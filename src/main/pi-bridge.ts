@@ -35,9 +35,15 @@ export class PiBridge extends EventEmitter {
     this.shutDown = false
     this.buffer = ''
 
+    const fnmNodeBin = '/Users/xilinxing/.local/share/fnm/node-versions/v22.22.3/installation/bin'
+    const envPath = process.env.PATH ?? ''
+    const pathWithFnm = envPath.includes(fnmNodeBin)
+      ? envPath
+      : `${fnmNodeBin}:${envPath}`
+
     const child = spawn('pi', ['--mode', 'rpc'], {
       cwd: this.cwd,
-      env: { ...process.env },
+      env: { ...process.env, PATH: pathWithFnm },
       stdio: ['pipe', 'pipe', 'pipe']
     })
 
