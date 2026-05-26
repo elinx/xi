@@ -29,6 +29,7 @@ export function usePiRpc(): UsePiRpcReturn {
   const currentAssistantId = useRef<string | null>(null)
   const currentContentBlocks = useRef<Map<number, ContentBlock>>(new Map())
   const toolCallArgsBuffer = useRef<Map<number, string>>(new Map())
+  const pendingToolCallArgs = useRef<Map<string, Record<string, unknown>>>(new Map())
 
   const updateContentBlock = useCallback(
     (contentIndex: number, updater: (block: ContentBlock) => ContentBlock) => {
@@ -190,6 +191,7 @@ export function usePiRpc(): UsePiRpcReturn {
                 args: parsedArgs,
                 status: 'running',
               })
+              pendingToolCallArgs.current.set(ame.toolCall.id, parsedArgs)
               toolCallArgsBuffer.current.delete(ame.contentIndex)
               syncContentBlocksToMessage()
               break
@@ -265,25 +267,45 @@ export function usePiRpc(): UsePiRpcReturn {
 
         case 'tool_execution_end': {
           const toolEvent = event as ToolExecutionEndEvent
+          const toolArgs = pendingToolCallArgs.current.get(toolEvent.toolCallId)
+          pendingToolCallArgs.current.delete(toolEvent.toolCallId)
+
+          const extraBlocks: ContentBlock[] = []
+
           const hasImageContent = toolEvent.result?.content?.some(
             (c: Record<string, unknown>) => c.type === 'image'
           )
 
           if (hasImageContent) {
-            const imageBlocks: ContentBlock[] = []
             for (const c of toolEvent.result.content as Array<Record<string, unknown>>) {
               if (c.type === 'text' && typeof c.text === 'string') {
-                imageBlocks.push({ type: 'text', content: c.text })
+                extraBlocks.push({ type: 'text', content: c.text })
               } else if (c.type === 'image') {
                 const img = c as unknown as PiImageContent
-                imageBlocks.push({
+                extraBlocks.push({
                   type: 'image',
                   src: `data:${img.mimeType};base64,${img.data}`,
                   alt: `Result from ${toolEvent.toolName}`,
                 })
               }
             }
+          }
 
+          if (
+            toolEvent.toolName === 'write' &&
+            toolArgs &&
+            typeof toolArgs.path === 'string' &&
+            toolArgs.path.endsWith('.html') &&
+            typeof toolArgs.content === 'string'
+          ) {
+            extraBlocks.push({
+              type: 'html',
+              content: toolArgs.content,
+              title: toolArgs.path.split('/').pop(),
+            })
+          }
+
+          if (extraBlocks.length > 0) {
             setMessages((prev) => [
               ...prev.map((msg) => {
                 if (msg.id !== currentAssistantId.current) return msg
@@ -304,7 +326,7 @@ export function usePiRpc(): UsePiRpcReturn {
                   {
                     type: 'tool_result',
                     toolCallId: toolEvent.toolCallId,
-                    content: imageBlocks,
+                    content: extraBlocks,
                   },
                 ],
                 timestamp: Date.now(),

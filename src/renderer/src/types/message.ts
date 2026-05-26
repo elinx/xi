@@ -8,6 +8,7 @@ export interface ChatMessage {
 export type ContentBlock =
   | TextBlock
   | ImageBlock
+  | HtmlBlock
   | ToolCallBlock
   | ToolResultBlock
   | ActionBlock;
@@ -24,6 +25,12 @@ export interface ImageBlock {
   width?: number;
   height?: number;
   annotations?: Annotation[];
+}
+
+export interface HtmlBlock {
+  type: 'html';
+  content: string;
+  title?: string;
 }
 
 export interface ToolCallBlock {

@@ -8,6 +8,7 @@ import type {
   ToolCallBlock,
   ToolResultBlock,
   ImageBlock,
+  HtmlBlock,
   Annotation,
 } from '../types/message'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
@@ -79,8 +80,51 @@ function ToolResultRenderer({ block }: { block: ToolResultBlock }): React.ReactE
         if (child.type === 'image') {
           return <ImageBlockRenderer key={i} block={child as ImageBlock} />
         }
+        if (child.type === 'html') {
+          return <HtmlBlockRenderer key={i} block={child as HtmlBlock} />
+        }
         return null
       })}
+    </div>
+  )
+}
+
+function HtmlBlockRenderer({ block }: { block: HtmlBlock }): React.ReactElement {
+  const [expanded, setExpanded] = useState(true)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const handleLoad = useCallback(() => {
+    if (!iframeRef.current) return
+    const doc = iframeRef.current.contentDocument
+    if (!doc?.body) return
+    const height = doc.body.scrollHeight
+    iframeRef.current.style.height = `${Math.min(Math.max(height, 100), 600)}px`
+  }, [])
+
+  return (
+    <div className="my-2 overflow-hidden rounded border border-gray-700">
+      <div className="flex items-center justify-between bg-gray-800/80 px-3 py-1.5">
+        <span className="text-xs font-medium text-gray-400">
+          {block.title ?? 'HTML Preview'}
+        </span>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-gray-500 hover:text-gray-300"
+        >
+          {expanded ? 'Collapse' : 'Expand'}
+        </button>
+      </div>
+      {expanded && (
+        <iframe
+          ref={iframeRef}
+          srcDoc={block.content}
+          sandbox="allow-scripts allow-same-origin"
+          onLoad={handleLoad}
+          className="w-full border-0 bg-white"
+          style={{ height: '300px' }}
+          title={block.title ?? 'HTML Preview'}
+        />
+      )}
     </div>
   )
 }
@@ -297,6 +341,8 @@ function ContentBlockRenderer({
       )
     case 'action':
       return <div className="text-xs text-yellow-400">[Action: {block.actionType}]</div>
+    case 'html':
+      return <HtmlBlockRenderer block={block} />
     default:
       return null
   }
