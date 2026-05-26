@@ -7,9 +7,12 @@ function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest } = usePiRpc()
   const [error, setError] = useState<string | null>(null)
 
-  function handleConnect(): void {
+  async function handleConnect(): Promise<void> {
     setError(null)
-    window.api.sendCommand({ type: 'pi:start' })
+    const result = await window.api.start()
+    if (!result.ok && result.error) {
+      setError(result.error)
+    }
   }
 
   useEffect(() => {
