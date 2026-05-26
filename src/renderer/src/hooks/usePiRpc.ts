@@ -212,14 +212,14 @@ export function usePiRpc(): UsePiRpcReturn {
           const msg = event.message
           if (msg.role === 'toolResult') {
             const toolResultMsg = msg as PiToolResultMessage
-            const blocks: ContentBlock[] = []
+            const extraBlocks: ContentBlock[] = []
 
             for (const content of toolResultMsg.content) {
               if (content.type === 'text') {
-                blocks.push({ type: 'text', content: content.text })
+                extraBlocks.push({ type: 'text', content: content.text })
               } else if (content.type === 'image') {
                 const img = content as PiImageContent
-                blocks.push({
+                extraBlocks.push({
                   type: 'image',
                   src: `data:${img.mimeType};base64,${img.data}`,
                   alt: 'Screenshot',
@@ -227,19 +227,14 @@ export function usePiRpc(): UsePiRpcReturn {
               }
             }
 
-            const toolResultChatMsg: ChatMessage = {
-              id: crypto.randomUUID(),
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'tool_result',
-                  toolCallId: toolResultMsg.toolCallId,
-                  content: blocks,
-                },
-              ],
-              timestamp: toolResultMsg.timestamp,
+            if (extraBlocks.length > 0 && currentAssistantId.current) {
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== currentAssistantId.current) return m
+                  return { ...m, blocks: [...m.blocks, ...extraBlocks] }
+                }),
+              )
             }
-            setMessages((prev) => [...prev, toolResultChatMsg])
           }
           break
         }
@@ -306,32 +301,23 @@ export function usePiRpc(): UsePiRpcReturn {
           }
 
           if (extraBlocks.length > 0) {
-            setMessages((prev) => [
-              ...prev.map((msg) => {
+            setMessages((prev) =>
+              prev.map((msg) => {
                 if (msg.id !== currentAssistantId.current) return msg
                 return {
                   ...msg,
-                  blocks: msg.blocks.map((block) => {
-                    if (block.type === 'tool_call' && block.status === 'running') {
-                      return { ...block, status: 'completed' as const }
-                    }
-                    return block
-                  }),
+                  blocks: [
+                    ...msg.blocks.map((block) => {
+                      if (block.type === 'tool_call' && block.status === 'running') {
+                        return { ...block, status: 'completed' as const }
+                      }
+                      return block
+                    }),
+                    ...extraBlocks,
+                  ],
                 }
               }),
-              {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                blocks: [
-                  {
-                    type: 'tool_result',
-                    toolCallId: toolEvent.toolCallId,
-                    content: extraBlocks,
-                  },
-                ],
-                timestamp: Date.now(),
-              },
-            ])
+            )
           } else {
             setMessages((prev) =>
               prev.map((msg) => {
