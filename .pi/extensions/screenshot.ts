@@ -5,6 +5,18 @@ import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+const FNM_NODE_BIN = "/Users/xilinxing/.local/share/fnm/node-versions/v22.22.3/installation/bin";
+
+function getEnvWithPath(): Record<string, string> {
+  const envPath = process.env.PATH ?? "";
+  return {
+    ...process.env,
+    PATH: envPath.includes(FNM_NODE_BIN)
+      ? envPath
+      : `${FNM_NODE_BIN}:${envPath}`,
+  } as Record<string, string>;
+}
+
 const screenshotTool = defineTool({
   name: "screenshot",
   label: "Screenshot",
@@ -50,15 +62,16 @@ async function captureUrl(
   try {
     await new Promise<void>((resolve, reject) => {
       const proc = execFile(
-        "python3",
+        "npx",
         [
-          "-c",
-          [
-            "import subprocess, sys",
-            `subprocess.run([sys.executable, "-m", "playwright", "screenshot", "--wait-for-timeout", "1000", ${JSON.stringify(url)}, ${JSON.stringify(tmpPath)}], check=True)`,
-          ].join("\n"),
+          "playwright",
+          "screenshot",
+          "--wait-for-timeout",
+          "1000",
+          url,
+          tmpPath,
         ],
-        { signal: signal ?? undefined, timeout: 30000 },
+        { signal: signal ?? undefined, timeout: 30000, env: getEnvWithPath() },
         (error) => {
           if (error) reject(error);
           else resolve();
