@@ -1,12 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-export interface ScreenshotResult {
-  image: string
-  mimeType: 'image/png'
-  width: number
-  height: number
-}
-
 const api = {
   sendCommand: (command: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:sendCommand', command),
@@ -46,11 +39,6 @@ const api = {
 
   stop: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:stop'),
-
-  captureScreenshot: (
-    options: Record<string, unknown>
-  ): Promise<{ ok: boolean; data?: ScreenshotResult; error?: string }> =>
-    ipcRenderer.invoke('screenshot:capture', options)
 }
 
 contextBridge.exposeInMainWorld('api', api)

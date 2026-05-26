@@ -1,11 +1,9 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { join } from 'path'
 import { PiBridge } from './pi-bridge'
-import { ScreenshotServer, type ScreenshotOptions } from './screenshot-server'
 
 let mainWindow: BrowserWindow | null = null
 let piBridge: PiBridge | null = null
-const screenshotServer = new ScreenshotServer()
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -106,15 +104,6 @@ function registerIpcHandlers(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
-
-  ipcMain.handle('screenshot:capture', async (_event, options: ScreenshotOptions) => {
-    try {
-      const result = await screenshotServer.capture(options)
-      return { ok: true, data: result }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
 }
 
 app.whenReady().then(() => {
@@ -139,8 +128,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   piBridge?.stop().catch((err: Error) => {
     console.error('[PiBridge] Error during shutdown:', err.message)
-  })
-  screenshotServer.dispose().catch((err: Error) => {
-    console.error('[ScreenshotServer] Error during shutdown:', err.message)
   })
 })
