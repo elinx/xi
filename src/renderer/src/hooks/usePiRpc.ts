@@ -265,22 +265,67 @@ export function usePiRpc(): UsePiRpcReturn {
 
         case 'tool_execution_end': {
           const toolEvent = event as ToolExecutionEndEvent
-          void toolEvent
-
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id !== currentAssistantId.current) return msg
-              return {
-                ...msg,
-                blocks: msg.blocks.map((block) => {
-                  if (block.type === 'tool_call' && block.status === 'running') {
-                    return { ...block, status: 'completed' as const }
-                  }
-                  return block
-                }),
-              }
-            }),
+          const hasImageContent = toolEvent.result?.content?.some(
+            (c: Record<string, unknown>) => c.type === 'image'
           )
+
+          if (hasImageContent) {
+            const imageBlocks: ContentBlock[] = []
+            for (const c of toolEvent.result.content as Array<Record<string, unknown>>) {
+              if (c.type === 'text' && typeof c.text === 'string') {
+                imageBlocks.push({ type: 'text', content: c.text })
+              } else if (c.type === 'image') {
+                const img = c as unknown as PiImageContent
+                imageBlocks.push({
+                  type: 'image',
+                  src: `data:${img.mimeType};base64,${img.data}`,
+                  alt: `Result from ${toolEvent.toolName}`,
+                })
+              }
+            }
+
+            setMessages((prev) => [
+              ...prev.map((msg) => {
+                if (msg.id !== currentAssistantId.current) return msg
+                return {
+                  ...msg,
+                  blocks: msg.blocks.map((block) => {
+                    if (block.type === 'tool_call' && block.status === 'running') {
+                      return { ...block, status: 'completed' as const }
+                    }
+                    return block
+                  }),
+                }
+              }),
+              {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                blocks: [
+                  {
+                    type: 'tool_result',
+                    toolCallId: toolEvent.toolCallId,
+                    content: imageBlocks,
+                  },
+                ],
+                timestamp: Date.now(),
+              },
+            ])
+          } else {
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.id !== currentAssistantId.current) return msg
+                return {
+                  ...msg,
+                  blocks: msg.blocks.map((block) => {
+                    if (block.type === 'tool_call' && block.status === 'running') {
+                      return { ...block, status: 'completed' as const }
+                    }
+                    return block
+                  }),
+                }
+              }),
+            )
+          }
           break
         }
 
