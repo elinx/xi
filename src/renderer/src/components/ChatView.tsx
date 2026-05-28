@@ -11,6 +11,7 @@ import type {
   HtmlBlock,
   Annotation,
 } from '../types/message'
+import type { ForkableMessage } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
 
@@ -19,6 +20,8 @@ interface ChatViewProps {
   onSendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
+  onForkAtEntry: (entryId: string) => void
+  getForkMessages: () => Promise<ForkableMessage[]>
 }
 
 function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement {
@@ -348,12 +351,70 @@ function ContentBlockRenderer({
   }
 }
 
-function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest }: ChatViewProps): React.ReactElement {
+function ForkPopover({
+  forkMessages,
+  onForkAtEntry,
+  onClose,
+}: {
+  forkMessages: ForkableMessage[]
+  onForkAtEntry: (entryId: string) => void
+  onClose: () => void
+}): React.ReactElement {
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent): void {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose])
+
+  return (
+    <div
+      ref={popoverRef}
+      className="absolute right-0 top-8 z-30 w-72 rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+    >
+      <div className="border-b border-gray-800 px-3 py-2">
+        <span className="text-xs font-medium text-gray-400">Fork from message</span>
+      </div>
+      <div className="max-h-60 overflow-y-auto py-1">
+        {forkMessages.length === 0 ? (
+          <div className="px-3 py-4 text-center text-xs text-gray-600">
+            No forkable messages
+          </div>
+        ) : (
+          forkMessages.map((msg) => (
+            <button
+              key={msg.entryId}
+              onClick={() => {
+                onForkAtEntry(msg.entryId)
+                onClose()
+              }}
+              className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-gray-800 transition-colors"
+            >
+              <svg className="mt-0.5 w-3 h-3 flex-shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+              </svg>
+              <span className="text-xs text-gray-300 line-clamp-2">{msg.text || '(empty)'}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
     blockIndex: number
   } | null>(null)
+  const [forkPopoverMessageId, setForkPopoverMessageId] = useState<string | null>(null)
+  const [forkMessages, setForkMessages] = useState<ForkableMessage[]>([])
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -370,6 +431,16 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
     },
     [onSendPrompt],
   )
+
+  const handleForkClick = useCallback(async (messageId: string) => {
+    if (forkPopoverMessageId === messageId) {
+      setForkPopoverMessageId(null)
+      return
+    }
+    const msgs = await getForkMessages()
+    setForkMessages(msgs)
+    setForkPopoverMessageId(messageId)
+  }, [forkPopoverMessageId, getForkMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -389,14 +460,33 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`rounded-lg px-4 py-3 ${
+              className={`group relative rounded-lg px-4 py-3 ${
                 msg.role === 'user'
                   ? 'bg-gray-800 ml-8'
                   : 'bg-gray-900 mr-4'
               }`}
             >
-              <div className="mb-1 text-xs font-medium text-gray-400">
-                {msg.role === 'user' ? 'You' : 'Pi'}
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-400">
+                  {msg.role === 'user' ? 'You' : 'Pi'}
+                </span>
+                {msg.role === 'user' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => handleForkClick(msg.id)}
+                      className="rounded px-2 py-0.5 text-xs text-gray-500 opacity-0 transition-opacity hover:text-gray-300 hover:bg-gray-700 group-hover:opacity-100"
+                    >
+                      Fork
+                    </button>
+                    {forkPopoverMessageId === msg.id && (
+                      <ForkPopover
+                        forkMessages={forkMessages}
+                        onForkAtEntry={onForkAtEntry}
+                        onClose={() => setForkPopoverMessageId(null)}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 {msg.blocks.map((block, i) => (

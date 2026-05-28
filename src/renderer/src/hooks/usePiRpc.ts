@@ -18,6 +18,7 @@ interface UsePiRpcReturn {
   abort: () => void
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
+  clearMessages: () => void
 }
 
 export function usePiRpc(): UsePiRpcReturn {
@@ -405,5 +406,13 @@ export function usePiRpc(): UsePiRpcReturn {
     window.api.sendCommand({ type: 'abort' })
   }, [])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest }
+  const clearMessages = useCallback(() => {
+    setMessages([])
+    currentAssistantId.current = null
+    currentContentBlocks.current.clear()
+    toolCallArgsBuffer.current.clear()
+    pendingToolCallArgs.current.clear()
+  }, [])
+
+  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages }
 }

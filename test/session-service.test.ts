@@ -1,0 +1,433 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+import {
+  parseSessionFile,
+  findMainSession,
+  listSessions,
+  buildSessionTree,
+  decodeProjectDir,
+  nameSession,
+} from '../src/main/session-service'
+import type { SessionInfo } from '../src/renderer/src/types/session'
+
+let testDir: string
+
+beforeEach(() => {
+  testDir = mkdtempSync(join(tmpdir(), 'pi-session-test-'))
+})
+
+afterEach(() => {
+  rmSync(testDir, { recursive: true, force: true })
+})
+
+function writeSession(dir: string, filename: string, header: Record<string, unknown>, entries: Record<string, unknown>[] = []): string {
+  mkdirSync(dir, { recursive: true })
+  const filePath = join(dir, filename)
+  const lines = [JSON.stringify({ type: 'session', version: 3, ...header })]
+  for (const entry of entries) {
+    lines.push(JSON.stringify(entry))
+  }
+  writeFileSync(filePath, lines.join('\n') + '\n')
+  return filePath
+}
+
+function makeProjectDir(base: string, cwd: string): string {
+  const encoded = '--' + cwd.replace(/\//g, '-') + '--'
+  return join(base, encoded)
+}
+
+describe('decodeProjectDir', () => {
+  it('strips -- wrappers and replaces - with /', () => {
+    expect(decodeProjectDir('--Users-foo-bar--')).toBe('/Users/foo/bar')
+  })
+
+  it('handles path without dashes in segments', () => {
+    expect(decodeProjectDir('--Users-john-projects--')).toBe('/Users/john/projects')
+  })
+
+  it('returns / for empty wrapped dir', () => {
+    expect(decodeProjectDir('----')).toBe('/')
+  })
+})
+
+describe('parseSessionFile', () => {
+  it('parses a valid session file with user messages', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'test.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:24:40.822Z', cwd: '/test/project' },
+      [
+        { type: 'message', id: 'a1', parentId: null, timestamp: '2026-05-26T16:24:41.000Z', message: { role: 'user', content: 'Hello' } },
+        { type: 'message', id: 'a2', parentId: 'a1', timestamp: '2026-05-26T16:24:42.000Z', message: { role: 'assistant', content: [] } },
+        { type: 'message', id: 'a3', parentId: 'a2', timestamp: '2026-05-26T16:24:43.000Z', message: { role: 'user', content: 'World' } },
+      ]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.sessionId).toBe('uuid-1')
+    expect(result!.messageCount).toBe(2)
+    expect(result!.name).toBeNull()
+    expect(result!.cwd).toBe('/test/project')
+    expect(result!.parentSessionPath).toBeNull()
+    expect(result!.isMain).toBe(false)
+  })
+
+  it('extracts session name from session_info entry', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'named.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [
+        { type: 'session_info', id: 'b1', parentId: null, timestamp: '2026-05-26T16:30:01.000Z', name: 'main' },
+      ]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe('main')
+  })
+
+  it('returns null for file without session header', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'bad.jsonl')
+    writeFileSync(filePath, '{"type":"message","id":"x"}\n')
+
+    expect(parseSessionFile(filePath)).toBeNull()
+  })
+
+  it('returns null for non-existent file', () => {
+    expect(parseSessionFile('/nonexistent/file.jsonl')).toBeNull()
+  })
+
+  it('returns null for empty file', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'empty.jsonl')
+    writeFileSync(filePath, '')
+
+    expect(parseSessionFile(filePath)).toBeNull()
+  })
+
+  it('parses parentSession from header', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-3', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: '/path/to/parent.jsonl' },
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.parentSessionPath).toBe('/path/to/parent.jsonl')
+  })
+
+  it('uses last session_info name if multiple exist', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'multi-name.jsonl',
+      { id: 'uuid-4', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [
+        { type: 'session_info', id: 'c1', parentId: null, timestamp: '2026-05-26T16:30:01.000Z', name: 'first' },
+        { type: 'session_info', id: 'c2', parentId: 'c1', timestamp: '2026-05-26T16:30:02.000Z', name: 'renamed' },
+      ]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe('renamed')
+  })
+})
+
+describe('findMainSession', () => {
+  it('returns null when no sessions exist', () => {
+    expect(findMainSession('/test/project', testDir)).toBeNull()
+  })
+
+  it('returns oldest session when no session is named "main" for the cwd', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 's1.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+    )
+
+    const result = findMainSession('/test/project', testDir)
+    expect(result).not.toBeNull()
+    expect(result!.sessionId).toBe('uuid-1')
+    expect(result!.name).toBeNull()
+  })
+
+  it('finds a session named "main" for the given cwd', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 'main.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', id: 's1', parentId: null, timestamp: '2026-05-26T16:00:01.000Z', name: 'main' }]
+    )
+
+    const result = findMainSession('/test/project', testDir)
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe('main')
+    expect(result!.cwd).toBe('/test/project')
+  })
+
+  it('does not match main from a different cwd', () => {
+    const projectDirA = makeProjectDir(testDir, '/project/a')
+    const projectDirB = makeProjectDir(testDir, '/project/b')
+    writeSession(projectDirA, 'main.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/a' },
+      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
+    )
+    writeSession(projectDirB, 'other.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/b' },
+    )
+
+    expect(findMainSession('/project/b', testDir)).not.toBeNull()
+    expect(findMainSession('/project/b', testDir)!.sessionId).toBe('uuid-2')
+  })
+
+  it('falls back to oldest session when no session is named "main"', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 'old.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+    )
+    writeSession(projectDir, 'newer.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+    )
+
+    const result = findMainSession('/test/project', testDir)
+    expect(result).not.toBeNull()
+    expect(result!.sessionId).toBe('uuid-1')
+  })
+
+  it('prefers named "main" over unnamed sessions', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 'old.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+    )
+    writeSession(projectDir, 'named.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
+    )
+
+    const result = findMainSession('/test/project', testDir)
+    expect(result).not.toBeNull()
+    expect(result!.sessionId).toBe('uuid-2')
+    expect(result!.name).toBe('main')
+  })
+})
+
+describe('buildSessionTree', () => {
+  function makeSession(filePath: string, overrides: Partial<SessionInfo> = {}): SessionInfo {
+    return {
+      filePath,
+      sessionId: 'test-id',
+      name: null,
+      createdAt: '2026-05-26T16:00:00.000Z',
+      cwd: '/test',
+      parentSessionPath: null,
+      messageCount: 0,
+      isMain: false,
+      ...overrides,
+    }
+  }
+
+  it('returns null for empty sessions array', () => {
+    expect(buildSessionTree([])).toBeNull()
+  })
+
+  it('builds tree with single root', () => {
+    const sessions = [makeSession('/a.jsonl', { isMain: true })]
+
+    const tree = buildSessionTree(sessions)
+    expect(tree).not.toBeNull()
+    expect(tree!.session.filePath).toBe('/a.jsonl')
+    expect(tree!.children).toHaveLength(0)
+  })
+
+  it('builds tree with parent-child relationship', () => {
+    const sessions = [
+      makeSession('/parent.jsonl', { isMain: true }),
+      makeSession('/child.jsonl', { parentSessionPath: '/parent.jsonl' }),
+    ]
+
+    const tree = buildSessionTree(sessions)
+    expect(tree!.session.filePath).toBe('/parent.jsonl')
+    expect(tree!.children).toHaveLength(1)
+    expect(tree!.children[0].session.filePath).toBe('/child.jsonl')
+  })
+
+  it('attaches orphan sessions to root', () => {
+    const sessions = [
+      makeSession('/main.jsonl', { isMain: true }),
+      makeSession('/orphan.jsonl', { parentSessionPath: '/nonexistent.jsonl' }),
+    ]
+
+    const tree = buildSessionTree(sessions)
+    expect(tree!.children).toHaveLength(1)
+    expect(tree!.children[0].session.filePath).toBe('/orphan.jsonl')
+  })
+
+  it('builds multi-level tree', () => {
+    const sessions = [
+      makeSession('/root.jsonl', { isMain: true }),
+      makeSession('/child1.jsonl', { parentSessionPath: '/root.jsonl' }),
+      makeSession('/grandchild.jsonl', { parentSessionPath: '/child1.jsonl' }),
+      makeSession('/child2.jsonl', { parentSessionPath: '/root.jsonl' }),
+    ]
+
+    const tree = buildSessionTree(sessions)
+    expect(tree!.session.filePath).toBe('/root.jsonl')
+    expect(tree!.children).toHaveLength(2)
+    expect(tree!.children[0].session.filePath).toBe('/child1.jsonl')
+    expect(tree!.children[0].children).toHaveLength(1)
+    expect(tree!.children[0].children[0].session.filePath).toBe('/grandchild.jsonl')
+    expect(tree!.children[1].session.filePath).toBe('/child2.jsonl')
+  })
+})
+
+describe('listSessions', () => {
+  it('returns empty when sessions dir does not exist', () => {
+    const result = listSessions(undefined, join(testDir, 'nonexistent'))
+    expect(result.projects).toHaveLength(0)
+  })
+
+  it('returns empty when sessions dir has no project dirs', () => {
+    mkdirSync(join(testDir, 'other'), { recursive: true })
+    const result = listSessions(undefined, testDir)
+    expect(result.projects).toHaveLength(0)
+  })
+
+  it('groups sessions by project directory', () => {
+    const projectDirA = makeProjectDir(testDir, '/project/a')
+    const projectDirB = makeProjectDir(testDir, '/project/b')
+
+    writeSession(projectDirA, 's1.jsonl',
+      { id: 'uuid-a1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/a' },
+      [{ type: 'session_info', id: 'x1', parentId: null, name: 'main' }]
+    )
+    writeSession(projectDirA, 's2.jsonl',
+      { id: 'uuid-a2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/project/a' }
+    )
+    writeSession(projectDirB, 's1.jsonl',
+      { id: 'uuid-b1', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/project/b' },
+      [{ type: 'session_info', id: 'y1', parentId: null, name: 'main' }]
+    )
+
+    const result = listSessions(undefined, testDir)
+    expect(result.projects).toHaveLength(2)
+
+    const projectA = result.projects.find(p => p.projectPath === '/project/a')
+    const projectB = result.projects.find(p => p.projectPath === '/project/b')
+    expect(projectA).toBeDefined()
+    expect(projectB).toBeDefined()
+    expect(projectA!.allSessions).toHaveLength(2)
+    expect(projectB!.allSessions).toHaveLength(1)
+  })
+
+  it('marks current active session as main when provided', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 'old.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+    )
+    const newerPath = writeSession(projectDir, 'newer.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+    )
+
+    const result = listSessions(newerPath, testDir)
+    const newer = result.projects[0].allSessions.find(s => s.filePath === newerPath)
+    expect(newer!.isMain).toBe(true)
+  })
+
+  it('falls back to oldest session as main if no currentSessionPath', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    writeSession(projectDir, 'old.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+    )
+    writeSession(projectDir, 'newer.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+    )
+
+    const result = listSessions(undefined, testDir)
+    const oldest = result.projects[0].allSessions.find(s => s.sessionId === 'uuid-1')
+    expect(oldest!.isMain).toBe(true)
+  })
+
+  it('builds tree from forked sessions with parentSessionPath', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    const mainPath = writeSession(projectDir, 'main.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
+    )
+    writeSession(projectDir, 'fork1.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
+      [{ type: 'session_info', id: 's2', parentId: 's1', name: 'experiment-1' }]
+    )
+    writeSession(projectDir, 'fork2.jsonl',
+      { id: 'uuid-3', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
+      [{ type: 'session_info', id: 's3', parentId: 's1', name: 'experiment-2' }]
+    )
+
+    const result = listSessions(mainPath, testDir)
+    expect(result.projects).toHaveLength(1)
+
+    const root = result.projects[0].root
+    expect(root).not.toBeNull()
+    expect(root!.session.name).toBe('main')
+    expect(root!.children).toHaveLength(2)
+    expect(root!.children.map(c => c.session.name).sort()).toEqual(['experiment-1', 'experiment-2'])
+  })
+
+  it('builds nested fork tree (grandchild)', () => {
+    const projectDir = makeProjectDir(testDir, '/test/project')
+    const mainPath = writeSession(projectDir, 'main.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
+    )
+    const childPath = writeSession(projectDir, 'child.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
+      [{ type: 'session_info', id: 's2', parentId: 's1', name: 'fork-a' }]
+    )
+    writeSession(projectDir, 'grandchild.jsonl',
+      { id: 'uuid-3', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/test/project', parentSession: childPath },
+      [{ type: 'session_info', id: 's3', parentId: 's2', name: 'fork-a-sub' }]
+    )
+
+    const result = listSessions(mainPath, testDir)
+    const root = result.projects[0].root!
+    expect(root.session.name).toBe('main')
+    expect(root.children).toHaveLength(1)
+    expect(root.children[0].session.name).toBe('fork-a')
+    expect(root.children[0].children).toHaveLength(1)
+    expect(root.children[0].children[0].session.name).toBe('fork-a-sub')
+  })
+})
+
+describe('nameSession', () => {
+  it('appends session_info entry to an existing file', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'test.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    const result = nameSession(filePath, 'main')
+    expect(result).toBe(true)
+
+    const parsed = parseSessionFile(filePath)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.name).toBe('main')
+  })
+
+  it('returns false for non-existent file', () => {
+    expect(nameSession('/nonexistent/file.jsonl', 'main')).toBe(false)
+  })
+
+  it('overwrites name when called again (last session_info wins)', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'test.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    nameSession(filePath, 'first')
+    nameSession(filePath, 'renamed')
+
+    const parsed = parseSessionFile(filePath)
+    expect(parsed!.name).toBe('renamed')
+  })
+})

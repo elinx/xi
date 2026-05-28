@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { SessionListResult, ForkableMessage, SessionInfo } from '../renderer/src/types/session'
 
 const api = {
   sendCommand: (command: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
@@ -39,6 +40,30 @@ const api = {
 
   stop: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:stop'),
+
+  listSessions: (): Promise<SessionListResult> =>
+    ipcRenderer.invoke('session:listSessions'),
+
+  getForkMessages: (): Promise<ForkableMessage[]> =>
+    ipcRenderer.invoke('session:getForkMessages'),
+
+  forkAtEntry: (entryId: string): Promise<{ success: boolean; text?: string; error?: string }> =>
+    ipcRenderer.invoke('session:forkAtEntry', entryId),
+
+  switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:switchSession', sessionPath),
+
+  newSession: (parentSessionPath?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:newSession', parentSessionPath),
+
+  renameSession: (name: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:renameSession', name),
+
+  getCurrentSession: (): Promise<SessionInfo | null> =>
+    ipcRenderer.invoke('session:getCurrentSession'),
+
+  refreshSessions: (): Promise<SessionListResult> =>
+    ipcRenderer.invoke('session:refreshSessions'),
 }
 
 contextBridge.exposeInMainWorld('api', api)
