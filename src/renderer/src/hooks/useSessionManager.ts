@@ -9,7 +9,7 @@ interface UseSessionManagerReturn {
   currentSession: SessionInfo | null
   forkMessages: ForkableMessage[]
   loadSessions: () => Promise<void>
-  forkAtEntry: (entryId: string) => Promise<void>
+  forkAtEntry: (entryId: string, name: string) => Promise<void>
   switchSession: (sessionPath: string) => Promise<void>
   newSession: (name: string, parentSessionPath?: string) => Promise<boolean>
   renameSession: (name: string) => Promise<void>
@@ -51,9 +51,10 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     }
   }, [])
 
-  const forkAtEntry = useCallback(async (entryId: string) => {
+  const forkAtEntry = useCallback(async (entryId: string, name: string) => {
     const result = await api.forkAtEntry(entryId)
     if (result.success) {
+      await api.renameSession(name)
       await loadSessions()
       await loadCurrentSession()
     }
@@ -91,13 +92,12 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
   }, [loadSessions, loadCurrentSession])
 
   useEffect(() => {
+    loadSessions()
     if (isConnected) {
-      loadSessions()
       loadCurrentSession()
     }
-  }, [isConnected])
+  }, [isConnected, loadSessions, loadCurrentSession])
 
-  // Also refresh when Pi reconnects (state change events)
   useEffect(() => {
     const cleanup = window.api.onStateChanged((state) => {
       if (state.connected) {

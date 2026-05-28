@@ -91,4 +91,6 @@ export interface SessionIpcApi {
   getCurrentSession: () => Promise<SessionInfo | null>
   /** Refresh session list (after fork/switch/new operations). */
   refreshSessions: () => Promise<SessionListResult>
+  /** Get all messages in the current Pi session (raw Pi message format). */
+  getMessages: () => Promise<unknown[]>
 }

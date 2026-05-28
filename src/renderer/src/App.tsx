@@ -6,7 +6,7 @@ import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages } = usePiRpc()
+  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, getForkMessages, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -27,8 +27,9 @@ function App(): React.ReactElement {
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
     clearMessages()
     await switchSession(sessionPath)
+    await loadHistory()
     await refresh()
-  }, [clearMessages, switchSession, refresh])
+  }, [clearMessages, switchSession, loadHistory, refresh])
 
   const handleNewSession = useCallback(async (name: string) => {
     const parentPath = currentSession?.filePath
@@ -37,11 +38,12 @@ function App(): React.ReactElement {
     if (result) await refresh()
   }, [clearMessages, newSession, currentSession, refresh])
 
-  const handleForkAtEntry = useCallback(async (entryId: string) => {
+  const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
     clearMessages()
-    await forkAtEntry(entryId)
+    await forkAtEntry(entryId, name)
+    await loadHistory()
     await refresh()
-  }, [clearMessages, forkAtEntry, refresh])
+  }, [clearMessages, forkAtEntry, loadHistory, refresh])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {

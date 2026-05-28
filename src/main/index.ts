@@ -273,6 +273,15 @@ function registerIpcHandlers(): void {
     }
     return sessionService.listSessions(currentPath)
   })
+
+  ipcMain.handle('session:getMessages', async () => {
+    try {
+      const data = (await sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
+      return data.messages ?? []
+    } catch {
+      return []
+    }
+  })
 }
 
 app.whenReady().then(() => {

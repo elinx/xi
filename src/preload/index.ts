@@ -64,6 +64,9 @@ const api = {
 
   refreshSessions: (): Promise<SessionListResult> =>
     ipcRenderer.invoke('session:refreshSessions'),
+
+  getMessages: (): Promise<unknown[]> =>
+    ipcRenderer.invoke('session:getMessages'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

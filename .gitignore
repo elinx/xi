@@ -8,6 +8,10 @@ dist/
 # Pi reference source (not part of this project)
 ref/
 
+# Stray test outputs
+*.html
+!src/**/*.html
+
 # OS files
 .DS_Store
 Thumbs.db

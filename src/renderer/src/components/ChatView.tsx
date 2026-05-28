@@ -20,7 +20,7 @@ interface ChatViewProps {
   onSendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
-  onForkAtEntry: (entryId: string) => void
+  onForkAtEntry: (entryId: string, name: string) => void
   getForkMessages: () => Promise<ForkableMessage[]>
 }
 
@@ -357,10 +357,12 @@ function ForkPopover({
   onClose,
 }: {
   forkMessages: ForkableMessage[]
-  onForkAtEntry: (entryId: string) => void
+  onForkAtEntry: (entryId: string, name: string) => void
   onClose: () => void
 }): React.ReactElement {
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null)
+  const [forkName, setForkName] = useState('')
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent): void {
@@ -372,6 +374,13 @@ function ForkPopover({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
+  const handleConfirm = useCallback(() => {
+    if (selectedEntryId && forkName.trim()) {
+      onForkAtEntry(selectedEntryId, forkName.trim())
+      onClose()
+    }
+  }, [selectedEntryId, forkName, onForkAtEntry, onClose])
+
   return (
     <div
       ref={popoverRef}
@@ -380,7 +389,7 @@ function ForkPopover({
       <div className="border-b border-gray-800 px-3 py-2">
         <span className="text-xs font-medium text-gray-400">Fork from message</span>
       </div>
-      <div className="max-h-60 overflow-y-auto py-1">
+      <div className="max-h-48 overflow-y-auto py-1">
         {forkMessages.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-gray-600">
             No forkable messages
@@ -389,20 +398,41 @@ function ForkPopover({
           forkMessages.map((msg) => (
             <button
               key={msg.entryId}
-              onClick={() => {
-                onForkAtEntry(msg.entryId)
-                onClose()
-              }}
-              className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-gray-800 transition-colors"
+              onClick={() => setSelectedEntryId(msg.entryId)}
+              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
+                selectedEntryId === msg.entryId ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-gray-800 text-gray-300'
+              }`}
             >
               <svg className="mt-0.5 w-3 h-3 flex-shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
-              <span className="text-xs text-gray-300 line-clamp-2">{msg.text || '(empty)'}</span>
+              <span className="text-xs line-clamp-2">{msg.text || '(empty)'}</span>
             </button>
           ))
         )}
       </div>
+      {selectedEntryId && (
+        <div className="border-t border-gray-700 px-3 py-2">
+          <input
+            autoFocus
+            value={forkName}
+            onChange={(e) => setForkName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConfirm()
+              if (e.key === 'Escape') onClose()
+            }}
+            placeholder="Fork session name"
+            className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={handleConfirm}
+            disabled={!forkName.trim()}
+            className="mt-1.5 w-full rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Fork
+          </button>
+        </div>
+      )}
     </div>
   )
 }

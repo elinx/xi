@@ -8,6 +8,7 @@ import type {
   PiUserMessage,
   PiAssistantMessage,
   PiToolResultMessage,
+  PiContentBlock,
 } from '../types/pi-events'
 
 interface UsePiRpcReturn {
@@ -19,6 +20,7 @@ interface UsePiRpcReturn {
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
   clearMessages: () => void
+  loadHistory: () => Promise<void>
 }
 
 export function usePiRpc(): UsePiRpcReturn {
@@ -414,5 +416,88 @@ export function usePiRpc(): UsePiRpcReturn {
     pendingToolCallArgs.current.clear()
   }, [])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages }
+  const loadHistory = useCallback(async () => {
+    type ExtendedApiWithMessages = typeof window.api & { getMessages: () => Promise<unknown[]> }
+    const api = window.api as ExtendedApiWithMessages
+
+    let piMessages: unknown[]
+    try {
+      piMessages = await api.getMessages()
+    } catch {
+      return
+    }
+
+    if (!Array.isArray(piMessages) || piMessages.length === 0) return
+
+    const chatMessages: ChatMessage[] = []
+
+    for (const raw of piMessages) {
+      const msg = raw as Record<string, unknown>
+      if (msg.role === 'user') {
+        const content = typeof msg.content === 'string'
+          ? msg.content
+          : Array.isArray(msg.content)
+            ? (msg.content as PiContentBlock[])
+                .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+                .map((c) => c.text)
+                .join('')
+            : ''
+        chatMessages.push({
+          id: crypto.randomUUID(),
+          role: 'user',
+          blocks: [{ type: 'text', content }],
+          timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+        })
+      } else if (msg.role === 'assistant') {
+        const blocks: ContentBlock[] = []
+        const content = msg.content as PiContentBlock[]
+        if (Array.isArray(content)) {
+          for (const c of content) {
+            if (c.type === 'text') {
+              blocks.push({ type: 'text', content: c.text })
+            } else if (c.type === 'thinking') {
+              blocks.push({ type: 'text', content: '\u{1F4AD} ' + c.thinking })
+            } else if (c.type === 'toolCall') {
+              blocks.push({
+                type: 'tool_call',
+                toolName: c.name,
+                args: c.arguments,
+                status: 'completed',
+              })
+            }
+          }
+        }
+        chatMessages.push({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          blocks,
+          timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+        })
+      } else if (msg.role === 'toolResult') {
+        const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
+        if (lastAssistant) {
+          const content = msg.content as PiContentBlock[]
+          if (Array.isArray(content)) {
+            for (const c of content) {
+              if (c.type === 'text') {
+                lastAssistant.blocks.push({ type: 'text', content: c.text })
+              } else if (c.type === 'image') {
+                const img = c as PiImageContent
+                lastAssistant.blocks.push({
+                  type: 'image',
+                  src: `data:${img.mimeType};base64,${img.data}`,
+                  alt: `Result from ${msg.toolName as string}`,
+                })
+              }
+            }
+          }
+        }
+      }
+    }
+
+    clearMessages()
+    setMessages(chatMessages)
+  }, [clearMessages])
+
+  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory }
 }
