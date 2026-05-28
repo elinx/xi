@@ -6,8 +6,8 @@ import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory } = usePiRpc()
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, getForkMessages, refresh } = useSessionManager(isConnected)
+  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -28,8 +28,9 @@ function App(): React.ReactElement {
     clearMessages()
     await switchSession(sessionPath)
     await loadHistory()
+    await loadForkPoints(sessionPath)
     await refresh()
-  }, [clearMessages, switchSession, loadHistory, refresh])
+  }, [clearMessages, switchSession, loadHistory, loadForkPoints, refresh])
 
   const handleNewSession = useCallback(async (name: string) => {
     const parentPath = currentSession?.filePath
@@ -73,6 +74,7 @@ function App(): React.ReactElement {
         onSwitchSession={handleSwitchSession}
         onNewSession={handleNewSession}
         onRenameSession={renameSession}
+        onDeleteSession={deleteSession}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -129,6 +131,7 @@ function App(): React.ReactElement {
           onSendPrompt={sendPrompt}
           onForkAtEntry={handleForkAtEntry}
           getForkMessages={getForkMessages}
+          forkPoints={forkPoints}
         />
 
         <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} />

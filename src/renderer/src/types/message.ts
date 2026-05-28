@@ -3,6 +3,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   blocks: ContentBlock[];
   timestamp: number;
+  piEntryId?: string;
 }
 
 export type ContentBlock =

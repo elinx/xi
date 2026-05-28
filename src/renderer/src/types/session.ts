@@ -73,6 +73,12 @@ export interface ForkableMessage {
   text: string
 }
 
+/** A recorded fork point in a parent session's JSONL file. */
+export interface ForkPoint {
+  entryId: string
+  childName: string
+}
+
 /** IPC channels for session management between renderer and main process. */
 export interface SessionIpcApi {
   /** List all sessions grouped by project. */
@@ -80,7 +86,7 @@ export interface SessionIpcApi {
   /** Get forkable user messages for the current session. */
   getForkMessages: () => Promise<ForkableMessage[]>
   /** Fork at a specific entry, creating a new session. */
-  forkAtEntry: (entryId: string) => Promise<{ success: boolean; text?: string; error?: string }>
+  forkAtEntry: (entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
   /** Switch to a different session. */
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   /** Create a new session, optionally with a parent. */
@@ -93,4 +99,8 @@ export interface SessionIpcApi {
   refreshSessions: () => Promise<SessionListResult>
   /** Get all messages in the current Pi session (raw Pi message format). */
   getMessages: () => Promise<unknown[]>
+  /** Delete a session by file path. Cannot delete the active session. */
+  deleteSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
+  /** Get fork points recorded in a session file. */
+  getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
 }

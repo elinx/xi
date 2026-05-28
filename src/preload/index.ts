@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { SessionListResult, ForkableMessage, SessionInfo } from '../renderer/src/types/session'
+import type { SessionListResult, ForkableMessage, SessionInfo, ForkPoint } from '../renderer/src/types/session'
 
 const api = {
   sendCommand: (command: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
@@ -47,8 +47,8 @@ const api = {
   getForkMessages: (): Promise<ForkableMessage[]> =>
     ipcRenderer.invoke('session:getForkMessages'),
 
-  forkAtEntry: (entryId: string): Promise<{ success: boolean; text?: string; error?: string }> =>
-    ipcRenderer.invoke('session:forkAtEntry', entryId),
+  forkAtEntry: (entryId: string, name?: string): Promise<{ success: boolean; text?: string; error?: string }> =>
+    ipcRenderer.invoke('session:forkAtEntry', entryId, name),
 
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),
@@ -67,6 +67,12 @@ const api = {
 
   getMessages: (): Promise<unknown[]> =>
     ipcRenderer.invoke('session:getMessages'),
+
+  deleteSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:deleteSession', sessionPath),
+
+  getForkPoints: (sessionPath: string): Promise<ForkPoint[]> =>
+    ipcRenderer.invoke('session:getForkPoints', sessionPath),
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -1,12 +1,13 @@
-import { readdirSync, readFileSync, existsSync, statSync, appendFileSync } from 'fs'
-import { join } from 'path'
+import { readdirSync, readFileSync, existsSync, statSync, appendFileSync, unlinkSync, rmSync } from 'fs'
+import { join, dirname } from 'path'
 import { homedir } from 'os'
 import type {
   SessionInfo,
   SessionListResult,
   SessionFileHeader,
   ProjectSessionTree,
-  SessionTreeNode
+  SessionTreeNode,
+  ForkPoint
 } from '../renderer/src/types/session'
 
 export function getSessionDir(): string {
@@ -236,4 +237,67 @@ export function nameSession(sessionPath: string, name: string): boolean {
   } catch {
     return false
   }
+}
+
+export function deleteSession(sessionPath: string, sessionDir?: string): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  try {
+    unlinkSync(sessionPath)
+
+    const dir = dirname(sessionPath)
+    const remaining = readdirSync(dir).filter((name) => name.endsWith('.jsonl'))
+    if (remaining.length === 0) {
+      rmSync(dir, { recursive: true })
+    }
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function addForkPoint(sessionPath: string, entryId: string, childName: string): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  try {
+    const entry = JSON.stringify({
+      type: 'fork_point',
+      entryId,
+      childName,
+    })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function getForkPoints(sessionPath: string): ForkPoint[] {
+  if (!existsSync(sessionPath)) return []
+
+  const forkPoints: ForkPoint[] = []
+
+  try {
+    const content = readFileSync(sessionPath, 'utf-8')
+    const lines = content.split('\n').filter((line) => line.trim().length > 0)
+
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>
+        if (entry.type === 'fork_point' && typeof entry.entryId === 'string') {
+          forkPoints.push({
+            entryId: entry.entryId,
+            childName: typeof entry.childName === 'string' ? entry.childName : '',
+          })
+        }
+      } catch {
+        continue
+      }
+    }
+  } catch {
+    return []
+  }
+
+  return forkPoints
 }

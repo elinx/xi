@@ -3,7 +3,7 @@ import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { PiBridge } from './pi-bridge'
 import * as sessionService from './session-service'
-import type { SessionInfo, ForkableMessage } from '../renderer/src/types/session'
+import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
 let mainWindow: BrowserWindow | null = null
 let piBridge: PiBridge | null = null
@@ -193,9 +193,33 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:forkAtEntry', async (_event, entryId: string) => {
+  ipcMain.handle('session:forkAtEntry', async (_event, entryId: string, name?: string) => {
+    let parentPath: string | null = null
+    try {
+      const preState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      parentPath = typeof preState.sessionPath === 'string' ? preState.sessionPath : null
+    } catch {}
+
     try {
       const data = (await sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
+
+      if (name) {
+        try {
+          await sendRpcCommand({ type: 'set_session_name', name })
+        } catch {}
+        try {
+          const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const childPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
+          if (childPath) {
+            sessionService.nameSession(childPath, name)
+          }
+        } catch {}
+      }
+
+      if (parentPath) {
+        sessionService.addForkPoint(parentPath, entryId, name ?? '')
+      }
+
       return { success: true, text: typeof data.text === 'string' ? data.text : undefined }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -281,6 +305,24 @@ function registerIpcHandlers(): void {
     } catch {
       return []
     }
+  })
+
+  ipcMain.handle('session:deleteSession', async (_event, sessionPath: string) => {
+    const stateData = await sendRpcCommand({ type: 'get_state' }) as Record<string, unknown>
+    const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+    if (currentPath === sessionPath) {
+      return { success: false, error: 'Cannot delete the active session' }
+    }
+
+    const result = sessionService.deleteSession(sessionPath)
+    if (result) {
+      return { success: true }
+    }
+    return { success: false, error: 'Failed to delete session' }
+  })
+
+  ipcMain.handle('session:getForkPoints', async (_event, sessionPath: string) => {
+    return sessionService.getForkPoints(sessionPath)
   })
 }
 

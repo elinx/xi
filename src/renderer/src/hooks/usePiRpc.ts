@@ -10,6 +10,7 @@ import type {
   PiToolResultMessage,
   PiContentBlock,
 } from '../types/pi-events'
+import type { ForkPoint } from '../types/session'
 
 interface UsePiRpcReturn {
   messages: ChatMessage[]
@@ -21,6 +22,8 @@ interface UsePiRpcReturn {
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
   clearMessages: () => void
   loadHistory: () => Promise<void>
+  forkPoints: ForkPoint[]
+  loadForkPoints: (sessionPath: string) => Promise<void>
 }
 
 export function usePiRpc(): UsePiRpcReturn {
@@ -410,10 +413,24 @@ export function usePiRpc(): UsePiRpcReturn {
 
   const clearMessages = useCallback(() => {
     setMessages([])
+    setForkPoints([])
     currentAssistantId.current = null
     currentContentBlocks.current.clear()
     toolCallArgsBuffer.current.clear()
     pendingToolCallArgs.current.clear()
+  }, [])
+
+  const [forkPoints, setForkPoints] = useState<ForkPoint[]>([])
+
+  const loadForkPoints = useCallback(async (sessionPath: string) => {
+    type ExtendedApiWithForkPoints = typeof window.api & { getForkPoints: (path: string) => Promise<ForkPoint[]> }
+    const apiWithFp = window.api as ExtendedApiWithForkPoints
+    try {
+      const points = await apiWithFp.getForkPoints(sessionPath)
+      setForkPoints(points)
+    } catch {
+      setForkPoints([])
+    }
   }, [])
 
   const loadHistory = useCallback(async () => {
@@ -433,6 +450,7 @@ export function usePiRpc(): UsePiRpcReturn {
 
     for (const raw of piMessages) {
       const msg = raw as Record<string, unknown>
+      const piEntryId = typeof msg.id === 'string' ? msg.id : undefined
       if (msg.role === 'user') {
         const content = typeof msg.content === 'string'
           ? msg.content
@@ -447,6 +465,7 @@ export function usePiRpc(): UsePiRpcReturn {
           role: 'user',
           blocks: [{ type: 'text', content }],
           timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+          piEntryId,
         })
       } else if (msg.role === 'assistant') {
         const blocks: ContentBlock[] = []
@@ -472,6 +491,7 @@ export function usePiRpc(): UsePiRpcReturn {
           role: 'assistant',
           blocks,
           timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+          piEntryId,
         })
       } else if (msg.role === 'toolResult') {
         const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
@@ -499,5 +519,5 @@ export function usePiRpc(): UsePiRpcReturn {
     setMessages(chatMessages)
   }, [clearMessages])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory }
+  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints }
 }

@@ -11,7 +11,7 @@ import type {
   HtmlBlock,
   Annotation,
 } from '../types/message'
-import type { ForkableMessage } from '../types/session'
+import type { ForkableMessage, ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
 
@@ -22,6 +22,7 @@ interface ChatViewProps {
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
   onForkAtEntry: (entryId: string, name: string) => void
   getForkMessages: () => Promise<ForkableMessage[]>
+  forkPoints: ForkPoint[]
 }
 
 function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement {
@@ -437,7 +438,7 @@ function ForkPopover({
   )
 }
 
-function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -487,53 +488,72 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
         </div>
       ) : (
         <div className="mx-auto max-w-3xl space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`group relative rounded-lg px-4 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-gray-800 ml-8'
-                  : 'bg-gray-900 mr-4'
-              }`}
-            >
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-400">
-                  {msg.role === 'user' ? 'You' : 'Pi'}
-                </span>
-                {msg.role === 'user' && (
-                  <div className="relative">
-                    <button
-                      onClick={() => handleForkClick(msg.id)}
-                      className="rounded px-2 py-0.5 text-xs text-gray-500 opacity-0 transition-opacity hover:text-gray-300 hover:bg-gray-700 group-hover:opacity-100"
-                    >
-                      Fork
-                    </button>
-                    {forkPopoverMessageId === msg.id && (
-                      <ForkPopover
-                        forkMessages={forkMessages}
-                        onForkAtEntry={onForkAtEntry}
-                        onClose={() => setForkPopoverMessageId(null)}
-                      />
-                    )}
+          {messages.map((msg) => {
+            const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+
+            return (
+              <div
+                key={msg.id}
+                className={`group relative rounded-lg px-4 py-3 ${
+                  msg.role === 'user'
+                    ? 'bg-gray-800 ml-8'
+                    : 'bg-gray-900 mr-4'
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-400">
+                    {msg.role === 'user' ? 'You' : 'Pi'}
+                  </span>
+                  {msg.role === 'user' && (
+                    <div className="relative">
+                      <button
+                        onClick={() => handleForkClick(msg.id)}
+                        className="rounded px-2 py-0.5 text-xs text-gray-500 opacity-0 transition-opacity hover:text-gray-300 hover:bg-gray-700 group-hover:opacity-100"
+                      >
+                        Fork
+                      </button>
+                      {forkPopoverMessageId === msg.id && (
+                        <ForkPopover
+                          forkMessages={forkMessages}
+                          onForkAtEntry={onForkAtEntry}
+                          onClose={() => setForkPopoverMessageId(null)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {msg.blocks.map((block, i) => (
+                    <ContentBlockRenderer
+                      key={i}
+                      block={block}
+                      messageId={msg.id}
+                      blockIndex={i}
+                      annotatingTarget={annotatingTarget}
+                      onEnterAnnotation={handleEnterAnnotation}
+                      onExitAnnotation={handleExitAnnotation}
+                      onSendFeedback={handleSendFeedback}
+                    />
+                  ))}
+                </div>
+                {msgForkPoints.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-700/50 pt-2">
+                    {msgForkPoints.map((fp, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 rounded-full bg-purple-900/40 px-2 py-0.5 text-[10px] text-purple-300"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                        </svg>
+                        forked: {fp.childName || '(unnamed)'}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
-              <div className="space-y-2">
-                {msg.blocks.map((block, i) => (
-                  <ContentBlockRenderer
-                    key={i}
-                    block={block}
-                    messageId={msg.id}
-                    blockIndex={i}
-                    annotatingTarget={annotatingTarget}
-                    onEnterAnnotation={handleEnterAnnotation}
-                    onExitAnnotation={handleExitAnnotation}
-                    onSendFeedback={handleSendFeedback}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
       )}

@@ -7,6 +7,7 @@ interface SessionSidebarProps {
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string) => void
   onRenameSession: (name: string) => void
+  onDeleteSession: (sessionPath: string) => Promise<boolean>
   isCollapsed: boolean
   onToggleCollapse: () => void
 }
@@ -42,16 +43,19 @@ function SessionNode({
   currentSessionPath,
   onSwitch,
   onRename,
+  onDelete,
 }: {
   node: SessionTreeNode
   depth: number
   currentSessionPath: string | null
   onSwitch: (path: string) => void
   onRename: (name: string) => void
+  onDelete: (path: string) => Promise<boolean>
 }): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(getDisplayName(node.session))
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
 
@@ -129,7 +133,42 @@ function SessionNode({
         <span className="flex-shrink-0 text-[10px] text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
           {formatRelativeTime(node.session.createdAt)}
         </span>
+
+        {isActive && !node.session.isMain && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (confirmDelete) {
+                onDelete(node.session.filePath)
+                setConfirmDelete(false)
+              } else {
+                setConfirmDelete(true)
+              }
+            }}
+            onBlur={() => setConfirmDelete(false)}
+            className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] transition-colors ${
+              confirmDelete
+                ? 'bg-red-600 text-white'
+                : 'text-gray-500 hover:text-red-400 hover:bg-gray-700'
+            }`}
+          >
+            {confirmDelete ? 'Del' : 'x'}
+          </button>
+        )}
       </div>
+
+      {node.session.parentSessionPath && (
+        <div
+          className="flex items-center gap-1 cursor-pointer hover:text-blue-400 transition-colors"
+          style={{ paddingLeft: `${depth * 16 + 24}px` }}
+          onClick={() => onSwitch(node.session.parentSessionPath!)}
+        >
+          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+          </svg>
+          <span className="text-[10px] text-gray-600 hover:text-blue-400">parent</span>
+        </div>
+      )}
 
       {hasChildren && isExpanded && (
         <div>
@@ -141,6 +180,7 @@ function SessionNode({
               currentSessionPath={currentSessionPath}
               onSwitch={onSwitch}
               onRename={onRename}
+              onDelete={onDelete}
             />
           ))}
         </div>
@@ -155,6 +195,7 @@ function SessionSidebar({
   onSwitchSession,
   onNewSession,
   onRenameSession,
+  onDeleteSession,
   isCollapsed,
   onToggleCollapse,
 }: SessionSidebarProps): React.ReactElement {
@@ -288,6 +329,7 @@ function SessionSidebar({
                       currentSessionPath={currentSession?.filePath ?? null}
                       onSwitch={onSwitchSession}
                       onRename={onRenameSession}
+                      onDelete={onDeleteSession}
                     />
                   </div>
                 )}

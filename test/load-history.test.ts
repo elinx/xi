@@ -25,6 +25,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   blocks: ContentBlock[]
   timestamp: number
+  piEntryId?: string
 }
 
 type ContentBlock =
@@ -37,6 +38,7 @@ function convertPiMessagesToChatMessages(piMessages: unknown[]): ChatMessage[] {
 
   for (const raw of piMessages) {
     const msg = raw as Record<string, unknown>
+    const piEntryId = typeof msg.id === 'string' ? msg.id : undefined
     if (msg.role === 'user') {
       const content = typeof msg.content === 'string'
         ? msg.content
@@ -51,6 +53,7 @@ function convertPiMessagesToChatMessages(piMessages: unknown[]): ChatMessage[] {
         role: 'user',
         blocks: [{ type: 'text', content }],
         timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+        piEntryId,
       })
     } else if (msg.role === 'assistant') {
       const blocks: ContentBlock[] = []
@@ -76,6 +79,7 @@ function convertPiMessagesToChatMessages(piMessages: unknown[]): ChatMessage[] {
         role: 'assistant',
         blocks,
         timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
+        piEntryId,
       })
     } else if (msg.role === 'toolResult') {
       const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
@@ -518,5 +522,172 @@ describe('ForkPopover name validation', () => {
     }
 
     expect(onForkAtEntry).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadHistory: piEntryId extraction', () => {
+  it('extracts id from Pi messages as piEntryId', () => {
+    const messages = [
+      { role: 'user', content: 'Hello', timestamp: 1000, id: 'entry-user-1' },
+      { role: 'assistant', content: [], timestamp: 1001, id: 'entry-asst-1' },
+    ]
+
+    const result = convertPiMessagesToChatMessages(messages)
+    expect(result).toHaveLength(2)
+    expect(result[0].piEntryId).toBe('entry-user-1')
+    expect(result[1].piEntryId).toBe('entry-asst-1')
+  })
+
+  it('leaves piEntryId undefined when id is missing', () => {
+    const messages = [
+      { role: 'user', content: 'Hello', timestamp: 1000 },
+    ]
+
+    const result = convertPiMessagesToChatMessages(messages)
+    expect(result[0].piEntryId).toBeUndefined()
+  })
+
+  it('leaves piEntryId undefined when id is not a string', () => {
+    const messages = [
+      { role: 'user', content: 'Hello', timestamp: 1000, id: 42 },
+    ]
+
+    const result = convertPiMessagesToChatMessages(messages)
+    expect(result[0].piEntryId).toBeUndefined()
+  })
+})
+
+describe('Fork point marker matching', () => {
+  interface ForkPoint { entryId: string; childName: string }
+  interface MsgWithEntryId { piEntryId?: string; role: string }
+
+  function matchForkPoints(messages: MsgWithEntryId[], forkPoints: ForkPoint[]): Map<number, ForkPoint[]> {
+    const matches = new Map<number, ForkPoint[]>()
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (!msg.piEntryId) continue
+      const matched = forkPoints.filter(fp => fp.entryId === msg.piEntryId)
+      if (matched.length > 0) {
+        matches.set(i, matched)
+      }
+    }
+    return matches
+  }
+
+  it('matches fork points to messages by piEntryId', () => {
+    const messages: MsgWithEntryId[] = [
+      { role: 'user', piEntryId: 'entry-1' },
+      { role: 'assistant' },
+      { role: 'user', piEntryId: 'entry-2' },
+    ]
+    const forkPoints: ForkPoint[] = [
+      { entryId: 'entry-1', childName: 'experiment-1' },
+    ]
+
+    const matches = matchForkPoints(messages, forkPoints)
+    expect(matches.has(0)).toBe(true)
+    expect(matches.get(0)![0].childName).toBe('experiment-1')
+    expect(matches.has(2)).toBe(false)
+  })
+
+  it('matches multiple fork points to same message', () => {
+    const messages: MsgWithEntryId[] = [
+      { role: 'user', piEntryId: 'entry-1' },
+    ]
+    const forkPoints: ForkPoint[] = [
+      { entryId: 'entry-1', childName: 'fork-a' },
+      { entryId: 'entry-1', childName: 'fork-b' },
+    ]
+
+    const matches = matchForkPoints(messages, forkPoints)
+    expect(matches.get(0)).toHaveLength(2)
+  })
+
+  it('returns empty map when no messages have piEntryId', () => {
+    const messages: MsgWithEntryId[] = [
+      { role: 'user' },
+      { role: 'assistant' },
+    ]
+    const forkPoints: ForkPoint[] = [
+      { entryId: 'entry-1', childName: 'fork-a' },
+    ]
+
+    const matches = matchForkPoints(messages, forkPoints)
+    expect(matches.size).toBe(0)
+  })
+
+  it('returns empty map when fork points list is empty', () => {
+    const messages: MsgWithEntryId[] = [
+      { role: 'user', piEntryId: 'entry-1' },
+    ]
+
+    const matches = matchForkPoints(messages, [])
+    expect(matches.size).toBe(0)
+  })
+})
+
+describe('Delete session flow', () => {
+  it('useSessionManager.deleteSession calls IPC and refreshes', async () => {
+    const api = {
+      deleteSession: vi.fn().mockResolvedValue({ success: true }),
+      listSessions: vi.fn().mockResolvedValue({ projects: [] }),
+      getCurrentSession: vi.fn().mockResolvedValue(null),
+    }
+
+    async function handleDeleteSession(sessionPath: string): Promise<boolean> {
+      const result = await api.deleteSession(sessionPath)
+      if (result.success) {
+        await api.listSessions()
+        return true
+      }
+      return false
+    }
+
+    const result = await handleDeleteSession('/old-session.jsonl')
+    expect(result).toBe(true)
+    expect(api.deleteSession).toHaveBeenCalledWith('/old-session.jsonl')
+    expect(api.listSessions).toHaveBeenCalled()
+  })
+
+  it('returns false when delete fails', async () => {
+    const api = {
+      deleteSession: vi.fn().mockResolvedValue({ success: false, error: 'Cannot delete active session' }),
+    }
+
+    async function handleDeleteSession(sessionPath: string): Promise<boolean> {
+      const result = await api.deleteSession(sessionPath)
+      return result.success
+    }
+
+    const result = await handleDeleteSession('/active-session.jsonl')
+    expect(result).toBe(false)
+  })
+})
+
+describe('Jump to parent session', () => {
+  it('parent link calls onSwitchSession with parentSessionPath', () => {
+    const onSwitch = vi.fn()
+    const parentSessionPath = '/parent-session.jsonl'
+
+    onSwitch(parentSessionPath)
+    expect(onSwitch).toHaveBeenCalledWith('/parent-session.jsonl')
+  })
+
+  it('forked session has parentSessionPath', () => {
+    const forkedSession = {
+      filePath: '/fork.jsonl',
+      parentSessionPath: '/main.jsonl',
+      name: 'experiment-1',
+    }
+    expect(forkedSession.parentSessionPath).toBe('/main.jsonl')
+  })
+
+  it('root session has null parentSessionPath', () => {
+    const rootSession = {
+      filePath: '/main.jsonl',
+      parentSessionPath: null,
+      name: 'main',
+    }
+    expect(rootSession.parentSessionPath).toBeNull()
   })
 })

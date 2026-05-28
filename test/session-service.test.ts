@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import {
@@ -9,6 +9,9 @@ import {
   buildSessionTree,
   decodeProjectDir,
   nameSession,
+  deleteSession,
+  addForkPoint,
+  getForkPoints,
 } from '../src/main/session-service'
 import type { SessionInfo } from '../src/renderer/src/types/session'
 
@@ -429,5 +432,112 @@ describe('nameSession', () => {
 
     const parsed = parseSessionFile(filePath)
     expect(parsed!.name).toBe('renamed')
+  })
+})
+
+describe('deleteSession', () => {
+  it('deletes a session file', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'to-delete.jsonl',
+      { id: 'uuid-del', timestamp: '2026-05-28T12:00:00.000Z', cwd: '/test' },
+    )
+
+    expect(existsSync(filePath)).toBe(true)
+    const result = deleteSession(filePath)
+    expect(result).toBe(true)
+    expect(existsSync(filePath)).toBe(false)
+  })
+
+  it('returns false for non-existent file', () => {
+    expect(deleteSession('/nonexistent/file.jsonl')).toBe(false)
+  })
+
+  it('removes empty project directory after deleting last session', () => {
+    const projectDir = makeProjectDir(testDir, '/test/empty-project')
+    const filePath = writeSession(projectDir, 'only.jsonl',
+      { id: 'uuid-only', timestamp: '2026-05-28T12:00:00.000Z', cwd: '/test/empty-project' },
+    )
+
+    expect(existsSync(projectDir)).toBe(true)
+    deleteSession(filePath)
+    expect(existsSync(projectDir)).toBe(false)
+  })
+
+  it('keeps project directory if other sessions remain', () => {
+    const projectDir = makeProjectDir(testDir, '/test/busy-project')
+    writeSession(projectDir, 's1.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-28T12:00:00.000Z', cwd: '/test/busy-project' },
+    )
+    const filePath = writeSession(projectDir, 's2.jsonl',
+      { id: 'uuid-2', timestamp: '2026-05-28T13:00:00.000Z', cwd: '/test/busy-project' },
+    )
+
+    deleteSession(filePath)
+    expect(existsSync(projectDir)).toBe(true)
+  })
+})
+
+describe('addForkPoint', () => {
+  it('appends fork_point entry to session file', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'parent.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-parent","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    const result = addForkPoint(filePath, 'entry-abc', 'experiment-1')
+    expect(result).toBe(true)
+
+    const points = getForkPoints(filePath)
+    expect(points).toHaveLength(1)
+    expect(points[0].entryId).toBe('entry-abc')
+    expect(points[0].childName).toBe('experiment-1')
+  })
+
+  it('returns false for non-existent file', () => {
+    expect(addForkPoint('/nonexistent/file.jsonl', 'entry-1', 'name')).toBe(false)
+  })
+
+  it('accumulates multiple fork points', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'multi-fork.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-m","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    addForkPoint(filePath, 'entry-1', 'fork-a')
+    addForkPoint(filePath, 'entry-2', 'fork-b')
+
+    const points = getForkPoints(filePath)
+    expect(points).toHaveLength(2)
+    expect(points[0].entryId).toBe('entry-1')
+    expect(points[0].childName).toBe('fork-a')
+    expect(points[1].entryId).toBe('entry-2')
+    expect(points[1].childName).toBe('fork-b')
+  })
+})
+
+describe('getForkPoints', () => {
+  it('returns empty array for non-existent file', () => {
+    expect(getForkPoints('/nonexistent/file.jsonl')).toEqual([])
+  })
+
+  it('returns empty array for session without fork points', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'no-forks.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    expect(getForkPoints(filePath)).toEqual([])
+  })
+
+  it('skips malformed entries', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'bad-entry.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\nnot-json\n{"type":"fork_point","entryId":"good"}\n')
+
+    const points = getForkPoints(filePath)
+    expect(points).toHaveLength(1)
+    expect(points[0].entryId).toBe('good')
+    expect(points[0].childName).toBe('')
   })
 })

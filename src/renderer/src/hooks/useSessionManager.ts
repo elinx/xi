@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { SessionListResult, SessionInfo, ForkableMessage, SessionIpcApi } from '../types/session'
+import type { SessionListResult, SessionInfo, ForkableMessage, ForkPoint, SessionIpcApi } from '../types/session'
 
 type ExtendedApi = typeof window.api & SessionIpcApi
 const api = window.api as ExtendedApi
@@ -13,6 +13,8 @@ interface UseSessionManagerReturn {
   switchSession: (sessionPath: string) => Promise<void>
   newSession: (name: string, parentSessionPath?: string) => Promise<boolean>
   renameSession: (name: string) => Promise<void>
+  deleteSession: (sessionPath: string) => Promise<boolean>
+  getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   refresh: () => Promise<void>
   getForkMessages: () => Promise<ForkableMessage[]>
 }
@@ -52,9 +54,8 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
   }, [])
 
   const forkAtEntry = useCallback(async (entryId: string, name: string) => {
-    const result = await api.forkAtEntry(entryId)
+    const result = await api.forkAtEntry(entryId, name)
     if (result.success) {
-      await api.renameSession(name)
       await loadSessions()
       await loadCurrentSession()
     }
@@ -91,6 +92,23 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     await Promise.all([loadSessions(), loadCurrentSession()])
   }, [loadSessions, loadCurrentSession])
 
+  const deleteSession = useCallback(async (sessionPath: string): Promise<boolean> => {
+    const result = await api.deleteSession(sessionPath)
+    if (result.success) {
+      await loadSessions()
+      return true
+    }
+    return false
+  }, [loadSessions])
+
+  const getForkPoints = useCallback(async (sessionPath: string): Promise<ForkPoint[]> => {
+    try {
+      return await api.getForkPoints(sessionPath)
+    } catch {
+      return []
+    }
+  }, [])
+
   useEffect(() => {
     loadSessions()
     if (isConnected) {
@@ -117,6 +135,8 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     switchSession,
     newSession,
     renameSession,
+    deleteSession,
+    getForkPoints,
     refresh,
     getForkMessages,
   }

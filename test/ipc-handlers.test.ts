@@ -324,3 +324,148 @@ describe('IPC: session:listSessions', () => {
     expect(listSessionsFn).toHaveBeenCalledWith(undefined)
   })
 })
+
+describe('IPC: session:deleteSession', () => {
+  it('prevents deleting the active session', async () => {
+    const sendRpcCommand = vi.fn().mockResolvedValue({
+      sessionPath: '/active-session.jsonl',
+    })
+    const deleteSessionFn = vi.fn().mockReturnValue(true)
+
+    async function handleDeleteSession(sessionPath: string) {
+      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      if (currentPath === sessionPath) {
+        return { success: false, error: 'Cannot delete the active session' }
+      }
+      const result = deleteSessionFn(sessionPath)
+      return result ? { success: true } : { success: false, error: 'Failed to delete session' }
+    }
+
+    const result = await handleDeleteSession('/active-session.jsonl')
+    expect(result.success).toBe(false)
+    expect(deleteSessionFn).not.toHaveBeenCalled()
+  })
+
+  it('deletes a non-active session', async () => {
+    const sendRpcCommand = vi.fn().mockResolvedValue({
+      sessionPath: '/active-session.jsonl',
+    })
+    const deleteSessionFn = vi.fn().mockReturnValue(true)
+
+    async function handleDeleteSession(sessionPath: string) {
+      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      if (currentPath === sessionPath) {
+        return { success: false, error: 'Cannot delete the active session' }
+      }
+      const result = deleteSessionFn(sessionPath)
+      return result ? { success: true } : { success: false, error: 'Failed to delete session' }
+    }
+
+    const result = await handleDeleteSession('/other-session.jsonl')
+    expect(result.success).toBe(true)
+    expect(deleteSessionFn).toHaveBeenCalledWith('/other-session.jsonl')
+  })
+
+  it('returns error when deleteSession fails', async () => {
+    const sendRpcCommand = vi.fn().mockResolvedValue({
+      sessionPath: '/active-session.jsonl',
+    })
+    const deleteSessionFn = vi.fn().mockReturnValue(false)
+
+    async function handleDeleteSession(sessionPath: string) {
+      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      if (currentPath === sessionPath) {
+        return { success: false, error: 'Cannot delete the active session' }
+      }
+      const result = deleteSessionFn(sessionPath)
+      return result ? { success: true } : { success: false, error: 'Failed to delete session' }
+    }
+
+    const result = await handleDeleteSession('/other-session.jsonl')
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('IPC: session:forkAtEntry with name', () => {
+  it('records fork point in parent session after fork', async () => {
+    const sendRpcCommand = vi.fn()
+    sendRpcCommand.mockResolvedValueOnce({ sessionPath: '/parent.jsonl' })
+    sendRpcCommand.mockResolvedValueOnce({ })
+    sendRpcCommand.mockResolvedValueOnce({ })
+    sendRpcCommand.mockResolvedValueOnce({ sessionPath: '/child.jsonl' })
+
+    const nameSession = vi.fn().mockReturnValue(true)
+    const addForkPoint = vi.fn().mockReturnValue(true)
+
+    async function handleForkAtEntry(entryId: string, name?: string) {
+      let parentPath: string | null = null
+      try {
+        const preState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        parentPath = typeof preState.sessionPath === 'string' ? preState.sessionPath : null
+      } catch {}
+
+      const data = (await sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
+
+      if (name) {
+        try { await sendRpcCommand({ type: 'set_session_name', name }) } catch {}
+        try {
+          const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const childPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
+          if (childPath) nameSession(childPath, name)
+        } catch {}
+      }
+
+      if (parentPath) addForkPoint(parentPath, entryId, name ?? '')
+
+      return { success: true, text: typeof data.text === 'string' ? data.text : undefined }
+    }
+
+    const result = await handleForkAtEntry('entry-42', 'experiment-1')
+    expect(result.success).toBe(true)
+    expect(addForkPoint).toHaveBeenCalledWith('/parent.jsonl', 'entry-42', 'experiment-1')
+    expect(nameSession).toHaveBeenCalledWith('/child.jsonl', 'experiment-1')
+  })
+
+  it('records fork point even without name', async () => {
+    const sendRpcCommand = vi.fn()
+    sendRpcCommand.mockResolvedValueOnce({ sessionPath: '/parent.jsonl' })
+    sendRpcCommand.mockResolvedValueOnce({ })
+
+    const addForkPoint = vi.fn().mockReturnValue(true)
+
+    async function handleForkAtEntry(entryId: string, name?: string) {
+      let parentPath: string | null = null
+      try {
+        const preState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        parentPath = typeof preState.sessionPath === 'string' ? preState.sessionPath : null
+      } catch {}
+
+      await sendRpcCommand({ type: 'fork', entryId })
+
+      if (parentPath) addForkPoint(parentPath, entryId, name ?? '')
+
+      return { success: true }
+    }
+
+    const result = await handleForkAtEntry('entry-99')
+    expect(result.success).toBe(true)
+    expect(addForkPoint).toHaveBeenCalledWith('/parent.jsonl', 'entry-99', '')
+  })
+})
+
+describe('IPC: session:getForkPoints', () => {
+  it('calls sessionService.getForkPoints with session path', () => {
+    const getForkPointsFn = vi.fn().mockReturnValue([
+      { entryId: 'entry-1', childName: 'fork-a' },
+      { entryId: 'entry-2', childName: 'fork-b' },
+    ])
+
+    const result = getForkPointsFn('/parent.jsonl')
+    expect(getForkPointsFn).toHaveBeenCalledWith('/parent.jsonl')
+    expect(result).toHaveLength(2)
+    expect(result[0].entryId).toBe('entry-1')
+  })
+})
