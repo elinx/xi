@@ -205,6 +205,14 @@ function SessionSidebar({
   const [isCreating, setIsCreating] = useState(false)
   const [newSessionName, setNewSessionName] = useState('')
 
+  const projects = sessions?.projects ?? []
+
+  useEffect(() => {
+    if (projects.length > 0 && expandedProjects.size === 0) {
+      setExpandedProjects(new Set(projects.map(p => p.projectPath)))
+    }
+  }, [projects, expandedProjects.size])
+
   const toggleProject = useCallback((projectPath: string) => {
     setExpandedProjects((prev) => {
       const next = new Set(prev)
@@ -240,8 +248,6 @@ function SessionSidebar({
       </div>
     )
   }
-
-  const projects = sessions?.projects ?? []
 
   return (
     <div className="flex flex-col w-[260px] bg-gray-950 border-r border-gray-800 overflow-hidden">
