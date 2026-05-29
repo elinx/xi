@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 
 interface SessionSidebarProps {
@@ -208,10 +208,13 @@ function SessionSidebar({
   const projects = sessions?.projects ?? []
 
   useEffect(() => {
-    if (projects.length > 0 && expandedProjects.size === 0) {
-      setExpandedProjects(new Set(projects.map(p => p.projectPath)))
+    if (projects.length > 0) {
+      setExpandedProjects((prev) => {
+        if (prev.size > 0) return prev
+        return new Set(projects.map(p => p.projectPath))
+      })
     }
-  }, [projects, expandedProjects.size])
+  }, [projects])
 
   const toggleProject = useCallback((projectPath: string) => {
     setExpandedProjects((prev) => {
