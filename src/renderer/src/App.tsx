@@ -66,9 +66,10 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     if (isConnected && currentSession?.filePath) {
+      loadHistory()
       loadForkPoints(currentSession.filePath)
     }
-  }, [isConnected, currentSession?.filePath, loadForkPoints])
+  }, [isConnected, currentSession?.filePath, loadHistory, loadForkPoints])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
