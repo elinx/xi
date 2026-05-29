@@ -112,7 +112,7 @@ export function findMainSession(cwd: string, sessionDir?: string): SessionInfo |
   return null
 }
 
-export function listSessions(currentSessionPath?: string, sessionDir?: string): SessionListResult {
+export function listSessions(_currentSessionPath?: string, sessionDir?: string): SessionListResult {
   const sessionDirPath = sessionDir ?? getSessionDir()
   if (!existsSync(sessionDirPath)) {
     return { projects: [] }
@@ -151,12 +151,10 @@ export function listSessions(currentSessionPath?: string, sessionDir?: string): 
 
     sessions.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
-    if (currentSessionPath) {
-      const active = sessions.find((s) => s.filePath === currentSessionPath)
-      if (active) active.isMain = true
-    }
-
-    if (!sessions.some((s) => s.isMain)) {
+    const namedMain = sessions.find((s) => s.name === 'main')
+    if (namedMain) {
+      namedMain.isMain = true
+    } else if (sessions.length > 0) {
       sessions[0].isMain = true
     }
 

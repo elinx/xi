@@ -324,18 +324,21 @@ describe('listSessions', () => {
     expect(projectB!.allSessions).toHaveLength(1)
   })
 
-  it('marks current active session as main when provided', () => {
+  it('marks session named "main" as isMain regardless of age', () => {
     const projectDir = makeProjectDir(testDir, '/test/project')
     writeSession(projectDir, 'old.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
-    const newerPath = writeSession(projectDir, 'newer.jsonl',
+    writeSession(projectDir, 'named-main.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
     )
 
-    const result = listSessions(newerPath, testDir)
-    const newer = result.projects[0].allSessions.find(s => s.filePath === newerPath)
-    expect(newer!.isMain).toBe(true)
+    const result = listSessions(undefined, testDir)
+    const namedMain = result.projects[0].allSessions.find(s => s.name === 'main')
+    const oldest = result.projects[0].allSessions.find(s => s.name !== 'main')
+    expect(namedMain!.isMain).toBe(true)
+    expect(oldest!.isMain).toBe(false)
   })
 
   it('falls back to oldest session as main if no currentSessionPath', () => {

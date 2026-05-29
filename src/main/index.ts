@@ -308,11 +308,13 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:deleteSession', async (_event, sessionPath: string) => {
-    const stateData = await sendRpcCommand({ type: 'get_state' }) as Record<string, unknown>
-    const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
-    if (currentPath === sessionPath) {
-      return { success: false, error: 'Cannot delete the active session' }
-    }
+    try {
+      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      if (currentPath === sessionPath) {
+        return { success: false, error: 'Cannot delete the active session' }
+      }
+    } catch {}
 
     const result = sessionService.deleteSession(sessionPath)
     if (result) {

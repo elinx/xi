@@ -73,6 +73,8 @@ main.jsonl          (no parentSession)
   2. The oldest session for the project (fallback)
 - On app startup, the main session is automatically resumed via `--session <path>` flag to PiBridge
 - If the main session has no name, it is automatically named `"main"` before PiBridge starts
+- `isMain` is set in `listSessions()` based on the session name, **not** the currently active session
+- The currently active session is tracked separately by `currentSession?.filePath` in the frontend
 
 ### 3.2 Session Naming
 
@@ -144,14 +146,14 @@ Pure functions operating on the filesystem. All functions that access the sessio
 
 | Channel | RPC Commands | Notes |
 |---------|-------------|-------|
-| `session:listSessions` | `get_state` → `listSessions(path)` | Passes currentSessionPath to mark active |
+| `session:listSessions` | `get_state` (unused for isMain) → `listSessions()` | `isMain` based on name, not currentSessionPath |
 | `session:getForkMessages` | `get_fork_messages` | Returns forkable user messages |
 | `session:forkAtEntry` | `get_state` → `fork` → `set_session_name` → `get_state` | Records fork point in parent |
 | `session:switchSession` | `switch_session` | Passes sessionPath |
 | `session:newSession` | `new_session` | Optionally passes parentSession |
 | `session:renameSession` | `set_session_name` + `nameSession()` | RPC first, file fallback always |
 | `session:getCurrentSession` | `get_state` → `listSessions()` → find | Matches by sessionPath |
-| `session:deleteSession` | `get_state` (safety check) → `deleteSession()` | Blocks active session deletion |
+| `session:deleteSession` | `get_state` (safety check, try/catch) → `deleteSession()` | Blocks active session deletion; allows delete when Pi disconnected |
 | `session:getMessages` | `get_messages` | Returns raw Pi message array |
 | `session:getForkPoints` | (no RPC) → `getForkPoints()` | Reads directly from disk |
 
@@ -306,6 +308,8 @@ Messages where forks originated show a purple badge below the content:
 6. refresh()            ← reload sessions + currentSession
 ```
 
+On Pi connect, fork points are loaded automatically via `useEffect` that watches `isConnected` + `currentSession?.filePath`.
+
 ### 6.3 Fork
 
 ```
@@ -401,6 +405,7 @@ type ContentBlock =
 | `get_state` fails | `listSessions()` returns with no currentSessionPath marked |
 | `set_session_name` RPC fails | Falls back to `nameSession()` direct file write |
 | Delete active session | IPC returns `{ success: false, error: "Cannot delete the active session" }` |
+| Delete when Pi disconnected | Safety check skipped (try/catch around get_state), delete proceeds |
 | Parse invalid JSONL line | `parseSessionFile` skips line, continues |
 | Empty project directory | `listSessions` skips it; `deleteSession` removes it |
 | Pi disconnected during operation | RPC rejects, UI shows "Pi Disconnected" state |

@@ -62,8 +62,13 @@ function App(): React.ReactElement {
     await forkAtEntry(entryId, name)
     await loadHistory()
     await refresh()
-    setActiveSessionPath(null)
   }, [clearMessages, forkAtEntry, loadHistory, refresh])
+
+  useEffect(() => {
+    if (isConnected && currentSession?.filePath) {
+      loadForkPoints(currentSession.filePath)
+    }
+  }, [isConnected, currentSession?.filePath, loadForkPoints])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
