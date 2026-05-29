@@ -9,6 +9,9 @@ function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
+  const activeSessionName = currentSession?.name ?? sessions?.projects
+    ?.flatMap(p => p.allSessions)
+    ?.find(s => s.isMain)?.name ?? null
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   async function handleConnect(): Promise<void> {
@@ -97,9 +100,9 @@ function App(): React.ReactElement {
             <span className="text-xs text-gray-400">
               {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
             </span>
-            {currentSession?.name && (
+            {activeSessionName && (
               <span className="text-xs text-gray-300 font-medium border-l border-gray-700 pl-2">
-                {currentSession.name}
+                {activeSessionName}
               </span>
             )}
             {isStreaming && (
