@@ -5,14 +5,28 @@ import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
 
+function getDisplayName(session: { name: string | null; createdAt: string }): string {
+  if (session.name) return session.name
+  const d = new Date(session.createdAt)
+  const month = d.toLocaleString('en', { month: 'short' })
+  const day = d.getDate()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${month} ${day} ${hh}:${mm}`
+}
+
 function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
-  const activeSessionName = currentSession?.name ?? sessions?.projects
-    ?.flatMap(p => p.allSessions)
-    ?.find(s => s.isMain)?.name ?? null
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
+
+  const activeSession = activeSessionPath
+    ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
+    : currentSession
+
+  const activeSessionName = activeSession ? getDisplayName(activeSession) : null
 
   async function handleConnect(): Promise<void> {
     setError(null)
@@ -28,6 +42,7 @@ function App(): React.ReactElement {
   }, [])
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
+    setActiveSessionPath(sessionPath)
     clearMessages()
     await switchSession(sessionPath)
     await loadHistory()
@@ -47,6 +62,7 @@ function App(): React.ReactElement {
     await forkAtEntry(entryId, name)
     await loadHistory()
     await refresh()
+    setActiveSessionPath(null)
   }, [clearMessages, forkAtEntry, loadHistory, refresh])
 
   useEffect(() => {
