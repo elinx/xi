@@ -134,6 +134,21 @@ function SessionNode({
           {formatRelativeTime(node.session.createdAt)}
         </span>
 
+        {node.session.parentSessionPath && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onSwitch(node.session.parentSessionPath!)
+            }}
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-500 hover:text-blue-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-colors"
+            title="Go to parent session"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        )}
+
         {!isActive && !node.session.isMain && (
           <button
             onClick={(e) => {
@@ -156,19 +171,6 @@ function SessionNode({
           </button>
         )}
       </div>
-
-      {node.session.parentSessionPath && (
-        <div
-          className="flex items-center gap-1 cursor-pointer hover:text-blue-400 transition-colors"
-          style={{ paddingLeft: `${depth * 16 + 24}px` }}
-          onClick={() => onSwitch(node.session.parentSessionPath!)}
-        >
-          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-          </svg>
-          <span className="text-[10px] text-gray-600 hover:text-blue-400">parent</span>
-        </div>
-      )}
 
       {hasChildren && isExpanded && (
         <div>
