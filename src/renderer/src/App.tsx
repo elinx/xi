@@ -97,6 +97,11 @@ function App(): React.ReactElement {
             <span className="text-xs text-gray-400">
               {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
             </span>
+            {currentSession?.name && (
+              <span className="text-xs text-gray-300 font-medium border-l border-gray-700 pl-2">
+                {currentSession.name}
+              </span>
+            )}
             {isStreaming && (
               <span className="text-xs text-blue-400 animate-pulse">Streaming...</span>
             )}

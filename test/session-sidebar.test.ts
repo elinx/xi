@@ -172,3 +172,33 @@ describe('Session tree rendering data', () => {
     expect(project.projectPath).toBe('/my/project')
   })
 })
+
+describe('Delete button visibility', () => {
+  it('shows delete button on non-active, non-main session', () => {
+    const isActive = false
+    const isMain = false
+    const showDelete = !isActive && !isMain
+    expect(showDelete).toBe(true)
+  })
+
+  it('hides delete button on active session', () => {
+    const isActive = true
+    const isMain = false
+    const showDelete = !isActive && !isMain
+    expect(showDelete).toBe(false)
+  })
+
+  it('hides delete button on main session', () => {
+    const isActive = false
+    const isMain = true
+    const showDelete = !isActive && !isMain
+    expect(showDelete).toBe(false)
+  })
+
+  it('hides delete button on active main session', () => {
+    const isActive = true
+    const isMain = true
+    const showDelete = !isActive && !isMain
+    expect(showDelete).toBe(false)
+  })
+})

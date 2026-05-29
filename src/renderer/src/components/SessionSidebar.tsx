@@ -134,7 +134,7 @@ function SessionNode({
           {formatRelativeTime(node.session.createdAt)}
         </span>
 
-        {isActive && !node.session.isMain && (
+        {!isActive && !node.session.isMain && (
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -146,9 +146,9 @@ function SessionNode({
               }
             }}
             onBlur={() => setConfirmDelete(false)}
-            className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] transition-colors ${
+            className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] opacity-0 group-hover:opacity-100 transition-colors ${
               confirmDelete
-                ? 'bg-red-600 text-white'
+                ? 'bg-red-600 text-white opacity-100'
                 : 'text-gray-500 hover:text-red-400 hover:bg-gray-700'
             }`}
           >
