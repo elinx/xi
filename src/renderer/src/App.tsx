@@ -4,6 +4,7 @@ import { useSessionManager } from './hooks/useSessionManager'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
+import { TokenUsageRing } from './components/TokenUsageRing'
 import type { ViewMode } from './utils/compact-view'
 
 function getDisplayName(session: { name: string | null; createdAt: string }): string {
@@ -17,13 +18,17 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 }
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd } = usePiRpc()
+  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd, tokenUsage } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('xi-sidebar-collapsed')
+    return saved === 'true'
+  })
   const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    return (localStorage.getItem('xi-view-mode') as ViewMode) || 'normal'
+    const saved = localStorage.getItem('xi-view-mode') as ViewMode
+    return saved === 'normal' || saved === 'turn' || saved === 'outline' ? saved : 'normal'
   })
 
   const activeSession = activeSessionPath
@@ -131,7 +136,11 @@ function App(): React.ReactElement {
         onRenameSession={renameSession}
         onDeleteSession={deleteSession}
         isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggleCollapse={() => {
+          const next = !sidebarCollapsed
+          setSidebarCollapsed(next)
+          localStorage.setItem('xi-sidebar-collapsed', String(next))
+        }}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -174,6 +183,16 @@ function App(): React.ReactElement {
             {error && (
               <span className="text-xs text-red-500" title={error}>Error</span>
             )}
+          </div>
+          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <TokenUsageRing
+              usedTokens={tokenUsage.totalTokens}
+              contextWindowSize={tokenUsage.contextWindowSize}
+              inputTokens={tokenUsage.inputTokens}
+              outputTokens={tokenUsage.outputTokens}
+              cacheReadTokens={tokenUsage.cacheReadTokens}
+              totalCost={tokenUsage.totalCost}
+            />
           </div>
           <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button

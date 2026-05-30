@@ -12,6 +12,24 @@ import type {
 } from '../types/pi-events'
 import type { ForkPoint } from '../types/session'
 
+export interface TokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  totalCost: number
+  contextWindowSize: number
+}
+
+function inferContextWindow(model: string): number {
+  if (!model) return 200000
+  const m = model.toLowerCase()
+  if (m.includes('gpt-4o') || m.includes('gpt-4-turbo')) return 128000
+  if (m.includes('claude')) return 200000
+  return 200000
+}
+
 interface UsePiRpcReturn {
   messages: ChatMessage[]
   isConnected: boolean
@@ -26,6 +44,7 @@ interface UsePiRpcReturn {
   loadForkPoints: (sessionPath: string) => Promise<void>
   onAgentEnd: (() => void) | null
   setOnAgentEnd: (cb: (() => void) | null) => void
+  tokenUsage: TokenUsage
 }
 
 export function usePiRpc(): UsePiRpcReturn {
@@ -33,6 +52,15 @@ export function usePiRpc(): UsePiRpcReturn {
   const [isConnected, setIsConnected] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    totalTokens: 0,
+    totalCost: 0,
+    contextWindowSize: 200000,
+  })
 
   const currentAssistantId = useRef<string | null>(null)
   const currentContentBlocks = useRef<Map<number, ContentBlock>>(new Map())
@@ -206,7 +234,21 @@ export function usePiRpc(): UsePiRpcReturn {
               break
             }
 
-            case 'done':
+            case 'done': {
+              const msg = ame.message
+              if (msg.usage) {
+                setTokenUsage({
+                  inputTokens: msg.usage.input,
+                  outputTokens: msg.usage.output,
+                  cacheReadTokens: msg.usage.cacheRead,
+                  cacheWriteTokens: msg.usage.cacheWrite,
+                  totalTokens: msg.usage.input + msg.usage.output,
+                  totalCost: msg.usage.cost.total,
+                  contextWindowSize: inferContextWindow(msg.responseModel),
+                })
+              }
+              break
+            }
             case 'error':
               break
           }
@@ -243,6 +285,20 @@ export function usePiRpc(): UsePiRpcReturn {
                   return { ...m, blocks: [...m.blocks, ...extraBlocks] }
                 }),
               )
+            }
+          }
+          if (msg.role === 'assistant') {
+            const assistantMsg = msg as PiAssistantMessage
+            if (assistantMsg.usage) {
+              setTokenUsage({
+                inputTokens: assistantMsg.usage.input,
+                outputTokens: assistantMsg.usage.output,
+                cacheReadTokens: assistantMsg.usage.cacheRead,
+                cacheWriteTokens: assistantMsg.usage.cacheWrite,
+                totalTokens: assistantMsg.usage.input + assistantMsg.usage.output,
+                totalCost: assistantMsg.usage.cost.total,
+                contextWindowSize: inferContextWindow(assistantMsg.responseModel),
+              })
             }
           }
           break
@@ -417,6 +473,15 @@ export function usePiRpc(): UsePiRpcReturn {
   const clearMessages = useCallback(() => {
     setMessages([])
     setForkPoints([])
+    setTokenUsage({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      contextWindowSize: 200000,
+    })
     currentAssistantId.current = null
     currentContentBlocks.current.clear()
     toolCallArgsBuffer.current.clear()
@@ -526,9 +591,35 @@ export function usePiRpc(): UsePiRpcReturn {
       }
     }
 
+    // Extract token usage from last assistant message in history
+    let restoredUsage: TokenUsage | null = null
+    for (let i = piMessages.length - 1; i >= 0; i--) {
+      const msg = piMessages[i] as Record<string, unknown>
+      if (msg.role === 'assistant') {
+        const usage = msg.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number } } | undefined
+        const responseModel = typeof msg.responseModel === 'string' ? msg.responseModel : ''
+        if (usage) {
+          restoredUsage = {
+            inputTokens: usage.input,
+            outputTokens: usage.output,
+            cacheReadTokens: usage.cacheRead,
+            cacheWriteTokens: usage.cacheWrite,
+            totalTokens: usage.input + usage.output,
+            totalCost: usage.cost.total,
+            contextWindowSize: inferContextWindow(responseModel),
+          }
+        }
+        break
+      }
+    }
+
     clearMessages()
     setMessages(chatMessages)
+    // Apply token usage after clearMessages to avoid being overwritten
+    if (restoredUsage) {
+      setTokenUsage(restoredUsage)
+    }
   }, [clearMessages])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd }
+  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, tokenUsage }
 }
