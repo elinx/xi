@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type {
@@ -20,6 +20,8 @@ import type { ConversationTurn } from '../utils/compact-view'
 
 interface ChatViewProps {
   messages: ChatMessage[]
+  isStreaming: boolean
+  streamingMessageId: string | null
   onSendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
@@ -29,7 +31,17 @@ interface ChatViewProps {
   viewMode: ViewMode
 }
 
-function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement {
+function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreaming?: boolean }): React.ReactElement {
+  // During streaming, skip expensive ReactMarkdown parsing to reduce flicker.
+  // Use lightweight <pre>-based rendering; switch to full markdown once stable.
+  if (isStreaming) {
+    return (
+      <div className="prose prose-sm max-w-none whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {block.content}
+        <span className="inline-block w-1.5 h-4 ml-0.5 bg-gray-400 animate-pulse align-text-bottom" />
+      </div>
+    )
+  }
   return (
     <div className="prose prose-sm max-w-none">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
@@ -37,7 +49,7 @@ function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement 
   )
 }
 
-function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactElement {
+const ToolCallRenderer = memo(function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactElement {
   const statusColors: Record<ToolCallBlock['status'], string> = {
     pending: 'text-gray-500',
     running: 'text-yellow-600',
@@ -72,7 +84,7 @@ function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactEleme
       </div>
     </details>
   )
-}
+})
 
 function ToolResultRenderer({ block }: { block: ToolResultBlock }): React.ReactElement {
   return (
@@ -307,10 +319,11 @@ function AnnotatableImageBlock({
   )
 }
 
-function ContentBlockRenderer({
+const ContentBlockRenderer = memo(function ContentBlockRenderer({
   block,
   messageId,
   blockIndex,
+  isStreamingBlock,
   annotatingTarget,
   onEnterAnnotation,
   onExitAnnotation,
@@ -319,6 +332,7 @@ function ContentBlockRenderer({
   block: ContentBlock
   messageId: string
   blockIndex: number
+  isStreamingBlock?: boolean
   annotatingTarget: { messageId: string; blockIndex: number } | null
   onEnterAnnotation: (messageId: string, blockIndex: number) => void
   onExitAnnotation: () => void
@@ -326,7 +340,7 @@ function ContentBlockRenderer({
 }): React.ReactElement | null {
   switch (block.type) {
     case 'text':
-      return <TextBlockRenderer block={block} />
+      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} />
     case 'tool_call':
       return <ToolCallRenderer block={block} />
     case 'tool_result':
@@ -354,7 +368,7 @@ function ContentBlockRenderer({
     default:
       return null
   }
-}
+})
 
 function ForkNameInput({
   onForkAtEntry,
@@ -429,6 +443,8 @@ function TurnCard({
   onForkClose,
   onForkAtEntry,
   forkPoints,
+  isStreaming,
+  streamingMessageId,
 }: {
   turn: ConversationTurn
   isLast: boolean
@@ -444,6 +460,8 @@ function TurnCard({
   onForkClose: () => void
   onForkAtEntry: (entryId: string, name: string) => void
   forkPoints: ForkPoint[]
+  isStreaming: boolean
+  streamingMessageId: string | null
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const agentSummary = getAgentSummary(turn.assistantMessages)
@@ -502,6 +520,7 @@ function TurnCard({
                         block={block}
                         messageId={msg.id}
                         blockIndex={i}
+                        isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
                         annotatingTarget={annotatingTarget}
                         onEnterAnnotation={onEnterAnnotation}
                         onExitAnnotation={onExitAnnotation}
@@ -568,6 +587,8 @@ function OutlineRow({
   onForkClose,
   onForkAtEntry,
   forkPoints,
+  isStreaming,
+  streamingMessageId,
 }: {
   turn: ConversationTurn
   isLast: boolean
@@ -583,6 +604,8 @@ function OutlineRow({
   onForkClose: () => void
   onForkAtEntry: (entryId: string, name: string) => void
   forkPoints: ForkPoint[]
+  isStreaming: boolean
+  streamingMessageId: string | null
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
 
@@ -641,6 +664,7 @@ function OutlineRow({
                         block={block}
                         messageId={msg.id}
                         blockIndex={i}
+                        isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
                         annotatingTarget={annotatingTarget}
                         onEnterAnnotation={onEnterAnnotation}
                         onExitAnnotation={onExitAnnotation}
@@ -689,7 +713,7 @@ function OutlineRow({
   )
 }
 
-function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -748,9 +772,18 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
     setForkEntryId(null)
   }, [])
 
+  // Throttled scroll: only scroll on animation frames to avoid jank
+  const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      bottomRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' })
+    })
+    return () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
+    }
+  }, [messages, isStreaming])
 
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
@@ -804,6 +837,7 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                       block={block}
                       messageId={msg.id}
                       blockIndex={i}
+                      isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
                       annotatingTarget={annotatingTarget}
                       onEnterAnnotation={handleEnterAnnotation}
                       onExitAnnotation={handleExitAnnotation}
@@ -850,6 +884,8 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
               onForkClose={handleForkClose}
               onForkAtEntry={onForkAtEntry}
               forkPoints={forkPoints}
+              isStreaming={isStreaming}
+              streamingMessageId={streamingMessageId}
             />
           ))}
           <div ref={bottomRef} />
@@ -873,6 +909,8 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
               onForkClose={handleForkClose}
               onForkAtEntry={onForkAtEntry}
               forkPoints={forkPoints}
+              isStreaming={isStreaming}
+              streamingMessageId={streamingMessageId}
             />
           ))}
           <div ref={bottomRef} />

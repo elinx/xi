@@ -34,6 +34,7 @@ interface UsePiRpcReturn {
   messages: ChatMessage[]
   isConnected: boolean
   isStreaming: boolean
+  streamingMessageId: string | null
   sendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
   abort: () => void
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
@@ -77,7 +78,32 @@ export function usePiRpc(): UsePiRpcReturn {
     [],
   )
 
+  // RAF-throttled sync to avoid flickering on every text_delta
+  const rafIdRef = useRef<number | null>(null)
   const syncContentBlocksToMessage = useCallback(() => {
+    if (!currentAssistantId.current) return
+    // Always schedule at most one RAF frame
+    if (rafIdRef.current !== null) return
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null
+      if (!currentAssistantId.current) return
+      const blocks = Array.from(currentContentBlocks.current.values())
+      const assistantId = currentAssistantId.current
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== assistantId) return msg
+          return { ...msg, blocks: [...blocks] }
+        }),
+      )
+    })
+  }, [])
+
+  // Force-flush any pending RAF sync (used at message/agent end)
+  const flushSync = useCallback(() => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
     if (!currentAssistantId.current) return
     const blocks = Array.from(currentContentBlocks.current.values())
     const assistantId = currentAssistantId.current
@@ -91,8 +117,8 @@ export function usePiRpc(): UsePiRpcReturn {
 
   const finalizeCurrentAssistant = useCallback(() => {
     if (!currentAssistantId.current) return
-    syncContentBlocksToMessage()
-  }, [syncContentBlocksToMessage])
+    flushSync()
+  }, [flushSync])
 
   const handleEvent = useCallback(
     (event: AgentSessionEvent) => {
@@ -103,7 +129,7 @@ export function usePiRpc(): UsePiRpcReturn {
 
         case 'agent_end':
           setIsStreaming(false)
-          finalizeCurrentAssistant()
+          flushSync()
           currentAssistantId.current = null
           currentContentBlocks.current.clear()
           toolCallArgsBuffer.current.clear()
@@ -230,7 +256,8 @@ export function usePiRpc(): UsePiRpcReturn {
               })
               pendingToolCallArgs.current.set(ame.toolCall.id, parsedArgs)
               toolCallArgsBuffer.current.delete(ame.contentIndex)
-              syncContentBlocksToMessage()
+              // toolcall_end is an important structural change, flush immediately
+              flushSync()
               break
             }
 
@@ -621,5 +648,7 @@ export function usePiRpc(): UsePiRpcReturn {
     }
   }, [clearMessages])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, tokenUsage }
+  const streamingMessageId = isStreaming ? currentAssistantId.current : null
+
+  return { messages, isConnected, isStreaming, streamingMessageId, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, tokenUsage }
 }

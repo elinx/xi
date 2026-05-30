@@ -18,7 +18,7 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 }
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd, tokenUsage } = usePiRpc()
+  const { messages, isConnected, isStreaming, streamingMessageId, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd, tokenUsage } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -245,6 +245,8 @@ function App(): React.ReactElement {
 
         <ChatView
           messages={messages}
+          isStreaming={isStreaming}
+          streamingMessageId={streamingMessageId}
           pendingUiRequests={pendingUiRequests}
           respondToUiRequest={respondToUiRequest}
           onSendPrompt={sendPrompt}
