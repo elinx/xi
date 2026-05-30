@@ -482,23 +482,21 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                   <span className="text-xs font-medium text-gray-500">
                     {msg.role === 'user' ? 'You' : 'Pi'}
                   </span>
-                  {msg.role === 'user' && (
-                    <div className="relative">
-                      <button
-                        onClick={() => handleForkClick(msg.id, msg.piEntryId)}
-                        className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                      >
-                        Fork
-                      </button>
-                      {forkInputMessageId === msg.id && forkEntryId && (
-                        <ForkNameInput
-                          onForkAtEntry={onForkAtEntry}
-                          onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
-                          defaultEntryId={forkEntryId}
-                        />
-                      )}
-                    </div>
-                  )}
+                  <div className="relative">
+                    <button
+                      onClick={() => handleForkClick(msg.id, msg.piEntryId)}
+                      className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                    >
+                      Fork
+                    </button>
+                    {forkInputMessageId === msg.id && forkEntryId && (
+                      <ForkNameInput
+                        onForkAtEntry={onForkAtEntry}
+                        onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
+                        defaultEntryId={forkEntryId}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   {msg.blocks.map((block, i) => (
