@@ -6,7 +6,7 @@ out/
 dist/
 
 # Agent GUI local data
-.agent-gui/
+.xi/
 
 # Pi reference source (not part of this project)
 ref/

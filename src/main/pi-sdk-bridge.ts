@@ -47,7 +47,7 @@ export class PiSDKBridge extends EventEmitter {
     }
 
     const resolvedCwd = resolve(cwd)
-    const localAgentDir = join(resolvedCwd, '.agent-gui')
+    const localAgentDir = join(resolvedCwd, '.xi')
     if (!existsSync(localAgentDir)) {
       mkdirSync(localAgentDir, { recursive: true })
     }

@@ -1,7 +1,7 @@
 {
-  "name": "agent-gui",
+  "name": "xi",
   "version": "0.0.1",
-  "description": "Agent GUI - Electron wrapper for Pi CLI",
+  "description": "Xi /shee/ — The next-generation coding tool",
   "main": "./out/main/index.js",
   "author": "",
   "scripts": {

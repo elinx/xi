@@ -13,7 +13,7 @@ import type {
 export function getSessionDir(cwd?: string): string {
   const projectRoot = cwd ?? process.cwd()
   const resolvedCwd = resolve(projectRoot)
-  const agentDir = join(resolvedCwd, '.agent-gui')
+  const agentDir = join(resolvedCwd, '.xi')
   const safePath = `--${resolvedCwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
   const sessionDir = join(agentDir, 'sessions', safePath)
   if (!existsSync(sessionDir)) {
