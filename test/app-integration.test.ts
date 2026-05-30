@@ -22,6 +22,7 @@ function createMockApi() {
     onExtensionUiRequest: vi.fn().mockReturnValue(() => {}),
     onStateChanged: vi.fn().mockReturnValue(() => {}),
     listSessions: vi.fn().mockResolvedValue({ projects: [] }),
+    getForkMessages: vi.fn().mockResolvedValue([]),
     forkAtEntry: vi.fn().mockResolvedValue({ success: true }),
     switchSession: vi.fn().mockResolvedValue({ success: true }),
     newSession: vi.fn().mockResolvedValue({ success: true }),

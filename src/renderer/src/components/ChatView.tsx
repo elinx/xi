@@ -11,7 +11,7 @@ import type {
   HtmlBlock,
   Annotation,
 } from '../types/message'
-import type { ForkPoint } from '../types/session'
+import type { ForkableMessage, ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
 
@@ -21,6 +21,7 @@ interface ChatViewProps {
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
   onForkAtEntry: (entryId: string, name: string) => void
+  getForkMessages: () => Promise<ForkableMessage[]>
   forkPoints: ForkPoint[]
 }
 
@@ -409,13 +410,14 @@ function ForkNameInput({
   )
 }
 
-function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, forkPoints }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
     blockIndex: number
   } | null>(null)
   const [forkInputMessageId, setForkInputMessageId] = useState<string | null>(null)
+  const [forkEntryId, setForkEntryId] = useState<string | null>(null)
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -433,13 +435,21 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
     [onSendPrompt],
   )
 
-  const handleForkClick = useCallback((messageId: string) => {
+  const handleForkClick = useCallback(async (messageId: string, piEntryId: string | undefined) => {
     if (forkInputMessageId === messageId) {
       setForkInputMessageId(null)
+      setForkEntryId(null)
       return
     }
+    if (piEntryId) {
+      setForkEntryId(piEntryId)
+    } else {
+      const msgs = await getForkMessages()
+      const lastMsg = msgs[msgs.length - 1]
+      setForkEntryId(lastMsg?.entryId ?? null)
+    }
     setForkInputMessageId(messageId)
-  }, [forkInputMessageId])
+  }, [forkInputMessageId, getForkMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -472,19 +482,19 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                   <span className="text-xs font-medium text-gray-400">
                     {msg.role === 'user' ? 'You' : 'Pi'}
                   </span>
-                  {msg.role === 'user' && msg.piEntryId && (
+                  {msg.role === 'user' && (
                     <div className="relative">
                       <button
-                        onClick={() => handleForkClick(msg.id)}
+                        onClick={() => handleForkClick(msg.id, msg.piEntryId)}
                         className="rounded px-2 py-0.5 text-xs text-gray-500 opacity-0 transition-opacity hover:text-gray-300 hover:bg-gray-700 group-hover:opacity-100"
                       >
                         Fork
                       </button>
-                      {forkInputMessageId === msg.id && (
+                      {forkInputMessageId === msg.id && forkEntryId && (
                         <ForkNameInput
                           onForkAtEntry={onForkAtEntry}
-                          onClose={() => setForkInputMessageId(null)}
-                          defaultEntryId={msg.piEntryId!}
+                          onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
+                          defaultEntryId={forkEntryId}
                         />
                       )}
                     </div>
