@@ -44,7 +44,8 @@
 | 时间 | hover 显示相对时间（`2h ago`） |
 | 重命名 | 双击进入编辑，Enter 提交，Escape 取消，失焦提交 |
 | 跳转父 session | 向上箭头按钮，仅 parentSessionPath 非空时显示 |
-| 删除 | x 按钮（hover 显示），再点确认（变为红色 `Del`），仅非活跃+非 main 可删除 |
+| 删除 | x 按钮（hover 显示），再点确认（变为红色 `Del`），仅非 main 可删除（包括活跃 session）；删除活跃 session 时后端先创建新 session 再删除旧的 |
+| Fork | 🔀 按钮（hover 显示），仅活跃 session 可 fork；点击后出现内联名称输入框 + Fork 按钮 + ✕ 取消按钮，输入名称后 fork 从最后一条用户消息 |
 
 ### 创建新 Session
 
@@ -148,7 +149,8 @@ Chat 区域已用 git graph 线条连接 turn，sidebar 的 session 树也采用
 
 右键菜单项：
 - Rename — 进入重命名编辑
+- Fork — 从最后一条用户消息 fork（仅活跃 session 时显示）
 - Go to parent — 跳转父 session（仅 parentSessionPath 非空时显示）
-- Delete — 删除 session（仅非活跃 + 非 main 时显示）
+- Delete — 删除 session（仅非 main 时显示，包括活跃 session）
 
 优先级：现有直接交互不变，右键菜单是补充而非替代。

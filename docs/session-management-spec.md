@@ -116,10 +116,23 @@ Fork points are rendered as purple badges on the corresponding message in ChatVi
 ### 3.5 Delete
 
 - Sessions can be deleted from the sidebar
-- **Cannot delete the currently active session** — IPC handler checks via `get_state`
+- **Active sessions can be deleted** — the backend creates a new session first, then deletes the old one, similar to `clearSession`
 - **Cannot delete main sessions** — UI hides the delete button
 - When the last session in a project directory is deleted, the project directory is removed
 - Delete is a two-step confirmation: hover shows `x`, click shows red `Del`, click again executes
+
+### 3.6 Fork
+
+When a session is active, a **Fork** button appears in the sidebar session node. Clicking it creates a new session that forks from the **last user message** in the current conversation — i.e., the new session shares the entire conversation history and then diverges.
+
+**Fork flow (sidebar)**:
+1. User clicks Fork button on the active session node → inline name input appears
+2. User types a fork name → presses Enter (or clicks Fork button)
+3. Frontend finds the last user message's `piEntryId` from the messages array
+4. Frontend calls `forkAtEntry(lastUserEntryId, name)` — same RPC flow as regular fork
+5. The new session becomes active and appears in the sidebar as a child of the original session
+
+This is a shortcut for the most common fork use case — forking from the end of the conversation. The existing ForkPopover (fork from any message) remains available in ChatView.
 
 ## 4. Data Flow
 
@@ -153,7 +166,7 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `session:newSession` | `new_session` | Optionally passes parentSession |
 | `session:renameSession` | `set_session_name` + `nameSession()` | RPC first, file fallback always |
 | `session:getCurrentSession` | `get_state` → `listSessions()` → find | Matches by sessionPath |
-| `session:deleteSession` | `get_state` (safety check, try/catch) → `deleteSession()` | Blocks active session deletion; allows delete when Pi disconnected |
+| `session:deleteSession` | `get_state` (check if active) → if active: `new_session` + `deleteSession()`; else: `deleteSession()` | Handles active session deletion by creating new session first |
 | `session:getMessages` | `get_messages` | Returns raw Pi message array |
 | `session:getForkPoints` | (no RPC) → `getForkPoints()` | Reads directly from disk |
 | `session:softPeek` | `soft_peek` | Reads messages from session without switching runtime (§6.6.7) |
@@ -260,7 +273,8 @@ For unnamed sessions, `getDisplayName()` shows creation time: `"May 29 16:24"`
 - **Session node**: click to switch, double-click to rename, hover for relative time
 - **Main indicator**: blue dot (●) before name
 - **Active highlight**: `bg-gray-800` on the current session
-- **Delete button**: `x` on hover for non-active, non-main sessions; click once → red `Del` confirm
+- **Delete button**: `x` on hover for non-main sessions (including the active session); click once → red `Del` confirm; deleting the active session creates a new session first then deletes the old one
+- **Fork button**: `🔀` icon on hover for the active session; click → inline name input; forks from the last user message
 - **Parent link**: `↑ parent` text below forked sessions, click to switch to parent
 - **New session**: `+` button opens inline name input, requires name before creating
 
@@ -329,8 +343,10 @@ On Pi connect, fork points are loaded automatically via `useEffect` that watches
 ```
 1. User clicks x → confirmDelete = true
 2. User clicks Del → onDelete(filePath)
-3. IPC: get_state → verify not active → deleteSession(path)
-4. On success: loadSessions() to refresh sidebar
+3. IPC: deleteSession(path)
+   - If session is active: backend creates new session first, then deletes old one
+   - If session is not active: directly deletes the session file
+4. On success: loadSessions() + loadCurrentSession() + refresh()
 ```
 
 ### 6.5 Pi Connected Event
@@ -786,7 +802,7 @@ type ContentBlock =
 | RPC timeout (30s) | Promise rejects, caller shows error or silently fails |
 | `get_state` fails | `listSessions()` returns with no currentSessionPath marked |
 | `set_session_name` RPC fails | Falls back to `nameSession()` direct file write |
-| Delete active session | IPC returns `{ success: false, error: "Cannot delete the active session" }` |
+| Delete active session | Backend creates new session first, then deletes old session file; similar to clearSession |
 | Delete when Pi disconnected | Safety check skipped (try/catch around get_state), delete proceeds |
 | Parse invalid JSONL line | `parseSessionFile` skips line, continues |
 | Empty project directory | `listSessions` skips it; `deleteSession` removes it |

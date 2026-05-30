@@ -8,6 +8,7 @@ interface SessionSidebarProps {
   onNewSession: (name: string) => void
   onRenameSession: (name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
+  onForkFromEnd: (sessionPath: string, name: string) => void
   isCollapsed: boolean
   onToggleCollapse: () => void
 }
@@ -182,9 +183,12 @@ function SessionNode({
   onSwitch,
   onRename,
   onDelete,
+  onForkFromEnd,
   onContextMenu,
   triggerRenamePath,
   onRenameTriggered,
+  triggerForkPath,
+  onForkTriggered,
 }: {
   node: SessionTreeNode
   ancestorLines: { hasLine: boolean; color: string; branchColor?: string; bottomColor?: string }[]
@@ -193,14 +197,19 @@ function SessionNode({
   onSwitch: (path: string) => void
   onRename: (name: string) => void
   onDelete: (path: string) => Promise<boolean>
+  onForkFromEnd: (sessionPath: string, name: string) => void
   onContextMenu: (e: React.MouseEvent, session: SessionInfo) => void
   triggerRenamePath: string | null
   onRenameTriggered: () => void
+  triggerForkPath: string | null
+  onForkTriggered: () => void
 }): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(getDisplayName(node.session))
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isForking, setIsForking] = useState(false)
+  const [forkName, setForkName] = useState('')
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
 
@@ -211,6 +220,14 @@ function SessionNode({
       onRenameTriggered()
     }
   }, [triggerRenamePath, node.session.filePath, onRenameTriggered])
+
+  useEffect(() => {
+    if (triggerForkPath === node.session.filePath) {
+      setIsForking(true)
+      setForkName('')
+      onForkTriggered()
+    }
+  }, [triggerForkPath, node.session.filePath, onForkTriggered])
 
   const handleDoubleClick = useCallback(() => {
     setIsRenaming(true)
@@ -331,7 +348,27 @@ function SessionNode({
             </button>
           )}
 
-          {!isActive && !node.session.isMain && (
+          {isActive && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsForking(true)
+                setForkName('')
+              }}
+              className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
+              title="Fork"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h4m6 0h4M12 5v4m0 6v4" />
+                <circle cx="5" cy="12" r="2" />
+                <circle cx="19" cy="12" r="2" />
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+          )}
+
+          {!node.session.isMain && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -343,17 +380,78 @@ function SessionNode({
                 }
               }}
               onBlur={() => setConfirmDelete(false)}
-              className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] opacity-0 group-hover:opacity-100 transition-colors ${
+              className={`flex-shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-colors ${
                 confirmDelete
                   ? 'bg-red-600 text-white opacity-100'
                   : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
               }`}
             >
-              {confirmDelete ? 'Del' : 'x'}
+              {confirmDelete ? (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
             </button>
           )}
         </div>
       </div>
+
+      {isForking && (
+        <div
+          className="flex items-center gap-1 pl-8 pr-2 py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            value={forkName}
+            onChange={(e) => setForkName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const trimmed = forkName.trim()
+                if (trimmed) {
+                  onForkFromEnd(node.session.filePath, trimmed)
+                  setIsForking(false)
+                  setForkName('')
+                }
+              }
+              if (e.key === 'Escape') {
+                setIsForking(false)
+                setForkName('')
+              }
+            }}
+            placeholder="Fork name"
+            className="flex-1 min-w-0 rounded border border-purple-300 bg-white px-2 py-0.5 text-xs text-gray-900 outline-none focus:border-purple-500"
+          />
+          <button
+            onClick={() => {
+              const trimmed = forkName.trim()
+              if (trimmed) {
+                onForkFromEnd(node.session.filePath, trimmed)
+                setIsForking(false)
+                setForkName('')
+              }
+            }}
+            disabled={!forkName.trim()}
+            className="rounded bg-purple-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Fork
+          </button>
+          <button
+            onClick={() => {
+              setIsForking(false)
+              setForkName('')
+            }}
+            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors"
+            title="Cancel"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {hasChildren && isExpanded && (
         <div>
@@ -396,9 +494,12 @@ function SessionNode({
                 onSwitch={onSwitch}
                 onRename={onRename}
                 onDelete={onDelete}
+                onForkFromEnd={onForkFromEnd}
                 onContextMenu={onContextMenu}
                 triggerRenamePath={triggerRenamePath}
                 onRenameTriggered={onRenameTriggered}
+                triggerForkPath={triggerForkPath}
+                onForkTriggered={onForkTriggered}
               />
             )
           })}
@@ -415,6 +516,7 @@ function SessionSidebar({
   onNewSession,
   onRenameSession,
   onDeleteSession,
+  onForkFromEnd,
   isCollapsed,
   onToggleCollapse,
 }: SessionSidebarProps): React.ReactElement {
@@ -432,6 +534,7 @@ function SessionSidebar({
     session: SessionInfo
   } | null>(null)
   const [triggerRenamePath, setTriggerRenamePath] = useState<string | null>(null)
+  const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
 
   const sidebarWidthRef = useRef(sidebarWidth)
   sidebarWidthRef.current = sidebarWidth
@@ -458,6 +561,10 @@ function SessionSidebar({
 
   const handleRenameTriggered = useCallback(() => {
     setTriggerRenamePath(null)
+  }, [])
+
+  const handleForkTriggered = useCallback(() => {
+    setTriggerForkPath(null)
   }, [])
 
   useEffect(() => {
@@ -594,9 +701,12 @@ function SessionSidebar({
             onSwitch={onSwitchSession}
             onRename={onRenameSession}
             onDelete={onDeleteSession}
+            onForkFromEnd={onForkFromEnd}
             onContextMenu={handleContextMenu}
             triggerRenamePath={triggerRenamePath}
             onRenameTriggered={handleRenameTriggered}
+            triggerForkPath={triggerForkPath}
+            onForkTriggered={handleForkTriggered}
           />
         )}
       </div>
@@ -632,7 +742,18 @@ function SessionSidebar({
               Go to parent
             </div>
           )}
-          {contextMenu.session.filePath !== currentSession?.filePath && !contextMenu.session.isMain && (
+          {contextMenu.session.filePath === currentSession?.filePath && (
+            <div
+              className="px-3 py-1.5 hover:bg-purple-50 cursor-pointer text-purple-600"
+              onClick={() => {
+                setTriggerForkPath(contextMenu.session.filePath)
+                setContextMenu(null)
+              }}
+            >
+              Fork
+            </div>
+          )}
+          {!contextMenu.session.isMain && (
             <div
               className="px-3 py-1.5 hover:bg-red-50 cursor-pointer text-red-600"
               onClick={() => {

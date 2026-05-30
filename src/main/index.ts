@@ -266,10 +266,24 @@ function registerIpcHandlers(): void {
     try {
       const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
       const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
+
       if (currentPath === sessionPath) {
-        return { success: false, error: 'Cannot delete the active session' }
+        // Deleting the active session: create a new session first, then delete the old one
+        await piBridge!.sendRpcCommand({ type: 'new_session' })
+        try {
+          await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
+        } catch {}
+        const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const newPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+        if (newPath) {
+          sessionService.nameSession(newPath, 'main')
+        }
+        sessionService.deleteSession(sessionPath)
+        return { success: true }
       }
-    } catch {}
+    } catch {
+      // Pi disconnected — allow delete anyway
+    }
 
     const result = sessionService.deleteSession(sessionPath)
     if (result) {

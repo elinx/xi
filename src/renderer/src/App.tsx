@@ -79,6 +79,17 @@ function App(): React.ReactElement {
     await refresh()
   }, [clearMessages, forkAtEntry, loadHistory, refresh])
 
+  const handleForkFromEnd = useCallback(async (sessionPath: string, name: string) => {
+    const msgs = await getForkMessages()
+    const lastEntry = msgs[msgs.length - 1]
+    if (!lastEntry?.entryId) return
+    clearMessages()
+    await forkAtEntry(lastEntry.entryId, name)
+    await loadHistory()
+    await refresh()
+    setActiveSessionPath(null)
+  }, [getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, setActiveSessionPath])
+
   const handleClearSession = useCallback(async () => {
     clearMessages()
     const ok = await clearSession()
@@ -135,6 +146,7 @@ function App(): React.ReactElement {
         onNewSession={handleNewSession}
         onRenameSession={renameSession}
         onDeleteSession={deleteSession}
+        onForkFromEnd={handleForkFromEnd}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => {
           const next = !sidebarCollapsed
