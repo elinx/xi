@@ -66,24 +66,22 @@ function GuideLine({ color }: { color: string }) {
   )
 }
 
-function GuideBranch({ color, isLast }: { color: string; isLast: boolean }) {
+function GuideBranch({ color }: { color: string }) {
   return (
     <div
       className="flex-shrink-0 relative pointer-events-none"
       style={{ width: SLOT_W, alignSelf: 'stretch' }}
     >
-      {!isLast && (
-        <div
-          className="absolute"
-          style={{
-            left: LINE_LEFT,
-            top: 0,
-            bottom: 0,
-            width: 1,
-            backgroundColor: color,
-          }}
-        />
-      )}
+      <div
+        className="absolute"
+        style={{
+          left: LINE_LEFT,
+          top: 0,
+          bottom: 0,
+          width: 1,
+          backgroundColor: color,
+        }}
+      />
       <div
         className="absolute"
         style={{
@@ -98,7 +96,7 @@ function GuideBranch({ color, isLast }: { color: string; isLast: boolean }) {
   )
 }
 
-function GuideElbow({ color, isLast }: { color: string; isLast: boolean }) {
+function GuideElbow({ color }: { color: string }) {
   return (
     <div
       className="flex-shrink-0 relative pointer-events-none"
@@ -116,18 +114,6 @@ function GuideElbow({ color, isLast }: { color: string; isLast: boolean }) {
           borderBottomLeftRadius: 4,
         }}
       />
-      {!isLast && (
-        <div
-          className="absolute"
-          style={{
-            left: LINE_LEFT,
-            top: '50%',
-            bottom: 0,
-            width: 1,
-            backgroundColor: color,
-          }}
-        />
-      )}
     </div>
   )
 }
@@ -240,10 +226,16 @@ function SessionNode({
     return ancestorLines.map((entry, i) => {
       const isConnector = i === ancestorLines.length - 1
       if (isConnector) {
-        if (entry.hasLine) {
-          return <GuideBranch key={i} color={entry.color} isLast={false} />
+        if (isOnActivePath) {
+          if (entry.hasLine) {
+            return <GuideBranch key={i} color={entry.color} />
+          }
+          return <GuideElbow key={i} color={entry.color} />
         }
-        return <GuideElbow key={i} color={entry.color} isLast={true} />
+        if (entry.hasLine) {
+          return <GuideLine key={i} color={entry.color} />
+        }
+        return <GuideSlot key={i} />
       }
       if (entry.hasLine) {
         return <GuideLine key={i} color={entry.color} />
