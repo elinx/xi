@@ -43,13 +43,18 @@ function App(): React.ReactElement {
   }, [])
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
+    const prevPath = activeSessionPath
     setActiveSessionPath(sessionPath)
-    clearMessages()
-    await switchSession(sessionPath)
-    await loadHistory()
-    await loadForkPoints(sessionPath)
-    await refresh()
-  }, [clearMessages, switchSession, loadHistory, loadForkPoints, refresh])
+    const result = await switchSession(sessionPath)
+    if (result.success) {
+      clearMessages()
+      await loadHistory()
+      await loadForkPoints(sessionPath)
+      await refresh()
+    } else {
+      setActiveSessionPath(prevPath)
+    }
+  }, [activeSessionPath, clearMessages, switchSession, loadHistory, loadForkPoints, refresh])
 
   const handleNewSession = useCallback(async (name: string) => {
     const parentPath = currentSession?.filePath

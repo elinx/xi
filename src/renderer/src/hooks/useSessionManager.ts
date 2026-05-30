@@ -10,7 +10,7 @@ interface UseSessionManagerReturn {
   forkMessages: ForkableMessage[]
   loadSessions: () => Promise<void>
   forkAtEntry: (entryId: string, name: string) => Promise<void>
-  switchSession: (sessionPath: string) => Promise<void>
+  switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   newSession: (name: string, parentSessionPath?: string) => Promise<boolean>
   renameSession: (name: string) => Promise<void>
   deleteSession: (sessionPath: string) => Promise<boolean>
@@ -68,6 +68,7 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
       await loadSessions()
       await loadCurrentSession()
     }
+    return result
   }, [loadSessions, loadCurrentSession])
 
   const newSession = useCallback(async (name: string, parentSessionPath?: string): Promise<boolean> => {
