@@ -103,4 +103,6 @@ export interface SessionIpcApi {
   deleteSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   /** Get fork points recorded in a session file. */
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
+  /** Clear the current session's conversation (delete JSONL, restart Pi, rename). */
+  clearSession: () => Promise<{ success: boolean; error?: string }>
 }

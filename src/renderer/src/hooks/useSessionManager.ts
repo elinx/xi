@@ -17,6 +17,7 @@ interface UseSessionManagerReturn {
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   refresh: () => Promise<void>
   getForkMessages: () => Promise<ForkableMessage[]>
+  clearSession: () => Promise<boolean>
 }
 
 export function useSessionManager(isConnected: boolean): UseSessionManagerReturn {
@@ -109,6 +110,20 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     }
   }, [])
 
+  const clearSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const result = await api.clearSession()
+      if (result.success) {
+        await loadSessions()
+        await loadCurrentSession()
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }, [loadSessions, loadCurrentSession])
+
   useEffect(() => {
     loadSessions()
     if (isConnected) {
@@ -139,5 +154,6 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     getForkPoints,
     refresh,
     getForkMessages,
+    clearSession,
   }
 }

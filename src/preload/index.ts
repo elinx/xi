@@ -73,6 +73,9 @@ const api = {
 
   getForkPoints: (sessionPath: string): Promise<ForkPoint[]> =>
     ipcRenderer.invoke('session:getForkPoints', sessionPath),
+
+  clearSession: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:clearSession'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

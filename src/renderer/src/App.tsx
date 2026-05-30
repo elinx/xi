@@ -17,7 +17,7 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 
 function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, refresh } = useSessionManager(isConnected)
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
@@ -63,6 +63,16 @@ function App(): React.ReactElement {
     await loadHistory()
     await refresh()
   }, [clearMessages, forkAtEntry, loadHistory, refresh])
+
+  const handleClearSession = useCallback(async () => {
+    clearMessages()
+    const ok = await clearSession()
+    if (ok) {
+      await loadHistory()
+      await refresh()
+      setActiveSessionPath(null)
+    }
+  }, [clearMessages, clearSession, loadHistory, refresh])
 
   useEffect(() => {
     if (isConnected) {
@@ -128,9 +138,20 @@ function App(): React.ReactElement {
               {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
             </span>
             {activeSessionName && (
-              <span className="text-xs text-gray-300 font-medium border-l border-gray-700 pl-2">
-                {activeSessionName}
-              </span>
+              <>
+                <span className="text-xs text-gray-300 font-medium border-l border-gray-700 pl-2">
+                  {activeSessionName}
+                </span>
+                <button
+                  onClick={handleClearSession}
+                  className="rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                  title="Clear conversation"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </>
             )}
             {isStreaming && (
               <span className="text-xs text-blue-400 animate-pulse">Streaming...</span>

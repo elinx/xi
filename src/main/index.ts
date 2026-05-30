@@ -326,6 +326,40 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:getForkPoints', async (_event, sessionPath: string) => {
     return sessionService.getForkPoints(sessionPath)
   })
+
+  ipcMain.handle('session:clearSession', async () => {
+    try {
+      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const sessionPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      const sessionName = typeof stateData.sessionName === 'string' ? stateData.sessionName : null
+
+      if (!sessionPath) {
+        return { success: false, error: 'No active session to clear' }
+      }
+
+      await piBridge?.stop()
+      piBridge = null
+
+      sessionService.deleteSession(sessionPath)
+
+      initPiBridge(undefined)
+      await piBridge?.start()
+
+      const newName = sessionName ?? 'main'
+      try {
+        await sendRpcCommand({ type: 'set_session_name', name: newName })
+      } catch {}
+      const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const newPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
+      if (newPath) {
+        sessionService.nameSession(newPath, newName)
+      }
+
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 }
 
 app.whenReady().then(() => {
