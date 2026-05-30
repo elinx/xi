@@ -70,6 +70,27 @@
 
 ---
 
+## 状态序列化与恢复
+
+App 重启时，UI 状态必须从 localStorage 正确恢复，确保用户看到与关闭前一致的界面。
+
+| 状态项 | localStorage key | 默认值 | 恢复时机 |
+|-------|-----------------|-------|--------|
+| 侧栏折叠 | `xi-sidebar-collapsed` | `false` | App mount |
+| 侧栏宽度 | `xi-sidebar-width` | `260` | App mount |
+| 视图模式 | `xi-view-mode` | `'normal'` | App mount |
+
+恢复规则：
+1. 读取 localStorage 对应 key，解析失败则使用默认值
+2. 侧栏折叠：`'true'` → 折叠，其他 → 展开
+3. 侧栏宽度：数值 clamp 到 `[180, 480]`，超出范围取默认 260
+4. 视图模式：仅接受 `'normal' | 'turn' | 'outline'`，非法值回退 `'normal'`
+5. 状态变更时实时写入 localStorage（如拖拽松开时写宽度，点击折叠时写折叠状态）
+
+Session 树节点展开/折叠状态暂不持久化（重启后默认全展开），后续按需增加。
+
+---
+
 ## 待讨论
 
 ### 1. Session 节点样式

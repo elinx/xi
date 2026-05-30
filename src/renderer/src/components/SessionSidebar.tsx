@@ -244,7 +244,7 @@ function SessionNode({
         return <GuideElbow key={i} color={entry.color} />
       }
       if (entry.hasLine) {
-        return <GuideLine key={i} color={entry.color} />
+        return <GuideLine key={i} color={entry.bottomColor ?? entry.color} />
       }
       return <GuideSlot key={i} />
     })
@@ -375,7 +375,7 @@ function SessionNode({
             const newAncestorLines = [
               ...ancestorLines.map((entry) => ({
                 hasLine: entry.hasLine,
-                color: onPath ? '#3b82f6' : entry.color,
+                color: entry.color,
                 branchColor: entry.branchColor,
                 bottomColor: entry.bottomColor,
               })),
@@ -422,7 +422,8 @@ function SessionSidebar({
   const [newSessionName, setNewSessionName] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('xi-sidebar-width')
-    return saved ? parseInt(saved, 10) : 260
+    const parsed = saved ? parseInt(saved, 10) : 260
+    return Number.isNaN(parsed) ? 260 : Math.min(480, Math.max(180, parsed))
   })
   const [isResizing, setIsResizing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
