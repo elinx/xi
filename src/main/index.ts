@@ -1,39 +1,12 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { join } from 'path'
-import { randomUUID } from 'crypto'
-import { PiBridge } from './pi-bridge'
+import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
 let mainWindow: BrowserWindow | null = null
-let piBridge: PiBridge | null = null
-
-interface PendingRpc {
-  resolve: (value: unknown) => void
-  reject: (reason: Error) => void
-  timer: ReturnType<typeof setTimeout>
-}
-
-const pendingRpcResponses = new Map<string, PendingRpc>()
-const RPC_TIMEOUT_MS = 30_000
-
-function sendRpcCommand(command: Record<string, unknown>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    if (!piBridge?.isConnected) {
-      reject(new Error('Pi not connected'))
-      return
-    }
-
-    const id = randomUUID()
-    const timer = setTimeout(() => {
-      pendingRpcResponses.delete(id)
-      reject(new Error(`RPC command timed out: ${command.type}`))
-    }, RPC_TIMEOUT_MS)
-
-    pendingRpcResponses.set(id, { resolve, reject, timer })
-    piBridge.sendCommand({ ...command, id })
-  })
-}
+let piBridge: PiSDKBridge | null = null
+let initialSessionPath: string | undefined
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -65,41 +38,32 @@ function createWindow(): void {
 
 function broadcastToRenderers(channel: string, data: unknown): void {
   BrowserWindow.getAllWindows().forEach((win) => {
-    win.webContents.send(channel, data)
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      try {
+        win.webContents.send(channel, data)
+      } catch {}
+    }
   })
 }
 
 function initPiBridge(sessionPath?: string): void {
-  piBridge = new PiBridge(process.cwd(), sessionPath)
+  piBridge = new PiSDKBridge()
+  initialSessionPath = sessionPath
 
   piBridge.on('event', (data: unknown) => {
+    // In SDK mode, extension_ui_request arrives as a regular event
+    if (typeof data === 'object' && data !== null) {
+      const obj = data as Record<string, unknown>
+      if (obj.type === 'extension_ui_request') {
+        broadcastToRenderers('pi:extensionUiRequest', data)
+        return
+      }
+    }
     broadcastToRenderers('pi:event', data)
   })
 
   piBridge.on('response', (data: unknown) => {
     broadcastToRenderers('pi:response', data)
-
-    if (typeof data === 'object' && data !== null) {
-      const obj = data as Record<string, unknown>
-      if (typeof obj.id === 'string') {
-        const pending = pendingRpcResponses.get(obj.id)
-        if (pending) {
-          clearTimeout(pending.timer)
-          pendingRpcResponses.delete(obj.id)
-          if (obj.success) {
-            pending.resolve(obj.data)
-          } else {
-            pending.reject(
-              new Error(typeof obj.error === 'string' ? obj.error : 'RPC command failed')
-            )
-          }
-        }
-      }
-    }
-  })
-
-  piBridge.on('extension_ui_request', (data: unknown) => {
-    broadcastToRenderers('pi:extensionUiRequest', data)
   })
 
   piBridge.on('connected', () => {
@@ -111,7 +75,7 @@ function initPiBridge(sessionPath?: string): void {
   })
 
   piBridge.on('error', (err: Error) => {
-    console.error('[PiBridge]', err.message)
+    console.error('[PiSDKBridge]', err.message)
   })
 }
 
@@ -142,18 +106,15 @@ function registerIpcHandlers(): void {
       initPiBridge(mainSession?.filePath)
     }
     try {
-      await piBridge!.start()
-      // Pi is now ready — name the session "main" if needed
+      await piBridge!.start(process.cwd(), initialSessionPath)
       const mainSession = sessionService.findMainSession(process.cwd())
       if (!mainSession || !mainSession.name) {
         try {
-          await sendRpcCommand({ type: 'set_session_name', name: 'main' })
-        } catch {
-          // RPC failed, try file fallback
-          const sessionPath = piBridge!.sessionFilePath
-          if (sessionPath) {
-            sessionService.nameSession(sessionPath, 'main')
-          }
+          await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
+        } catch {}
+        const sessionPath = piBridge!.sessionFilePath
+        if (sessionPath) {
+          sessionService.nameSession(sessionPath, 'main', process.cwd())
         }
       }
       return { ok: true }
@@ -174,8 +135,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:listSessions', async () => {
     let currentPath: string | undefined
     try {
-      const data = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      if (typeof data.sessionPath === 'string') currentPath = data.sessionPath
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
     } catch {
       currentPath = undefined
     }
@@ -184,7 +145,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:getForkMessages', async () => {
     try {
-      const data = (await sendRpcCommand({ type: 'get_fork_messages' })) as {
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_fork_messages' })) as {
         messages?: ForkableMessage[]
       }
       return data.messages ?? []
@@ -196,20 +157,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:forkAtEntry', async (_event, entryId: string, name?: string) => {
     let parentPath: string | null = null
     try {
-      const preState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      parentPath = typeof preState.sessionPath === 'string' ? preState.sessionPath : null
+      const preState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      parentPath = typeof preState.sessionFile === 'string' ? preState.sessionFile : null
     } catch {}
 
     try {
-      const data = (await sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
+      const data = (await piBridge!.sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
 
       if (name) {
         try {
-          await sendRpcCommand({ type: 'set_session_name', name })
+          await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
         } catch {}
         try {
-          const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const childPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
+          const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const childPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
           if (childPath) {
             sessionService.nameSession(childPath, name)
           }
@@ -228,7 +189,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:switchSession', async (_event, sessionPath: string) => {
     try {
-      await sendRpcCommand({ type: 'switch_session', sessionPath })
+      await piBridge!.sendRpcCommand({ type: 'switch_session', sessionPath })
       return { success: true }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -241,7 +202,7 @@ function registerIpcHandlers(): void {
       if (parentSessionPath) {
         command.parentSession = parentSessionPath
       }
-      await sendRpcCommand(command)
+      await piBridge!.sendRpcCommand(command)
       return { success: true }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -250,30 +211,24 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:renameSession', async (_event, name: string) => {
     try {
-      // Try RPC first
-      await sendRpcCommand({ type: 'set_session_name', name })
-    } catch {
-      // RPC failed, write directly as fallback
-    }
+      await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
+    } catch {}
 
-    // Always write to file directly to ensure name persists
     try {
-      const data = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const sessionPath = typeof data.sessionPath === 'string' ? data.sessionPath : null
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const sessionPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
       if (sessionPath) {
         sessionService.nameSession(sessionPath, name)
       }
-    } catch {
-      // Can't determine session path
-    }
+    } catch {}
 
     return { success: true }
   })
 
   ipcMain.handle('session:getCurrentSession', async () => {
     try {
-      const data = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const sessionPath = typeof data.sessionPath === 'string' ? data.sessionPath : null
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const sessionPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
       if (!sessionPath) return null
 
       const result = sessionService.listSessions()
@@ -290,8 +245,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:refreshSessions', async () => {
     let currentPath: string | undefined
     try {
-      const data = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      if (typeof data.sessionPath === 'string') currentPath = data.sessionPath
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
     } catch {
       currentPath = undefined
     }
@@ -300,7 +255,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:getMessages', async () => {
     try {
-      const data = (await sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
+      const data = (await piBridge!.sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
       return data.messages ?? []
     } catch {
       return []
@@ -309,8 +264,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:deleteSession', async (_event, sessionPath: string) => {
     try {
-      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const currentPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
       if (currentPath === sessionPath) {
         return { success: false, error: 'Cannot delete the active session' }
       }
@@ -329,23 +284,23 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:clearSession', async () => {
     try {
-      const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const oldPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const oldPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
       const sessionName = typeof stateData.sessionName === 'string' ? stateData.sessionName : null
 
       if (!oldPath) {
         return { success: false, error: 'No active session to clear' }
       }
 
-      await sendRpcCommand({ type: 'new_session' })
+      await piBridge!.sendRpcCommand({ type: 'new_session' })
 
       const newName = sessionName ?? 'main'
       try {
-        await sendRpcCommand({ type: 'set_session_name', name: newName })
+        await piBridge!.sendRpcCommand({ type: 'set_session_name', name: newName })
       } catch {}
 
-      const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const newPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
+      const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const newPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
       if (newPath) {
         sessionService.nameSession(newPath, newName)
       }
@@ -363,7 +318,6 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark'
   let mainSession = sessionService.findMainSession(process.cwd())
 
-  // If we found a session but it has no name, name it "main" right now
   if (mainSession && !mainSession.name) {
     sessionService.nameSession(mainSession.filePath, 'main')
     mainSession = { ...mainSession, name: 'main' }
@@ -388,6 +342,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   piBridge?.stop().catch((err: Error) => {
-    console.error('[PiBridge] Error during shutdown:', err.message)
+    console.error('[PiSDKBridge] Error during shutdown:', err.message)
   })
 })
