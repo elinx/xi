@@ -416,6 +416,7 @@ function ForkNameInput({
 
 function TurnCard({
   turn,
+  isLast,
   isExpanded,
   onToggleExpand,
   annotatingTarget,
@@ -430,6 +431,7 @@ function TurnCard({
   forkPoints,
 }: {
   turn: ConversationTurn
+  isLast: boolean
   isExpanded: boolean
   onToggleExpand: () => void
   annotatingTarget: { messageId: string; blockIndex: number } | null
@@ -449,91 +451,103 @@ function TurnCard({
   if (isExpanded) {
     const allMessages = [turn.userMessage, ...turn.assistantMessages]
     return (
-      <div className="border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg">
-        <div className="flex items-center justify-end px-3 py-1">
-          <button
-            onClick={onToggleExpand}
-            className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            Collapse
-          </button>
+      <div className="flex">
+        <div className="flex flex-col items-center w-6 flex-shrink-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 mt-3 flex-shrink-0" />
+          {!isLast && <div className="w-px flex-1 bg-gray-200" />}
         </div>
-        <div className="space-y-4 px-4 pb-4">
-          {allMessages.map((msg) => {
-            const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
-            return (
-              <div
-                key={msg.id}
-                className={`group relative rounded-lg px-4 py-3 ${
-                  msg.role === 'user' ? 'bg-blue-50 ml-4' : 'bg-gray-50 mr-2'
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">
-                    {msg.role === 'user' ? 'You' : 'Pi'}
-                  </span>
-                  <div className="relative">
-                    <button
-                      onClick={() => onForkClick(msg.id, msg.piEntryId)}
-                      className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                    >
-                      Fork
-                    </button>
-                    {forkInputMessageId === msg.id && forkEntryId && (
-                      <ForkNameInput
-                        onForkAtEntry={onForkAtEntry}
-                        onClose={onForkClose}
-                        defaultEntryId={forkEntryId}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {msg.blocks.map((block, i) => (
-                    <ContentBlockRenderer
-                      key={i}
-                      block={block}
-                      messageId={msg.id}
-                      blockIndex={i}
-                      annotatingTarget={annotatingTarget}
-                      onEnterAnnotation={onEnterAnnotation}
-                      onExitAnnotation={onExitAnnotation}
-                      onSendFeedback={onSendFeedback}
-                    />
-                  ))}
-                </div>
-                {msgForkPoints.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                    {msgForkPoints.map((fp, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+        <div className="flex-1 border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg ml-1">
+          <div className="flex items-center justify-end px-3 py-1">
+            <button
+              onClick={onToggleExpand}
+              className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Collapse
+            </button>
+          </div>
+          <div className="space-y-4 px-4 pb-4">
+            {allMessages.map((msg) => {
+              const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+              return (
+                <div
+                  key={msg.id}
+                  className={`group relative rounded-lg px-4 py-3 ${
+                    msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">
+                      {msg.role === 'user' ? 'You' : 'Pi'}
+                    </span>
+                    <div className="relative">
+                      <button
+                        onClick={() => onForkClick(msg.id, msg.piEntryId)}
+                        className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                       >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                        </svg>
-                        forked: {fp.childName || '(unnamed)'}
-                      </span>
+                        Fork
+                      </button>
+                      {forkInputMessageId === msg.id && forkEntryId && (
+                        <ForkNameInput
+                          onForkAtEntry={onForkAtEntry}
+                          onClose={onForkClose}
+                          defaultEntryId={forkEntryId}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {msg.blocks.map((block, i) => (
+                      <ContentBlockRenderer
+                        key={i}
+                        block={block}
+                        messageId={msg.id}
+                        blockIndex={i}
+                        annotatingTarget={annotatingTarget}
+                        onEnterAnnotation={onEnterAnnotation}
+                        onExitAnnotation={onExitAnnotation}
+                        onSendFeedback={onSendFeedback}
+                      />
                     ))}
                   </div>
-                )}
-              </div>
-            )
-          })}
+                  {msgForkPoints.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
+                      {msgForkPoints.map((fp, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                          </svg>
+                          forked: {fp.childName || '(unnamed)'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2.5 hover:bg-gray-50 transition-colors"
-      onClick={onToggleExpand}
-    >
-      <div className="text-sm text-gray-800">{userSummary}</div>
-      <div className="mt-0.5 text-sm text-gray-500 pl-4">
-        <span className="mr-1 text-gray-400">{'\u2192'}</span>
-        {agentSummary || '...'}
+    <div className="flex">
+      <div className="flex flex-col items-center w-6 flex-shrink-0">
+        <div className="w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 mt-2.5 flex-shrink-0 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors" onClick={onToggleExpand} />
+        {!isLast && <div className="w-px flex-1 bg-gray-200" />}
+      </div>
+      <div
+        className="flex-1 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2.5 hover:bg-gray-50 transition-colors ml-1"
+        onClick={onToggleExpand}
+      >
+        <div className="text-sm text-gray-800">{userSummary}</div>
+        <div className="mt-0.5 text-sm text-gray-500 pl-4">
+          <span className="mr-1 text-gray-400">{'\u2192'}</span>
+          {agentSummary || '...'}
+        </div>
       </div>
     </div>
   )
@@ -541,6 +555,7 @@ function TurnCard({
 
 function OutlineRow({
   turn,
+  isLast,
   isExpanded,
   onToggleExpand,
   annotatingTarget,
@@ -555,6 +570,7 @@ function OutlineRow({
   forkPoints,
 }: {
   turn: ConversationTurn
+  isLast: boolean
   isExpanded: boolean
   onToggleExpand: () => void
   annotatingTarget: { messageId: string; blockIndex: number } | null
@@ -573,90 +589,102 @@ function OutlineRow({
   if (isExpanded) {
     const allMessages = [turn.userMessage, ...turn.assistantMessages]
     return (
-      <div className="border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg">
-        <div className="flex items-center justify-between px-3 py-1">
-          <span className="text-xs text-gray-400">#{turn.index}</span>
-          <button
-            onClick={onToggleExpand}
-            className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            Collapse
-          </button>
+      <div className="flex">
+        <div className="flex flex-col items-center w-6 flex-shrink-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 mt-3 flex-shrink-0" />
+          {!isLast && <div className="w-px flex-1 bg-gray-200" />}
         </div>
-        <div className="space-y-4 px-4 pb-4">
-          {allMessages.map((msg) => {
-            const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
-            return (
-              <div
-                key={msg.id}
-                className={`group relative rounded-lg px-4 py-3 ${
-                  msg.role === 'user' ? 'bg-blue-50 ml-4' : 'bg-gray-50 mr-2'
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">
-                    {msg.role === 'user' ? 'You' : 'Pi'}
-                  </span>
-                  <div className="relative">
-                    <button
-                      onClick={() => onForkClick(msg.id, msg.piEntryId)}
-                      className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                    >
-                      Fork
-                    </button>
-                    {forkInputMessageId === msg.id && forkEntryId && (
-                      <ForkNameInput
-                        onForkAtEntry={onForkAtEntry}
-                        onClose={onForkClose}
-                        defaultEntryId={forkEntryId}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {msg.blocks.map((block, i) => (
-                    <ContentBlockRenderer
-                      key={i}
-                      block={block}
-                      messageId={msg.id}
-                      blockIndex={i}
-                      annotatingTarget={annotatingTarget}
-                      onEnterAnnotation={onEnterAnnotation}
-                      onExitAnnotation={onExitAnnotation}
-                      onSendFeedback={onSendFeedback}
-                    />
-                  ))}
-                </div>
-                {msgForkPoints.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                    {msgForkPoints.map((fp, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+        <div className="flex-1 border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg ml-1">
+          <div className="flex items-center justify-between px-3 py-1">
+            <span className="text-xs text-gray-400">#{turn.index}</span>
+            <button
+              onClick={onToggleExpand}
+              className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Collapse
+            </button>
+          </div>
+          <div className="space-y-4 px-4 pb-4">
+            {allMessages.map((msg) => {
+              const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+              return (
+                <div
+                  key={msg.id}
+                  className={`group relative rounded-lg px-4 py-3 ${
+                    msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">
+                      {msg.role === 'user' ? 'You' : 'Pi'}
+                    </span>
+                    <div className="relative">
+                      <button
+                        onClick={() => onForkClick(msg.id, msg.piEntryId)}
+                        className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                       >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                        </svg>
-                        forked: {fp.childName || '(unnamed)'}
-                      </span>
+                        Fork
+                      </button>
+                      {forkInputMessageId === msg.id && forkEntryId && (
+                        <ForkNameInput
+                          onForkAtEntry={onForkAtEntry}
+                          onClose={onForkClose}
+                          defaultEntryId={forkEntryId}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {msg.blocks.map((block, i) => (
+                      <ContentBlockRenderer
+                        key={i}
+                        block={block}
+                        messageId={msg.id}
+                        blockIndex={i}
+                        annotatingTarget={annotatingTarget}
+                        onEnterAnnotation={onEnterAnnotation}
+                        onExitAnnotation={onExitAnnotation}
+                        onSendFeedback={onSendFeedback}
+                      />
                     ))}
                   </div>
-                )}
-              </div>
-            )
-          })}
+                  {msgForkPoints.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
+                      {msgForkPoints.map((fp, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                          </svg>
+                          forked: {fp.childName || '(unnamed)'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="cursor-pointer rounded px-4 py-1.5 hover:bg-gray-50 transition-colors"
-      onClick={onToggleExpand}
-    >
-      <span className="text-xs text-gray-400 mr-2 font-mono">{turn.index}</span>
-      <span className="text-sm text-gray-800">{userSummary}</span>
+    <div className="flex">
+      <div className="flex flex-col items-center w-6 flex-shrink-0">
+        <div className="w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 mt-1.5 flex-shrink-0 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors" onClick={onToggleExpand} />
+        {!isLast && <div className="w-px flex-1 bg-gray-200" />}
+      </div>
+      <div
+        className="flex-1 cursor-pointer rounded px-3 py-1.5 hover:bg-gray-50 transition-colors ml-1"
+        onClick={onToggleExpand}
+      >
+        <span className="text-xs text-gray-400 mr-2 font-mono">{turn.index}</span>
+        <span className="text-sm text-gray-800">{userSummary}</span>
+      </div>
     </div>
   )
 }
@@ -745,8 +773,8 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                 key={msg.id}
                 className={`group relative rounded-lg px-4 py-3 ${
                   msg.role === 'user'
-                    ? 'bg-blue-50 ml-8'
-                    : 'bg-gray-50 mr-4'
+                    ? 'bg-blue-50'
+                    : 'bg-gray-50'
                 }`}
               >
                 <div className="mb-1 flex items-center justify-between">
@@ -804,11 +832,12 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
           <div ref={bottomRef} />
         </div>
       ) : viewMode === 'turn' ? (
-        <div className="mx-auto max-w-3xl space-y-2">
-          {turns.map((turn) => (
+        <div className="mx-auto max-w-3xl space-y-0">
+          {turns.map((turn, idx) => (
             <TurnCard
               key={turn.id}
               turn={turn}
+              isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
               annotatingTarget={annotatingTarget}
@@ -826,11 +855,12 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
           <div ref={bottomRef} />
         </div>
       ) : (
-        <div className="mx-auto max-w-3xl space-y-0.5">
-          {turns.map((turn) => (
+        <div className="mx-auto max-w-3xl space-y-0">
+          {turns.map((turn, idx) => (
             <OutlineRow
               key={turn.id}
               turn={turn}
+              isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
               annotatingTarget={annotatingTarget}
