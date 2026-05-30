@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { utilityProcess } from 'electron'
 import workerPath from './pi-worker?modulePath'
 import { resolve, join } from 'path'
 import { existsSync, mkdirSync, symlinkSync, lstatSync } from 'fs'
@@ -16,14 +16,22 @@ interface PendingCommand {
 
 const COMMAND_TIMEOUT_MS = 60_000
 
+interface UtilityChild {
+  on(event: 'message', listener: (msg: Record<string, unknown>) => void): UtilityChild
+  on(event: 'exit', listener: (code: number | null) => void): UtilityChild
+  postMessage(message: unknown): void
+  kill(): void
+  pid: number | undefined
+}
+
 export class PiSDKBridge extends EventEmitter {
-  private worker: Worker | null = null
+  private child: UtilityChild | null = null
   private pendingCommands = new Map<string, PendingCommand>()
   private _isConnected = false
   private _sessionFilePath: string | null = null
 
   get isConnected(): boolean {
-    return this._isConnected && this.worker !== null
+    return this._isConnected && this.child !== null
   }
 
   get sessionFilePath(): string | null {
@@ -35,10 +43,10 @@ export class PiSDKBridge extends EventEmitter {
       return
     }
 
-    if (this.worker) {
+    if (this.child) {
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Timed out waiting for existing Worker to connect'))
+          reject(new Error('Timed out waiting for existing process to connect'))
         }, 30_000)
         this.once('connected', () => { clearTimeout(timeout); resolve() })
         this.once('error', (err: Error) => { clearTimeout(timeout); reject(err) })
@@ -54,31 +62,31 @@ export class PiSDKBridge extends EventEmitter {
     process.env.PI_CODING_AGENT_DIR = localAgentDir
     this.linkGlobalAgentConfig(localAgentDir)
 
-    this.worker = new Worker(workerPath, {
-      workerData: { cwd, sessionPath },
+    const child = utilityProcess.fork(workerPath, [], {
+      serviceName: 'pi-sdk',
+      stdio: 'pipe',
+      env: { ...process.env },
+    }) as unknown as UtilityChild
+
+    this.child = child
+
+    child.on('message', (msg: Record<string, unknown>) => {
+      this.handleChildMessage(msg)
     })
 
-    this.worker.on('message', (msg: Record<string, unknown>) => {
-      this.handleWorkerMessage(msg)
-    })
-
-    this.worker.on('error', (err: Error) => {
-      console.error('[PiSDKBridge] Worker error:', err.message)
-      this.emit('error', err)
-    })
-
-    this.worker.on('exit', (code: number) => {
-      console.error('[PiSDKBridge] Worker exited with code:', code)
+    child.on('exit', (code: number | null) => {
+      console.error('[PiSDKBridge] Process exited with code:', code)
       this._isConnected = false
-      this.rejectAllPending(`Worker exited with code ${code}`)
+      this.child = null
+      this.rejectAllPending(`Process exited with code ${code}`)
       this.emit('disconnected')
     })
 
-    this.worker.postMessage({ type: 'init', data: { cwd, sessionPath } })
+    child.postMessage({ type: 'init', data: { cwd, sessionPath } })
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('Pi SDK Worker did not respond within 30s'))
+        reject(new Error('Pi SDK process did not respond within 30s'))
       }, 30_000)
 
       const onConnected = (): void => {
@@ -97,17 +105,17 @@ export class PiSDKBridge extends EventEmitter {
   }
 
   sendCommand(command: Record<string, unknown>): void {
-    if (!this.worker) {
-      this.emit('error', new Error('Worker not running'))
+    if (!this.child) {
+      this.emit('error', new Error('Process not running'))
       return
     }
-    this.worker.postMessage(command)
+    this.child.postMessage(command)
   }
 
   async sendRpcCommand(command: Record<string, unknown>): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      if (!this.worker) {
-        reject(new Error('Worker not running'))
+      if (!this.child) {
+        reject(new Error('Process not running'))
         return
       }
 
@@ -118,7 +126,7 @@ export class PiSDKBridge extends EventEmitter {
       }, COMMAND_TIMEOUT_MS)
 
       this.pendingCommands.set(id, { resolve, reject, timer })
-      this.worker.postMessage({ ...command, id })
+      this.child.postMessage({ ...command, id })
     })
   }
 
@@ -127,12 +135,12 @@ export class PiSDKBridge extends EventEmitter {
   }
 
   async stop(): Promise<void> {
-    if (!this.worker) return
+    if (!this.child) return
 
-    this.rejectAllPending('Worker stopping')
+    this.rejectAllPending('Process stopping')
 
-    await this.worker.terminate()
-    this.worker = null
+    this.child.kill()
+    this.child = null
     this._isConnected = false
   }
 
@@ -160,7 +168,7 @@ export class PiSDKBridge extends EventEmitter {
     }
   }
 
-  private handleWorkerMessage(msg: Record<string, unknown>): void {
+  private handleChildMessage(msg: Record<string, unknown>): void {
     const channel = msg.channel as string
 
     switch (channel) {
@@ -212,7 +220,7 @@ export class PiSDKBridge extends EventEmitter {
   }
 
   private rejectAllPending(reason: string): void {
-    for (const [id, pending] of this.pendingCommands) {
+    for (const [, pending] of this.pendingCommands) {
       clearTimeout(pending.timer)
       pending.reject(new Error(reason))
     }

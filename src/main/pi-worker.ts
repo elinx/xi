@@ -1,13 +1,12 @@
-import { parentPort } from 'node:worker_threads'
 import type { AgentSession, AgentSessionEvent, AgentSessionRuntime } from '@earendil-works/pi-coding-agent'
 
 process.on('uncaughtException', (err: Error) => {
-  parentPort?.postMessage({ channel: 'error', error: `Uncaught: ${err.message}` })
+  process.parentPort?.postMessage({ channel: 'error', error: `Uncaught: ${err.message}` })
 })
 
 process.on('unhandledRejection', (reason: unknown) => {
   const msg = reason instanceof Error ? reason.message : String(reason)
-  parentPort?.postMessage({ channel: 'error', error: `Unhandled rejection: ${msg}` })
+  process.parentPort?.postMessage({ channel: 'error', error: `Unhandled rejection: ${msg}` })
 })
 
 interface WorkerInit {
@@ -24,9 +23,10 @@ interface WorkerCommand {
 let session: AgentSession | null = null
 let runtime: AgentSessionRuntime | null = null
 let unsubscribe: (() => void) | null = null
+let pi: typeof import('@earendil-works/pi-coding-agent') | null = null
 
 function send(msg: Record<string, unknown>): void {
-  parentPort?.postMessage(msg)
+  process.parentPort?.postMessage(msg)
 }
 
 function forwardEvent(event: AgentSessionEvent): void {
@@ -49,13 +49,13 @@ async function bindSession(): Promise<void> {
 }
 
 async function init(data: WorkerInit): Promise<void> {
-  const pi = await import('@earendil-works/pi-coding-agent')
+  pi = await import('@earendil-works/pi-coding-agent')
   const agentDir = pi.getAgentDir()
 
   const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {
-    const services = await pi.createAgentSessionServices({ cwd, agentDir })
+    const services = await pi!.createAgentSessionServices({ cwd, agentDir })
     return {
-      ...(await pi.createAgentSessionFromServices({
+      ...(await pi!.createAgentSessionFromServices({
         services,
         sessionManager,
         sessionStartEvent,
@@ -85,7 +85,7 @@ async function init(data: WorkerInit): Promise<void> {
 }
 
 async function handleCommand(cmd: WorkerCommand): Promise<void> {
-  if (!session || !runtime) {
+  if (!session || !runtime || !pi) {
     send({ channel: 'response', id: cmd.id, success: false, error: 'Session not initialized' })
     return
   }
@@ -224,7 +224,8 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
   }
 }
 
-parentPort?.on('message', (msg: WorkerCommand | { type: 'init'; data: WorkerInit }) => {
+process.parentPort.on('message', (event: Electron.ParentPortMessageEvent) => {
+  const msg = event.data as WorkerCommand | { type: 'init'; data: WorkerInit }
   if (msg.type === 'init') {
     init((msg as { data: WorkerInit }).data).catch((err: Error) => {
       console.error('[PiWorker] Init failed:', err.message)
@@ -234,7 +235,7 @@ parentPort?.on('message', (msg: WorkerCommand | { type: 'init'; data: WorkerInit
     return
   }
 
-  handleCommand(msg).catch((err: Error) => {
+  handleCommand(msg as WorkerCommand).catch((err: Error) => {
     send({ channel: 'error', error: err.message })
   })
 })
