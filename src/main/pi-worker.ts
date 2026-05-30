@@ -22,6 +22,7 @@ interface WorkerCommand {
 
 let session: AgentSession | null = null
 let runtime: AgentSessionRuntime | null = null
+let sessionManager: import('@earendil-works/pi-coding-agent').SessionManager | null = null
 let unsubscribe: (() => void) | null = null
 let pi: typeof import('@earendil-works/pi-coding-agent') | null = null
 
@@ -52,12 +53,13 @@ async function init(data: WorkerInit): Promise<void> {
   pi = await import('@earendil-works/pi-coding-agent')
   const agentDir = pi.getAgentDir()
 
-  const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {
+  const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: sm, sessionStartEvent }) => {
+    sessionManager = sm
     const services = await pi!.createAgentSessionServices({ cwd, agentDir })
     return {
       ...(await pi!.createAgentSessionFromServices({
         services,
-        sessionManager,
+        sessionManager: sm,
         sessionStartEvent,
       })),
       services,
@@ -65,17 +67,17 @@ async function init(data: WorkerInit): Promise<void> {
     }
   }
 
-  let sessionManager: pi.SessionManager
+  let sm: pi.SessionManager
   if (data.sessionPath) {
-    sessionManager = pi.SessionManager.open(data.sessionPath)
+    sm = pi.SessionManager.open(data.sessionPath)
   } else {
-    sessionManager = pi.SessionManager.continueRecent(data.cwd)
+    sm = pi.SessionManager.continueRecent(data.cwd)
   }
 
   runtime = await pi.createAgentSessionRuntime(createRuntime, {
     cwd: data.cwd,
     agentDir,
-    sessionManager,
+    sessionManager: sm,
   })
 
   session = runtime.session
@@ -139,12 +141,29 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       }
 
       case 'get_messages': {
+        let messages = session.messages
+        if (messages.length === 0 && sessionManager) {
+          try {
+            const entries = sessionManager.getEntries()
+            const messageEntries = entries.filter((e) => e.type === 'message' && (e as Record<string, unknown>).message)
+            messages = messageEntries.map((e) => {
+              const entry = e as Record<string, unknown>
+              const msg = { ...(entry.message as Record<string, unknown>) }
+              if (!msg.id && typeof entry.id === 'string') {
+                msg.id = entry.id
+              }
+              return msg
+            }) as unknown as AgentSession['messages']
+          } catch {
+            // getEntries failed — return empty messages
+          }
+        }
         send({
           channel: 'response',
           id: cmd.id,
           command: 'get_messages',
           success: true,
-          data: { messages: session.messages },
+          data: { messages },
         })
         break
       }

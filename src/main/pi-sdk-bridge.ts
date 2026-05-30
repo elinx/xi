@@ -44,6 +44,7 @@ export class PiSDKBridge extends EventEmitter {
     }
 
     if (this.child) {
+      if (this._isConnected) return
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Timed out waiting for existing process to connect'))

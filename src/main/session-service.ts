@@ -22,12 +22,6 @@ export function getSessionDir(cwd?: string): string {
   return sessionDir
 }
 
-export function decodeProjectDir(encodedDir: string): string {
-  let stripped = encodedDir
-  if (stripped.startsWith('--')) stripped = stripped.slice(2)
-  if (stripped.endsWith('--')) stripped = stripped.slice(0, -2)
-  return '/' + stripped.replace(/-/g, '/')
-}
 
 export function parseSessionFile(filePath: string): SessionInfo | null {
   try {

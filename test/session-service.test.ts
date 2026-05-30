@@ -7,7 +7,6 @@ import {
   findMainSession,
   listSessions,
   buildSessionTree,
-  decodeProjectDir,
   nameSession,
   deleteSession,
   addForkPoint,
@@ -40,20 +39,6 @@ function makeProjectDir(base: string, _cwd: string): string {
   mkdirSync(base, { recursive: true })
   return base
 }
-
-describe('decodeProjectDir', () => {
-  it('strips -- wrappers and replaces - with /', () => {
-    expect(decodeProjectDir('--Users-foo-bar--')).toBe('/Users/foo/bar')
-  })
-
-  it('handles path without dashes in segments', () => {
-    expect(decodeProjectDir('--Users-john-projects--')).toBe('/Users/john/projects')
-  })
-
-  it('returns / for empty wrapped dir', () => {
-    expect(decodeProjectDir('----')).toBe('/')
-  })
-})
 
 describe('parseSessionFile', () => {
   it('parses a valid session file with user messages', () => {
