@@ -74,6 +74,9 @@ const api = {
   getForkPoints: (sessionPath: string): Promise<ForkPoint[]> =>
     ipcRenderer.invoke('session:getForkPoints', sessionPath),
 
+  setSessionStatus: (sessionPath: string, status: 'active' | 'completed'): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:setSessionStatus', sessionPath, status),
+
   clearSession: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession'),
 }

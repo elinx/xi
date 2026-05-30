@@ -47,10 +47,12 @@ Each line is a JSON object. The first line is always the session header.
 | `type` | Purpose | Key Fields |
 |--------|---------|------------|
 | `message` | A conversation entry | `id`, `parentId`, `message.role`, `message.content` |
-| `session_info` | Session metadata (name) | `name` |
+| `session_info` | Session metadata (name, status) | `name`, `status` |
 | `fork_point` | Records where a fork was created | `entryId`, `childName` |
 
-**Name resolution**: If multiple `session_info` entries exist, the **last** one wins (rename overwrites).
+**Name resolution**: If multiple `session_info` entries exist, the **last** one wins for each field (rename overwrites).
+
+**Status resolution**: Same as name — if multiple `session_info` entries contain `status`, the **last** one wins. If no `session_info` entry contains `status`, the session is considered `active`.
 
 ### 2.3 Inter-Session Relationships
 
@@ -113,7 +115,20 @@ When a fork is created, a `fork_point` entry is appended to the **parent** sessi
 
 Fork points are rendered as purple badges on the corresponding message in ChatView.
 
-### 3.5 Delete
+### 3.5 Session Status (Completed)
+
+Each session can be marked as **completed** to indicate the user is done with it and likely won't revisit it soon.
+
+- **Status values**: `active` (default) or `completed`
+- **Storage**: Appended as `{"type":"session_info","status":"completed"}` to the JSONL file, reusing the existing `session_info` entry type
+- **Resolution**: Last `session_info` entry's `status` field wins; absent `status` means `active`
+- **Auto-recovery**: **None** — sending a message to a completed session does NOT automatically change it back to `active`. Only manual toggle.
+- **Operations on completed sessions**: All operations (switch, fork, delete, rename) work the same regardless of status
+- **Visual**: Completed sessions appear with gray text (`text-gray-400`) and strikethrough (`line-through`) in the sidebar; dot turns gray (`bg-gray-300 border-gray-300`). No separate section — completed sessions stay in their tree position.
+- **Sorting**: No change — completed sessions remain in their original position in the tree; no grouping or reordering
+- **Child sessions**: A completed session's children are unaffected; they may be active or completed independently
+
+### 3.6 Delete
 
 - Sessions can be deleted from the sidebar
 - **Active sessions can be deleted** — the backend creates a new session first, then deletes the old one, similar to `clearSession`
@@ -134,6 +149,15 @@ When a session is active, a **Fork** button appears in the sidebar session node.
 
 This is a shortcut for the most common fork use case — forking from the end of the conversation. The existing ForkPopover (fork from any message) remains available in ChatView.
 
+### 3.7 Session Status Toggle
+
+Users can toggle a session between `active` and `completed` via the right-click context menu:
+
+- If the session is `active` → menu shows **"Mark as completed"**
+- If the session is `completed` → menu shows **"Mark as active"**
+
+The toggle writes a new `session_info` entry to the JSONL file and refreshes the sidebar. No RPC call to Pi is needed — this is a pure file operation.
+
 ## 4. Data Flow
 
 ### 4.1 Backend (Main Process)
@@ -151,6 +175,7 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `listSessions()` | `(currentSessionPath?, sessionDir?) → SessionListResult` | List all sessions grouped by project |
 | `buildSessionTree()` | `(sessions) → SessionTreeNode \| null` | Build parent-child tree from SessionInfo[] |
 | `nameSession()` | `(sessionPath, name) → boolean` | Append session_info entry to JSONL |
+| `setSessionStatus()` | `(sessionPath, status: 'active' \| 'completed') → boolean` | Append session_info entry with status to JSONL |
 | `deleteSession()` | `(sessionPath, sessionDir?) → boolean` | Delete file + cleanup empty directory |
 | `addForkPoint()` | `(sessionPath, entryId, childName) → boolean` | Append fork_point entry to JSONL |
 | `getForkPoints()` | `(sessionPath) → ForkPoint[]` | Extract all fork_point entries from JSONL |
@@ -169,6 +194,7 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `session:deleteSession` | `get_state` (check if active) → if active: `new_session` + `deleteSession()`; else: `deleteSession()` | Handles active session deletion by creating new session first |
 | `session:getMessages` | `get_messages` | Returns raw Pi message array |
 | `session:getForkPoints` | (no RPC) → `getForkPoints()` | Reads directly from disk |
+| `session:setSessionStatus` | (no RPC) → `setSessionStatus()` | Pure file operation; no Pi RPC needed |
 | `session:softPeek` | `soft_peek` | Reads messages from session without switching runtime (§6.6.7) |
 | `session:getRuntimeSessionId` | `get_state` | Returns sessionId + sessionFile + isStreaming of runtime's current session |
 
@@ -198,6 +224,7 @@ sendRpcCommand({ type: "fork", entryId })
 | `session:getMessages` | renderer → main | (none) |
 | `session:deleteSession` | renderer → main | `sessionPath: string` |
 | `session:getForkPoints` | renderer → main | `sessionPath: string` |
+| `session:setSessionStatus` | renderer → main | `sessionPath: string, status: 'active' \| 'completed'` |
 | `session:softPeek` | renderer → main | `sessionPath: string` |
 | `session:getRuntimeSessionId` | renderer → main | (none) |
 
@@ -219,6 +246,7 @@ sendRpcCommand({ type: "fork", entryId })
 - `switchSession(sessionPath)` — switch to different session
 - `newSession(name, parentSessionPath?)` — create + rename
 - `deleteSession(sessionPath)` — delete non-active session
+- `setSessionStatus(sessionPath, status)` — toggle session active/completed
 - `refresh()` — reload sessions + currentSession
 
 #### Conversion: Pi Messages → ChatMessage
@@ -276,6 +304,8 @@ For unnamed sessions, `getDisplayName()` shows creation time: `"May 29 16:24"`
 - **Delete button**: `x` on hover for non-main sessions (including the active session); click once → red `Del` confirm; deleting the active session creates a new session first then deletes the old one
 - **Fork button**: `🔀` icon on hover for the active session; click → inline name input; forks from the last user message
 - **Parent link**: `↑ parent` text below forked sessions, click to switch to parent
+- **Completed session visual**: Gray text (`text-gray-400`) + strikethrough (`line-through`) + gray dot (`bg-gray-300 border-gray-300`). Stays in original tree position — no grouping or separate section.
+- **Right-click context menu**: Includes "Mark as completed" / "Mark as active" toggle based on current status
 - **New session**: `+` button opens inline name input, requires name before creating
 
 ### 5.2 ChatView Fork Markers
@@ -757,6 +787,7 @@ interface SessionInfo {
   filePath: string        // Absolute path to .jsonl
   sessionId: string       // UUID from header
   name: string | null     // User-defined name (last session_info wins)
+  status: 'active' | 'completed' | null  // null等同于active (last session_info wins)
   createdAt: string       // ISO timestamp
   cwd: string             // Working directory
   parentSessionPath: string | null  // Parent .jsonl path
@@ -803,6 +834,7 @@ type ContentBlock =
 | `get_state` fails | `listSessions()` returns with no currentSessionPath marked |
 | `set_session_name` RPC fails | Falls back to `nameSession()` direct file write |
 | Delete active session | Backend creates new session first, then deletes old session file; similar to clearSession |
+| Set session status on non-existent file | `setSessionStatus()` returns `false` |
 | Delete when Pi disconnected | Safety check skipped (try/catch around get_state), delete proceeds |
 | Parse invalid JSONL line | `parseSessionFile` skips line, continues |
 | Empty project directory | `listSessions` skips it; `deleteSession` removes it |
@@ -819,7 +851,7 @@ type ContentBlock =
 
 | File | Count | Coverage |
 |------|-------|----------|
-| `session-service.test.ts` | ~55 | decodeProjectDir, parseSessionFile, findMainSession, listSessions, buildSessionTree, nameSession, deleteSession, addForkPoint, getForkPoints |
+| `session-service.test.ts` | ~55 | decodeProjectDir, parseSessionFile, findMainSession, listSessions, buildSessionTree, nameSession, deleteSession, addForkPoint, getForkPoints, setSessionStatus, parseSessionFile status resolution |
 | `app-integration.test.ts` | ~15 | Auto-start, fork parentSessionPath, refresh after operations, main session auto-naming, PiBridge readiness |
 | `ipc-handlers.test.ts` | ~25 | newSession, renameSession, switchSession, forkAtEntry, getCurrentSession, listSessions, deleteSession, getForkPoints |
 | `session-sidebar.test.ts` | ~20 | getDisplayName, formatRelativeTime, component props contract, tree rendering, delete button visibility |

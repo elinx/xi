@@ -8,6 +8,7 @@ interface SessionSidebarProps {
   onNewSession: (name: string) => void
   onRenameSession: (name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
+  onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
   isCollapsed: boolean
   onToggleCollapse: () => void
@@ -139,11 +140,13 @@ function DotSlot({
   hasChildren,
   isExpanded,
   gutterActive,
+  completed,
 }: {
   active: boolean
   hasChildren: boolean
   isExpanded: boolean
   gutterActive: boolean
+  completed: boolean
 }) {
   return (
     <div
@@ -155,7 +158,9 @@ function DotSlot({
           className={
             active
               ? 'w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 flex-shrink-0'
-              : 'w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-blue-500 flex-shrink-0'
+              : completed
+                ? 'w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-gray-300 flex-shrink-0'
+                : 'w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-blue-500 flex-shrink-0'
           }
         />
       </div>
@@ -183,6 +188,7 @@ function SessionNode({
   onSwitch,
   onRename,
   onDelete,
+  onSetSessionStatus,
   onForkFromEnd,
   onContextMenu,
   triggerRenamePath,
@@ -197,6 +203,7 @@ function SessionNode({
   onSwitch: (path: string) => void
   onRename: (name: string) => void
   onDelete: (path: string) => Promise<boolean>
+  onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
   onContextMenu: (e: React.MouseEvent, session: SessionInfo) => void
   triggerRenamePath: string | null
@@ -210,6 +217,7 @@ function SessionNode({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isForking, setIsForking] = useState(false)
   const [forkName, setForkName] = useState('')
+  const isCompleted = node.session.status === 'completed'
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
 
@@ -272,8 +280,12 @@ function SessionNode({
       <div
         className={`group flex items-center rounded cursor-pointer transition-colors ${
           isActive
-            ? 'bg-gray-100 text-gray-900'
-            : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
+            ? isCompleted
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-gray-100 text-gray-900'
+            : isCompleted
+              ? 'text-gray-400 hover:bg-gray-100/60 hover:text-gray-500'
+              : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
         }`}
         onClick={() => onSwitch(node.session.filePath)}
         onDoubleClick={handleDoubleClick}
@@ -285,6 +297,7 @@ function SessionNode({
           hasChildren={hasChildren}
           isExpanded={isExpanded}
           gutterActive={gutterActive}
+          completed={isCompleted}
         />
         <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
           {isRenaming ? (
@@ -301,7 +314,7 @@ function SessionNode({
               className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
             />
           ) : (
-            <span className="flex-1 truncate text-xs">
+            <span className={`flex-1 truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
               {getDisplayName(node.session)}
             </span>
           )}
@@ -494,6 +507,7 @@ function SessionNode({
                 onSwitch={onSwitch}
                 onRename={onRename}
                 onDelete={onDelete}
+                onSetSessionStatus={onSetSessionStatus}
                 onForkFromEnd={onForkFromEnd}
                 onContextMenu={onContextMenu}
                 triggerRenamePath={triggerRenamePath}
@@ -516,6 +530,7 @@ function SessionSidebar({
   onNewSession,
   onRenameSession,
   onDeleteSession,
+  onSetSessionStatus,
   onForkFromEnd,
   isCollapsed,
   onToggleCollapse,
@@ -701,6 +716,7 @@ function SessionSidebar({
             onSwitch={onSwitchSession}
             onRename={onRenameSession}
             onDelete={onDeleteSession}
+            onSetSessionStatus={onSetSessionStatus}
             onForkFromEnd={onForkFromEnd}
             onContextMenu={handleContextMenu}
             triggerRenamePath={triggerRenamePath}
@@ -730,6 +746,16 @@ function SessionSidebar({
             }}
           >
             Rename
+          </div>
+          <div
+            className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer"
+            onClick={() => {
+              const newStatus = contextMenu.session.status === 'completed' ? 'active' : 'completed'
+              onSetSessionStatus(contextMenu.session.filePath, newStatus)
+              setContextMenu(null)
+            }}
+          >
+            {contextMenu.session.status === 'completed' ? 'Mark as active' : 'Mark as completed'}
           </div>
           {contextMenu.session.parentSessionPath && (
             <div

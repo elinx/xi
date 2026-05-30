@@ -40,6 +40,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
 
     let messageCount = 0
     let name: string | null = null
+    let status: 'active' | 'completed' | null = null
 
     for (let i = 1; i < lines.length; i++) {
       try {
@@ -53,6 +54,9 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if (typeof entry.name === 'string') {
             name = entry.name
           }
+          if (entry.status === 'active' || entry.status === 'completed') {
+            status = entry.status
+          }
         }
       } catch {
         continue
@@ -63,6 +67,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
       filePath,
       sessionId: header.id,
       name,
+      status,
       createdAt: header.timestamp,
       cwd: header.cwd,
       parentSessionPath: header.parentSession ?? null,
@@ -258,6 +263,21 @@ export function addForkPoint(sessionPath: string, entryId: string, childName: st
       type: 'fork_point',
       entryId,
       childName,
+    })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function setSessionStatus(sessionPath: string, status: 'active' | 'completed'): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  try {
+    const entry = JSON.stringify({
+      type: 'session_info',
+      status,
     })
     appendFileSync(sessionPath, entry + '\n')
     return true

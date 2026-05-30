@@ -9,6 +9,7 @@ import {
   buildSessionTree,
   nameSession,
   deleteSession,
+  setSessionStatus,
   addForkPoint,
   getForkPoints,
 } from '../src/main/session-service'
@@ -123,6 +124,57 @@ describe('parseSessionFile', () => {
     expect(result).not.toBeNull()
     expect(result!.name).toBe('renamed')
   })
+
+  it('returns null status when no session_info has status', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'no-status.jsonl',
+      { id: 'uuid-5', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'main' }]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.status).toBeNull()
+  })
+
+  it('parses status from session_info entry', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'with-status.jsonl',
+      { id: 'uuid-6', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'done', status: 'completed' }]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe('completed')
+  })
+
+  it('uses last session_info status if multiple exist', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'multi-status.jsonl',
+      { id: 'uuid-7', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [
+        { type: 'session_info', name: 's1', status: 'completed' },
+        { type: 'session_info', name: 's2', status: 'active' },
+      ]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe('active')
+  })
+
+  it('ignores invalid status values', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'bad-status.jsonl',
+      { id: 'uuid-8', timestamp: '2026-05-26T16:30:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'x', status: 'invalid' }]
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result).not.toBeNull()
+    expect(result!.status).toBeNull()
+  })
 })
 
 describe('findMainSession', () => {
@@ -188,6 +240,7 @@ describe('buildSessionTree', () => {
       filePath,
       sessionId: 'test-id',
       name: null,
+      status: null,
       createdAt: '2026-05-26T16:00:00.000Z',
       cwd: '/test',
       parentSessionPath: null,
@@ -426,6 +479,53 @@ describe('deleteSession', () => {
 
     deleteSession(filePath)
     expect(existsSync(projectDir)).toBe(true)
+  })
+})
+
+describe('setSessionStatus', () => {
+  it('appends session_info with status to an existing file', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'test.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    const result = setSessionStatus(filePath, 'completed')
+    expect(result).toBe(true)
+
+    const parsed = parseSessionFile(filePath)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.status).toBe('completed')
+  })
+
+  it('returns false for non-existent file', () => {
+    expect(setSessionStatus('/nonexistent/file.jsonl', 'completed')).toBe(false)
+  })
+
+  it('overwrites status when called again (last session_info wins)', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'test.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    setSessionStatus(filePath, 'completed')
+    setSessionStatus(filePath, 'active')
+
+    const parsed = parseSessionFile(filePath)
+    expect(parsed!.status).toBe('active')
+  })
+
+  it('preserves name when setting status', () => {
+    const dir = join(testDir, 'sessions')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'test.jsonl')
+    writeFileSync(filePath, '{"type":"session","version":3,"id":"uuid-1","timestamp":"2026-05-28T10:00:00.000Z","cwd":"/test"}\n')
+
+    nameSession(filePath, 'my-session')
+    setSessionStatus(filePath, 'completed')
+
+    const parsed = parseSessionFile(filePath)
+    expect(parsed!.name).toBe('my-session')
+    expect(parsed!.status).toBe('completed')
   })
 })
 

@@ -296,6 +296,14 @@ function registerIpcHandlers(): void {
     return sessionService.getForkPoints(sessionPath)
   })
 
+  ipcMain.handle('session:setSessionStatus', async (_event, sessionPath: string, status: 'active' | 'completed') => {
+    const result = sessionService.setSessionStatus(sessionPath, status)
+    if (result) {
+      return { success: true }
+    }
+    return { success: false, error: 'Failed to set session status' }
+  })
+
   ipcMain.handle('session:clearSession', async () => {
     try {
       const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>

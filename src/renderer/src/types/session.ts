@@ -36,6 +36,8 @@ export interface SessionInfo {
   messageCount: number
   /** Whether this is the "main" session for its project. */
   isMain: boolean
+  /** Session status: 'active' or 'completed'. null means active (default). */
+  status: 'active' | 'completed' | null
 }
 
 /**
@@ -105,4 +107,6 @@ export interface SessionIpcApi {
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   /** Clear the current session's conversation (delete JSONL, restart Pi, rename). */
   clearSession: () => Promise<{ success: boolean; error?: string }>
+  /** Set session status (active/completed). Pure file operation, no Pi RPC. */
+  setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
 }

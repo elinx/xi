@@ -19,7 +19,7 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 
 function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, streamingMessageId, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd, tokenUsage } = usePiRpc()
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('xi-sidebar-collapsed')
@@ -146,6 +146,7 @@ function App(): React.ReactElement {
         onNewSession={handleNewSession}
         onRenameSession={renameSession}
         onDeleteSession={deleteSession}
+        onSetSessionStatus={setSessionStatus}
         onForkFromEnd={handleForkFromEnd}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => {
