@@ -7,6 +7,7 @@ dist/
 
 # Agent GUI local data
 .xi/
+.playwright-cli/
 
 # Pi reference source (not part of this project)
 ref/
