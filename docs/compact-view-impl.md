@@ -1,7 +1,7 @@
 # Compact View — Implementation Record
 
 对应 spec: `compact-view-spec.md`
-实现 commit: `5244925`
+实现 commits: `5244925` (初始实现), `d2517fe` (左对齐 + git graph)
 
 ## 已实现
 
@@ -40,6 +40,8 @@
 | "再次单击" 或 "收起按钮" 折叠 | **仅收起按钮**折叠，点击卡片内容区不折叠 | 见下方争议 #2 |
 | 展开样式：左侧蓝色竖线 + 浅蓝背景 | `border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg` | 无 |
 | 展开后复用 Normal 模式渲染 | 复用 `ContentBlockRenderer`、`ForkNameInput`、fork 逻辑 | 无 |
+| 无 gutter 装饰 | **左侧 git graph gutter**：圆点节点 + 竖线连接 | 见下方争议 #7 |
+| user 消息偏右 (`ml-8`) | **全部左对齐**，user/assistant 无 margin 偏移 | 见下方争议 #8 |
 
 ### Outline 模式
 
@@ -48,6 +50,13 @@
 | 每轮一行，只显示 user 提问 | 相同 | 无 |
 | 序号标记为"可选增强" | **默认开启**，`#N` 序号 + user 摘要 | 见下方争议 #3 |
 | 点击展开 | 相同，展开后与 Turn 模式一致（显示完整 user + assistant） | 无 |
+| 无 gutter 装饰 | **左侧 git graph gutter**：与 Turn 模式相同 | 见下方争议 #7 |
+
+### Normal 模式
+
+| spec 设计 | 实现 | 偏差 |
+|---|---|---|
+| user 消息偏右（聊天气泡风格） | **全部左对齐** | 见下方争议 #8 |
 
 ### Edge Cases
 
@@ -104,6 +113,31 @@
 长对话（200+ 条消息）在 Normal 模式下 DOM 节点过多，Compact View 只缓解了一半。
 
 **待定**：需要引入虚拟滚动（如 `@tanstack/react-virtual`），配合 Compact View 使用。
+
+### #7 Git Graph 线条（spec 无此设计）
+
+**spec 设计**：无 gutter 装饰，纯卡片列表
+**实际实现**：左侧 git graph gutter
+
+样式：
+- 每个 turn 前有圆点节点，非最后一个 turn 后有竖线连接
+- 折叠状态：空心圆点（白底灰边 `border-gray-300`），hover 时边框变蓝
+- 展开状态：实心蓝点（`bg-blue-500 border-blue-500`）
+- 竖线：`w-px bg-gray-200`
+- 展开内容的蓝色左边框（`border-l-[3px] border-blue-500`）与圆点视觉对齐
+
+结构：每个 turn 是 flex 行，左侧 gutter（`w-6`）+ 右侧内容区。
+
+**理由**：纯卡片列表视觉单调，缺乏上下文关联感。Git graph 线条赋予 turn 序列一种"时间线"的视觉节奏，让用户直觉感受到对话的推进脉络。圆点 → 竖线 → 圆点的模式与 git log --graph 同构，对开发者而言心智模型零成本。
+
+**待定**：Fork 分支的视觉表达——从圆点处分叉出第二条线通向子 session。目前 fork 只在卡片底部显示文字标签，未用线条表达。
+
+### #8 消息全部左对齐（spec 设计 user 偏右）
+
+**spec 设计**：Normal 模式 user 消息 `ml-8`（偏右），assistant 消息 `mr-4`（偏左），类似聊天气泡
+**实际实现**：所有模式下 user/assistant 消息均无水平 margin，统一左对齐
+
+**理由**：user 消息一会在左一会在右，在对话流中不协调。Agent 对话不是即时聊天——user 输入和 agent 回复是同一个工作流的上下游，视觉上应该是同方向流动，而非交替摇摆。左对齐让视线始终从左扫到右，阅读效率更高。
 
 ---
 
