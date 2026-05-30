@@ -40,7 +40,7 @@ function getDisplayName(session: SessionInfo): string {
 }
 
 const SLOT_W = 16
-const LINE_LEFT = 7
+const LINE_LEFT = 8
 
 function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): boolean {
   if (!sessionPath) return false
@@ -60,7 +60,7 @@ function GuideLine({ color }: { color: string }) {
           left: LINE_LEFT,
           top: 0,
           bottom: 0,
-          width: 1,
+          width: 1.5,
           backgroundColor: color,
         }}
       />
@@ -73,7 +73,7 @@ function GuideBranch({ color, branchColor, bottomColor }: { color: string; branc
   const btColor = bottomColor ?? color
   return (
     <div
-      className="flex-shrink-0 relative pointer-events-none"
+      className="flex-shrink-0 relative pointer-events-none overflow-visible"
       style={{ width: SLOT_W, alignSelf: 'stretch' }}
     >
       {/* 上半段竖线 + 圆角 + 水平分支：用 border 绘制，与 GuideElbow 同样的圆角效果 */}
@@ -83,9 +83,9 @@ function GuideBranch({ color, branchColor, bottomColor }: { color: string; branc
           left: LINE_LEFT,
           top: 0,
           height: '50%',
-          width: SLOT_W - LINE_LEFT - 1,
-          borderLeft: `1px solid ${color}`,
-          borderBottom: `1px solid ${brColor}`,
+          width: SLOT_W - LINE_LEFT + 3,
+          borderLeft: `1.5px solid ${color}`,
+          borderBottom: `1.5px solid ${brColor}`,
           borderBottomLeftRadius: 4,
         }}
       />
@@ -96,7 +96,7 @@ function GuideBranch({ color, branchColor, bottomColor }: { color: string; branc
           left: LINE_LEFT,
           top: '50%',
           bottom: 0,
-          width: 1,
+          width: 1.5,
           backgroundColor: btColor,
         }}
       />
@@ -107,7 +107,7 @@ function GuideBranch({ color, branchColor, bottomColor }: { color: string; branc
 function GuideElbow({ color }: { color: string }) {
   return (
     <div
-      className="flex-shrink-0 relative pointer-events-none"
+      className="flex-shrink-0 relative pointer-events-none overflow-visible"
       style={{ width: SLOT_W, alignSelf: 'stretch' }}
     >
       <div
@@ -116,9 +116,9 @@ function GuideElbow({ color }: { color: string }) {
           left: LINE_LEFT,
           top: 0,
           height: '50%',
-          width: SLOT_W - LINE_LEFT - 1,
-          borderLeft: `1px solid ${color}`,
-          borderBottom: `1px solid ${color}`,
+          width: SLOT_W - LINE_LEFT + 3,
+          borderLeft: `1.5px solid ${color}`,
+          borderBottom: `1.5px solid ${color}`,
           borderBottomLeftRadius: 4,
         }}
       />
@@ -150,28 +150,26 @@ function DotSlot({
 }) {
   return (
     <div
-      className="flex-shrink-0 flex flex-col items-center relative"
+      className="flex-shrink-0 flex items-center justify-center relative"
       style={{ width: SLOT_W, alignSelf: 'stretch' }}
     >
-      <div className="flex items-center justify-center h-6">
-        <div
-          className={
-            active
-              ? 'w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 flex-shrink-0'
-              : completed
-                ? 'w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-gray-300 flex-shrink-0'
-                : 'w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-blue-500 flex-shrink-0'
-          }
-        />
-      </div>
+      <div
+        className={
+          active
+            ? 'w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 flex-shrink-0'
+            : completed
+              ? 'w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-gray-300 flex-shrink-0'
+              : 'w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-blue-500 flex-shrink-0'
+        }
+      />
       {hasChildren && isExpanded && (
         <div
           className="absolute"
           style={{
             left: LINE_LEFT,
-            top: 24,
+            top: 'calc(50% + 5px)',
             bottom: 0,
-            width: 1,
+            width: 1.5,
             backgroundColor: gutterActive ? '#3b82f6' : '#e5e7eb',
           }}
         />
