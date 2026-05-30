@@ -156,6 +156,8 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `session:deleteSession` | `get_state` (safety check, try/catch) → `deleteSession()` | Blocks active session deletion; allows delete when Pi disconnected |
 | `session:getMessages` | `get_messages` | Returns raw Pi message array |
 | `session:getForkPoints` | (no RPC) → `getForkPoints()` | Reads directly from disk |
+| `session:softPeek` | `soft_peek` | Reads messages from session without switching runtime (§6.6.7) |
+| `session:getRuntimeSessionId` | `get_state` | Returns sessionId + sessionFile + isStreaming of runtime's current session |
 
 #### RPC Correlation
 
@@ -183,6 +185,8 @@ sendRpcCommand({ type: "fork", entryId })
 | `session:getMessages` | renderer → main | (none) |
 | `session:deleteSession` | renderer → main | `sessionPath: string` |
 | `session:getForkPoints` | renderer → main | `sessionPath: string` |
+| `session:softPeek` | renderer → main | `sessionPath: string` |
+| `session:getRuntimeSessionId` | renderer → main | (none) |
 
 ### 4.3 Frontend
 
@@ -337,17 +341,395 @@ onStateChanged({ connected: true })
   → loadCurrentSession()
 ```
 
+### 6.6 Streaming State During Session Switch
+
+Session switch may occur while the agent is streaming. The architecture uses a **single `AgentSessionRuntime`** that can only hold one active `AgentSession` at a time. When the user switches away from a streaming session, the agent **must continue running in the background** — it must NOT be aborted.
+
+This requires a **Soft Switch** mechanism that changes the frontend view without changing the runtime's active session. The runtime only switches when the session is idle (Hard Switch).
+
+#### 6.6.1 Two Switch Modes
+
+| | Soft Switch | Hard Switch |
+|---|---|---|
+| Trigger | User clicks a different session while current session is streaming | User clicks a different session while current session is idle |
+| Runtime | **No** `runtime.switchSession()` — the old session keeps streaming | Calls `runtime.switchSession()` — runtime switches to target |
+| Old session | Continues streaming in background; events are buffered | N/A (was idle) |
+| Can send prompt | **No** — runtime is still on the old session; input bar is disabled | Yes |
+| UI indicator | Banner: "Session X 后台运行中" + Stop button | Normal |
+|切回来 | Reload messages from the session; in-progress assistant turn is shown | Normal loadHistory |
+
+**Why Soft Switch does not call `runtime.switchSession()`**: That function calls `session.dispose()` → `agent.abort()`, which kills the streaming. Soft Switch avoids this entirely by leaving the runtime on the old session and only changing what the frontend displays.
+
+#### 6.6.2 Frontend State Machine
+
+The frontend tracks two pieces of state for soft switching:
+
+```
+viewSessionPath: string | null   — which session the user is LOOKING AT
+runtimeSessionPath: string | null — which session the runtime is ON (may differ during soft switch)
+```
+
+When `viewSessionPath !== runtimeSessionPath`, the frontend is in **soft-switched mode**.
+
+```
+                    ┌─────────────┐
+                    │   Normal     │ viewSession === runtimeSession
+                    │   Mode       │ Can send prompts, streaming events rendered
+                    └──────┬──────┘
+                           │ User clicks different session while streaming
+                           ▼
+                    ┌─────────────┐
+                    │ Soft-Switch  │ viewSession ≠ runtimeSession
+                    │ Mode         │ Cannot send prompts; background events buffered
+                    └──────┬──────┘
+                           │ User clicks back to runtimeSession OR agent ends
+                           ▼
+                    ┌─────────────┐
+                    │   Normal     │
+                    │   Mode       │
+                    └─────────────┘
+```
+
+**Exiting soft-switch mode**:
+
+1. **User clicks back to the runtime session**: Frontend sets `viewSessionPath = runtimeSessionPath`, replays buffered events, resumes rendering.
+2. **Agent ends (background streaming completes)**: `agent_end` event arrives → frontend updates `runtimeSessionPath` to match `viewSessionPath` (the user is now looking at a different idle session), and calls `runtime.switchSession(viewSessionPath)` as a hard switch.
+3. **User clicks Stop**: Aborts the background agent → `agent_end` fires → same as case 2.
+
+#### 6.6.3 Event Buffering and Session ID Tagging
+
+All events from the worker must include a `sessionId` field so the frontend can filter them during soft-switch mode.
+
+**Worker change** — `forwardEvent` attaches `sessionId`:
+
+```
+function forwardEvent(event: AgentSessionEvent): void {
+  send({ channel: 'event', data: { ...event, sessionId: session.sessionId } })
+}
+```
+
+**Main process** — pass through `sessionId` unchanged (already a passthrough).
+
+**Frontend event handler**:
+
+```
+handleEvent(event):
+  if viewSessionPath === runtimeSessionPath:
+    // Normal mode — process all events as before
+    processEvent(event)
+  else:
+    // Soft-switch mode
+    if event.sessionId === runtimeSessionId:
+      // Event from the background (still-streaming) session
+      bufferEvent(event)    // store for replay if user switches back
+    else:
+      // Event from an unexpected session — discard
+      ignore
+```
+
+**Buffer structure**:
+
+```
+backgroundEventBuffer: AgentSessionEvent[]   // capped at 500 events
+```
+
+The buffer is cleared when soft-switch mode exits.
+
+#### 6.6.4 Soft Switch Flow
+
+**Entering soft switch** (user clicks session B while A is streaming):
+
+```
+1. viewSessionPath = B.path
+2. loadHistoryForView(B.path)     // RPC: get_messages for session B
+   // Uses new soft_peek command (see §6.6.7) — reads messages without switching runtime
+3. loadForkPoints(B.path)
+4. refresh()
+5. // runtimeSessionPath remains A.path; A continues streaming
+6. // Input bar disabled, banner shown
+```
+
+**User clicks back to A while A still streaming**:
+
+```
+1. viewSessionPath = A.path = runtimeSessionPath  // back to normal mode
+2. replayBufferedEvents()          // apply buffered deltas to current messages
+3. // Input bar still disabled (streaming), but deltas now render in real-time
+```
+
+**Agent ends while in soft-switch mode** (background session A finishes):
+
+```
+1. agent_end event arrives with sessionId = A.sessionId
+2. bufferEvent(agent_end)          // buffer it
+3. runtimeSessionPath = viewSessionPath (B.path)  // now we can hard-switch
+4. runtime.switchSession(B.path)   // hard switch to what user is looking at
+5. clearBuffer()
+6. syncStreamingState()            // should be false
+7. // Input bar enabled, banner removed
+```
+
+**User clicks Stop while in soft-switch mode**:
+
+```
+1. Send abort command to runtime (which is on session A)
+2. agent_end arrives → same as "Agent ends" flow above
+```
+
+#### 6.6.5 Hard Switch Flow (Non-Streaming)
+
+When the current session is NOT streaming, a session click is a hard switch — identical to the current behavior:
+
+```
+1. viewSessionPath = B.path
+2. runtimeSessionPath = B.path
+3. clearMessages()
+4. result = switchSession(B.path)    // RPC: switch_session
+5. if result.success:
+     await loadHistory()
+     await loadForkPoints(B.path)
+     await refresh()
+6. else:
+     viewSessionPath = prevPath
+     runtimeSessionPath = prevPath
+```
+
+#### 6.6.6 Other Operations During Soft-Switch Mode
+
+| Operation | Allowed? | Behavior |
+|-----------|----------|----------|
+| New session | ❌ | Disabled — must stop background agent first or switch back |
+| Fork | ❌ | Disabled — same reason |
+| Clear session | ❌ | Disabled — same reason |
+| Delete a session (not the background one) | ⚠️ | Allowed — only deletes the JSONL, doesn't affect runtime |
+| Delete the background session | ❌ | Disabled — cannot delete a session the runtime is using |
+
+When the user tries a disabled operation, show a toast: "请先停止后台运行的会话"
+
+#### 6.6.7 New Worker Command: `soft_peek`
+
+The frontend needs to read messages from a session WITHOUT switching the runtime. This is used by soft switch to display the target session's history.
+
+```
+case 'soft_peek': {
+  // Read messages from a different session file without switching the runtime
+  const targetPath = cmd.sessionPath as string
+  const targetSm = pi.SessionManager.open(targetPath)
+  const entries = targetSm.getEntries()
+  const messages = entries
+    .filter(e => e.type === 'message' && e.message)
+    .map(e => ({ ...e.message, id: e.id }))
+  send({
+    channel: 'response',
+    id: cmd.id,
+    command: 'soft_peek',
+    success: true,
+    data: { messages, sessionId: entries[0]?.sessionId }
+  })
+  break
+}
+```
+
+This creates a temporary `SessionManager` for reading, does NOT affect the runtime's active session, and does NOT call `bindSession()`.
+
+#### 6.6.8 New IPC Channels
+
+| Channel | Direction | Payload | Description |
+|---------|-----------|---------|-------------|
+| `session:softPeek` | renderer → main | `sessionPath: string` | Read messages without switching runtime |
+| `session:getRuntimeSessionId` | renderer → main | (none) | Get the runtime's current sessionId |
+
+Main process handlers:
+
+```
+ipcMain.handle('session:softPeek', async (_event, sessionPath: string) => {
+  return piBridge.sendRpcCommand({ type: 'soft_peek', sessionPath })
+})
+
+ipcMain.handle('session:getRuntimeSessionId', async () => {
+  const data = await piBridge.sendRpcCommand({ type: 'get_state' })
+  return { sessionId: data.sessionId, sessionFile: data.sessionFile, isStreaming: data.isStreaming }
+})
+```
+
+#### 6.6.9 UI: Soft-Switch Banner and Input State
+
+When in soft-switch mode (`viewSessionPath !== runtimeSessionPath`):
+
+**Banner** (above chat area, below title bar):
+
+```
+┌──────────────────────────────────────────────────┐
+│ 🔄 Session "experiment-1" 后台运行中   [Stop]    │
+└──────────────────────────────────────────────────┘
+```
+
+- Clicking "Stop" sends abort command
+- Banner disappears when agent_end is received
+
+**Input bar**:
+
+- Disabled with placeholder: "当前会话后台运行中，无法发送消息"
+- Stop button shown
+
+**Sidebar**:
+
+- Background streaming session shows a small animated dot (🔵 pulsing) to indicate it's running
+- Current view session has the normal active highlight
+
+#### 6.6.10 Replaying Buffered Events
+
+When the user switches back to the runtime session while it's still streaming:
+
+```
+replayBufferedEvents():
+  for event in backgroundEventBuffer:
+    processEvent(event)    // same as normal handleEvent
+  clearBuffer()
+  // The in-progress assistant message now shows all accumulated content
+```
+
+The buffer may contain `message_update` (text_delta, toolcall_delta, etc.) and `tool_execution_end` events. These are processed sequentially to reconstruct the streaming state.
+
+**Edge case — `message_start` in buffer**: If the background agent started a new assistant turn after the user soft-switched away, the buffer will contain a `message_start` event. Processing it will set `currentAssistantId` and create a new ChatMessage as normal.
+
+**Buffer overflow protection**: If the buffer exceeds 500 events, drop the oldest events. This prevents memory issues during very long background streams. The user will see a gap in the replayed content, but `loadHistory()` will fill it on the next hard switch.
+
+#### 6.6.11 Updated Lifecycle Flows
+
+**Session Click** (replaces §6.2):
+
+```
+handleSessionClick(path):
+  if isStreaming && path !== viewSessionPath:
+    // Soft switch
+    viewSessionPath = path
+    messages = softPeek(path)      // RPC: soft_peek → convert → setMessages
+    loadForkPoints(path)
+    refresh()
+    // runtimeSessionPath unchanged, input disabled, banner shown
+  else if !isStreaming && path !== viewSessionPath:
+    // Hard switch
+    viewSessionPath = path
+    runtimeSessionPath = path
+    clearMessages()
+    result = switchSession(path)   // RPC: switch_session
+    if result.success:
+      await loadHistory()
+      await loadForkPoints(path)
+      await refresh()
+    else:
+      viewSessionPath = prevPath
+      runtimeSessionPath = prevPath
+  else:
+    // Already on this session, no-op
+```
+
+**New Session** (replaces §6.3):
+
+```
+handleNewSession(name):
+  if isStreaming:
+    // Show toast: "请先停止后台运行的会话"
+    return
+  clearMessages()
+  result = newSession(name, parentPath)
+  if result:
+    viewSessionPath = runtimeSessionPath  // stays in sync
+    await refresh()
+```
+
+**Fork** (replaces §6.3):
+
+```
+handleForkAtEntry(entryId, name):
+  if isStreaming:
+    // Show toast: "请先停止后台运行的会话"
+    return
+  clearMessages()
+  await forkAtEntry(entryId, name)
+  await loadHistory()
+  await refresh()
+```
+
+**Clear Session**:
+
+```
+handleClearSession():
+  if isStreaming:
+    // Show toast: "请先停止后台运行的会话"
+    return
+  clearMessages()
+  ok = await clearSession()
+  if ok:
+    clearMessages()
+    await loadHistory()
+    await refresh()
+    viewSessionPath = null
+```
+
+#### 6.6.12 `clearMessages()` Rules
+
+`clearMessages()` is only called during hard switches (when NOT streaming). In soft-switch mode, messages are replaced via `softPeek()` without calling `clearMessages()`.
+
+```
+clearMessages():
+  setMessages([])
+  setForkPoints([])
+  setTokenUsage(initial)
+  setIsStreaming(false)
+  isStreamingRef.current = false
+  currentAssistantId.current = null
+  currentContentBlocks.current.clear()
+  toolCallArgsBuffer.current.clear()
+  pendingToolCallArgs.current.clear()
+```
+
+#### 6.6.13 Error Scenarios
+
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| `soft_peek` RPC fails | Frontend shows empty message list for target session. User can retry by clicking again. |
+| `switchSession` RPC fails during hard switch | `viewSessionPath` and `runtimeSessionPath` revert to previous. No action needed. |
+| Worker crashes during soft switch | `onStateChanged({ connected: false })` fires. Both view and runtime paths reset. |
+| Rapid clicking (A → B → C while A streaming) | Each click is a soft switch. Buffer accumulates events for A. Only the latest viewSessionPath is shown. |
+| User clicks back to streaming session A | `viewSessionPath = runtimeSessionPath` → replay buffer → real-time rendering resumes. |
+| Agent ends while user is viewing B (soft-switch) | `agent_end` buffered → hard switch to B → buffer cleared → input enabled. |
+| `soft_peek` returns stale messages (agent appended more) | Expected — soft_peek is a point-in-time snapshot. User sees current state when they switch back. |
+| Buffer overflow (>500 events) | Oldest events dropped. Gap in replayed content. `loadHistory()` fills on next hard switch. |
+| Network disconnect during soft switch | Worker may crash → `disconnected` event → both paths reset. |
+
+#### 6.6.14 Implementation Checklist
+
+- [ ] Worker: add `sessionId` to all forwarded events
+- [ ] Worker: add `soft_peek` command
+- [ ] Main: add `session:softPeek` IPC handler
+- [ ] Main: add `session:getRuntimeSessionId` IPC handler
+- [ ] Preload: add `softPeek(sessionPath)` and `getRuntimeSessionId()` APIs
+- [ ] Frontend: add `viewSessionPath` / `runtimeSessionPath` state
+- [ ] Frontend: implement soft-switch detection (`isStreaming && clickedPath !== runtimeSessionPath`)
+- [ ] Frontend: event filtering + buffering during soft-switch mode
+- [ ] Frontend: buffer replay on switching back
+- [ ] Frontend: soft-switch banner component
+- [ ] Frontend: input bar disabled state + placeholder during soft-switch
+- [ ] Frontend: sidebar pulsing dot on background-streaming session
+- [ ] Frontend: disable new session / fork / clear during soft-switch
+- [ ] Frontend: toast message "请先停止后台运行的会话"
+- [ ] Frontend: agent_end handler during soft-switch (hard switch to view session)
+- [ ] Types: add `sessionId` to `AgentSessionEvent`
+
 ## 7. Pi RPC Commands Reference
 
 | Command | Direction | Response |
 |---------|-----------|----------|
-| `{ type: "get_state" }` | GUI → Pi | `{ sessionPath, ... }` |
+| `{ type: "get_state" }` | GUI → Pi | `{ sessionFile, sessionId, sessionName, isStreaming, isCompacting, thinkingLevel, messageCount }` |
 | `{ type: "get_messages" }` | GUI → Pi | `{ messages: [...] }` |
 | `{ type: "get_fork_messages" }` | GUI → Pi | `{ messages: [{ entryId, text }] }` |
 | `{ type: "fork", entryId }` | GUI → Pi | Creates new session from entry |
 | `{ type: "switch_session", sessionPath }` | GUI → Pi | Switches Pi to different session |
 | `{ type: "new_session", parentSession? }` | GUI → Pi | Creates blank session |
 | `{ type: "set_session_name", name }` | GUI → Pi | Sets name in Pi's state |
+| `{ type: "soft_peek", sessionPath }` | GUI → Pi | Reads messages from a session without switching runtime (§6.6.7) |
 
 All RPC commands are sent with a UUID `id` field. Responses include matching `id` for correlation.
 
@@ -409,6 +791,11 @@ type ContentBlock =
 | Parse invalid JSONL line | `parseSessionFile` skips line, continues |
 | Empty project directory | `listSessions` skips it; `deleteSession` removes it |
 | Pi disconnected during operation | RPC rejects, UI shows "Pi Disconnected" state |
+| Switch session while streaming | Soft switch: frontend changes view, runtime stays on old session (§6.6.4) |
+| Switch back to streaming session | Replay buffered events, resume real-time rendering (§6.6.10) |
+| `soft_peek` RPC fails | Frontend shows empty messages for target session (§6.6.13) |
+| New session / fork / clear while streaming | Operation blocked, toast shown: "请先停止后台运行的会话" (§6.6.6) |
+| Buffer overflow during soft switch | Oldest events dropped, gap in replayed content (§6.6.10) |
 
 ## 10. Test Coverage
 
@@ -423,3 +810,23 @@ type ContentBlock =
 | `load-history.test.ts` | ~26 | User/assistant/toolResult conversion, piEntryId extraction, fork point matching, fork flow, switch+loadHistory, ForkPopover validation |
 
 All session-service tests use temp directories with optional `sessionDir` param — no real `~/.pi/agent/sessions` access needed.
+
+### 10.1 Soft Switch Tests (§6.6)
+
+| Scenario | Expected Result | Section |
+|----------|----------------|---------|
+| Click different session while streaming | Soft switch: view changes, runtime stays on old session | §6.6.4 |
+| Click different session while NOT streaming | Hard switch: runtime switches | §6.6.5 |
+| Click back to streaming session | Buffered events replayed, real-time rendering resumes | §6.6.10 |
+| Agent ends while in soft-switch mode | Hard switch to view session, input enabled | §6.6.4 |
+| User clicks Stop in soft-switch mode | Background agent aborted, hard switch to view session | §6.6.4 |
+| New session while streaming | Blocked with toast | §6.6.6 |
+| Fork while streaming | Blocked with toast | §6.6.6 |
+| Clear session while streaming | Blocked with toast | §6.6.6 |
+| `soft_peek` RPC fails | Empty messages shown for target session | §6.6.13 |
+| Buffer overflow (>500 events) | Oldest events dropped | §6.6.10 |
+| `message_start` in buffer | New ChatMessage created during replay | §6.6.10 |
+| Event filtering during soft switch | Only runtime session events buffered; others discarded | §6.6.3 |
+| `sessionId` attached to worker events | All forwarded events include `sessionId` field | §6.6.3 |
+| Hard switch RPC fails | Paths revert to previous | §6.6.5 |
+| `clearMessages()` resets `isStreaming` | `isStreaming === false` after clear | §6.6.12 |
