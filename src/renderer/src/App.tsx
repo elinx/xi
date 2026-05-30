@@ -4,6 +4,7 @@ import { useSessionManager } from './hooks/useSessionManager'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
+import type { ViewMode } from './utils/compact-view'
 
 function getDisplayName(session: { name: string | null; createdAt: string }): string {
   if (session.name) return session.name
@@ -21,6 +22,9 @@ function App(): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('xi-view-mode') as ViewMode) || 'normal'
+  })
 
   const activeSession = activeSessionPath
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
@@ -171,6 +175,35 @@ function App(): React.ReactElement {
               <span className="text-xs text-red-500" title={error}>Error</span>
             )}
           </div>
+          <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <button
+              onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
+              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Full view"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
+              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Turn view"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
+              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Outline view"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+            </button>
+          </div>
           <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {!isConnected && (
               <button
@@ -199,6 +232,7 @@ function App(): React.ReactElement {
           onForkAtEntry={handleForkAtEntry}
           getForkMessages={getForkMessages}
           forkPoints={forkPoints}
+          viewMode={viewMode}
         />
 
         <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} />
