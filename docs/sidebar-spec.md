@@ -74,29 +74,60 @@
 
 ### 1. Session 节点样式
 
-当前每个 session 节点是一行紧凑文字，信息密度高但区分度低。是否需要增加视觉层次？
-
-**选项**：
-- A) 保持现状（单行，纯文字）
-- B) 双行：第一行 session 名称，第二行元数据（消息数、时间）
-- C) 单行但增加 icon 区分（main 用特殊 icon，forked session 用分支 icon）
+保持现状：单行紧凑文字，hover 显示时间。无需增加视觉层次。
 
 ### 2. 拖拽调整宽度
 
-sidebar 当前固定 260px。是否需要支持拖拽调整？
+支持拖拽右侧边缘调整 sidebar 宽度。
 
-### 3. Git Graph 线条一致性
+- 最小宽度：180px
+- 最大宽度：480px
+- 默认宽度：260px
+- 拖拽时实时调整，松开后宽度持久化到 localStorage（key: `xi-sidebar-width`）
+- 折叠态宽度不受影响（固定 w-12）
+
+### 3. 折叠态实用性
+
+保持极简，只保留展开按钮。不额外显示信息——折叠的目的就是节省空间，塞信息会失去折叠的意义。
 
 折叠后只剩一个展开按钮，无法快速操作。是否需要在折叠态显示 session 数量或当前 session 名？
 
 ### 4. 搜索/过滤
 
+暂不实现，标记为待定。Session 数量少时无需求，多了再考虑。
+
 session 多了之后是否需要搜索？是否需要按名称/时间/消息数排序？
 
 ### 5. Git Graph 线条一致性
 
-compact view 中的 chat 区域已用 git graph 线条表示 turn 序列。sidebar 的 session 树是否也用类似的线条连接父子关系（取代当前的缩进）？
+Chat 区域已用 git graph 线条连接 turn，sidebar 的 session 树也采用同样风格：
+
+- 左侧 gutter 区域画竖线 + 圆点节点，与 compact view 一致
+- 线条与缩进共存（不取代缩进）：缩进表示深度，线条表示父子连接
+- 折叠状态：空心圆点（`bg-white border-gray-300`），hover 变蓝
+- 展开状态 / 有子节点：实心圆点（`bg-blue-500`）
+- 活跃 session：圆点高亮
+- 竖线用 `bg-gray-200`，与 compact view 一致
+
+示意：
+```
+│
+●  main              2h ago
+│
+├─●  产品建议         2h ago
+│
+├─●  绘图            2h ago
+│
+●  ideas             15m ago
+```
 
 ### 6. 右键菜单
 
-当前操作散落在各个按钮上（双击重命名、hover 显示删除/跳转）。是否改为右键菜单统一入口？
+保留现有交互方式（单击切换、双击重命名、hover 显示删除/跳转），同时增加右键菜单作为统一入口。
+
+右键菜单项：
+- Rename — 进入重命名编辑
+- Go to parent — 跳转父 session（仅 parentSessionPath 非空时显示）
+- Delete — 删除 session（仅非活跃 + 非 main 时显示）
+
+优先级：现有直接交互不变，右键菜单是补充而非替代。
