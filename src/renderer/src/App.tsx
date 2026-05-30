@@ -17,7 +17,7 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 
 function App(): React.ReactElement {
   const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, refresh } = useSessionManager(isConnected)
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
@@ -165,7 +165,6 @@ function App(): React.ReactElement {
           respondToUiRequest={respondToUiRequest}
           onSendPrompt={sendPrompt}
           onForkAtEntry={handleForkAtEntry}
-          getForkMessages={getForkMessages}
           forkPoints={forkPoints}
         />
 

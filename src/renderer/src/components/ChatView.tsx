@@ -11,7 +11,7 @@ import type {
   HtmlBlock,
   Annotation,
 } from '../types/message'
-import type { ForkableMessage, ForkPoint } from '../types/session'
+import type { ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
 
@@ -21,7 +21,6 @@ interface ChatViewProps {
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
   onForkAtEntry: (entryId: string, name: string) => void
-  getForkMessages: () => Promise<ForkableMessage[]>
   forkPoints: ForkPoint[]
 }
 
@@ -352,17 +351,16 @@ function ContentBlockRenderer({
   }
 }
 
-function ForkPopover({
-  forkMessages,
+function ForkNameInput({
   onForkAtEntry,
   onClose,
+  defaultEntryId,
 }: {
-  forkMessages: ForkableMessage[]
   onForkAtEntry: (entryId: string, name: string) => void
   onClose: () => void
+  defaultEntryId: string
 }): React.ReactElement {
   const popoverRef = useRef<HTMLDivElement>(null)
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null)
   const [forkName, setForkName] = useState('')
 
   useEffect(() => {
@@ -376,76 +374,48 @@ function ForkPopover({
   }, [onClose])
 
   const handleConfirm = useCallback(() => {
-    if (selectedEntryId && forkName.trim()) {
-      onForkAtEntry(selectedEntryId, forkName.trim())
+    if (forkName.trim()) {
+      onForkAtEntry(defaultEntryId, forkName.trim())
       onClose()
     }
-  }, [selectedEntryId, forkName, onForkAtEntry, onClose])
+  }, [forkName, defaultEntryId, onForkAtEntry, onClose])
 
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-8 z-30 w-72 rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+      className="absolute right-0 top-8 z-30 w-64 rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
     >
-      <div className="border-b border-gray-800 px-3 py-2">
-        <span className="text-xs font-medium text-gray-400">Fork from message</span>
+      <div className="px-3 py-2 space-y-1.5">
+        <input
+          autoFocus
+          value={forkName}
+          onChange={(e) => setForkName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleConfirm()
+            if (e.key === 'Escape') onClose()
+          }}
+          placeholder="Fork session name"
+          className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={handleConfirm}
+          disabled={!forkName.trim()}
+          className="w-full rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Fork from here
+        </button>
       </div>
-      <div className="max-h-48 overflow-y-auto py-1">
-        {forkMessages.length === 0 ? (
-          <div className="px-3 py-4 text-center text-xs text-gray-600">
-            No forkable messages
-          </div>
-        ) : (
-          forkMessages.map((msg) => (
-            <button
-              key={msg.entryId}
-              onClick={() => setSelectedEntryId(msg.entryId)}
-              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
-                selectedEntryId === msg.entryId ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-gray-800 text-gray-300'
-              }`}
-            >
-              <svg className="mt-0.5 w-3 h-3 flex-shrink-0 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-              </svg>
-              <span className="text-xs line-clamp-2">{msg.text || '(empty)'}</span>
-            </button>
-          ))
-        )}
-      </div>
-      {selectedEntryId && (
-        <div className="border-t border-gray-700 px-3 py-2">
-          <input
-            autoFocus
-            value={forkName}
-            onChange={(e) => setForkName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleConfirm()
-              if (e.key === 'Escape') onClose()
-            }}
-            placeholder="Fork session name"
-            className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none focus:border-blue-500"
-          />
-          <button
-            onClick={handleConfirm}
-            disabled={!forkName.trim()}
-            className="mt-1.5 w-full rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Fork
-          </button>
-        </div>
-      )}
     </div>
   )
 }
 
-function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, forkPoints }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
     blockIndex: number
   } | null>(null)
-  const [forkPopoverMessageId, setForkPopoverMessageId] = useState<string | null>(null)
-  const [forkMessages, setForkMessages] = useState<ForkableMessage[]>([])
+  const [forkInputMessageId, setForkInputMessageId] = useState<string | null>(null)
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -463,15 +433,13 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
     [onSendPrompt],
   )
 
-  const handleForkClick = useCallback(async (messageId: string) => {
-    if (forkPopoverMessageId === messageId) {
-      setForkPopoverMessageId(null)
+  const handleForkClick = useCallback((messageId: string) => {
+    if (forkInputMessageId === messageId) {
+      setForkInputMessageId(null)
       return
     }
-    const msgs = await getForkMessages()
-    setForkMessages(msgs)
-    setForkPopoverMessageId(messageId)
-  }, [forkPopoverMessageId, getForkMessages])
+    setForkInputMessageId(messageId)
+  }, [forkInputMessageId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -504,7 +472,7 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                   <span className="text-xs font-medium text-gray-400">
                     {msg.role === 'user' ? 'You' : 'Pi'}
                   </span>
-                  {msg.role === 'user' && (
+                  {msg.role === 'user' && msg.piEntryId && (
                     <div className="relative">
                       <button
                         onClick={() => handleForkClick(msg.id)}
@@ -512,11 +480,11 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                       >
                         Fork
                       </button>
-                      {forkPopoverMessageId === msg.id && (
-                        <ForkPopover
-                          forkMessages={forkMessages}
+                      {forkInputMessageId === msg.id && (
+                        <ForkNameInput
                           onForkAtEntry={onForkAtEntry}
-                          onClose={() => setForkPopoverMessageId(null)}
+                          onClose={() => setForkInputMessageId(null)}
+                          defaultEntryId={msg.piEntryId!}
                         />
                       )}
                     </div>

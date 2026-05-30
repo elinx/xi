@@ -483,16 +483,14 @@ describe('Switch session + loadHistory', () => {
   })
 })
 
-describe('ForkPopover name validation', () => {
+describe('ForkNameInput validation', () => {
   it('requires non-empty fork name before confirming', () => {
     const onForkAtEntry = vi.fn()
 
-    // Simulate ForkPopover handleConfirm logic
-    const selectedEntryId = 'entry-1'
     const forkName = '   '
 
-    if (selectedEntryId && forkName.trim()) {
-      onForkAtEntry(selectedEntryId, forkName.trim())
+    if (forkName.trim()) {
+      onForkAtEntry(defaultEntryId, forkName.trim())
     }
 
     expect(onForkAtEntry).not.toHaveBeenCalled()
@@ -501,27 +499,27 @@ describe('ForkPopover name validation', () => {
   it('calls onForkAtEntry with trimmed name', () => {
     const onForkAtEntry = vi.fn()
 
-    const selectedEntryId = 'entry-1'
+    const defaultEntryId = 'entry-1'
     const forkName = '  my-fork  '
 
-    if (selectedEntryId && forkName.trim()) {
-      onForkAtEntry(selectedEntryId, forkName.trim())
+    if (forkName.trim()) {
+      onForkAtEntry(defaultEntryId, forkName.trim())
     }
 
     expect(onForkAtEntry).toHaveBeenCalledWith('entry-1', 'my-fork')
   })
 
-  it('does not confirm without selected message', () => {
+  it('always has an entryId from the message', () => {
     const onForkAtEntry = vi.fn()
 
-    const selectedEntryId = null
+    const defaultEntryId = 'entry-1'
     const forkName = 'some-name'
 
-    if (selectedEntryId && forkName.trim()) {
-      onForkAtEntry(selectedEntryId, forkName.trim())
+    if (forkName.trim()) {
+      onForkAtEntry(defaultEntryId, forkName.trim())
     }
 
-    expect(onForkAtEntry).not.toHaveBeenCalled()
+    expect(onForkAtEntry).toHaveBeenCalledWith('entry-1', 'some-name')
   })
 })
 
