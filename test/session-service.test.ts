@@ -36,9 +36,9 @@ function writeSession(dir: string, filename: string, header: Record<string, unkn
   return filePath
 }
 
-function makeProjectDir(base: string, cwd: string): string {
-  const encoded = '--' + cwd.replace(/\//g, '-') + '--'
-  return join(base, encoded)
+function makeProjectDir(base: string, _cwd: string): string {
+  mkdirSync(base, { recursive: true })
+  return base
 }
 
 describe('decodeProjectDir', () => {
@@ -146,8 +146,7 @@ describe('findMainSession', () => {
   })
 
   it('returns oldest session when no session is named "main" for the cwd', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 's1.jsonl',
+    writeSession(testDir, 's1.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
 
@@ -158,8 +157,7 @@ describe('findMainSession', () => {
   })
 
   it('finds a session named "main" for the given cwd', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 'main.jsonl',
+    writeSession(testDir, 'main.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
       [{ type: 'session_info', id: 's1', parentId: null, timestamp: '2026-05-26T16:00:01.000Z', name: 'main' }]
     )
@@ -170,27 +168,11 @@ describe('findMainSession', () => {
     expect(result!.cwd).toBe('/test/project')
   })
 
-  it('does not match main from a different cwd', () => {
-    const projectDirA = makeProjectDir(testDir, '/project/a')
-    const projectDirB = makeProjectDir(testDir, '/project/b')
-    writeSession(projectDirA, 'main.jsonl',
-      { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/a' },
-      [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
-    )
-    writeSession(projectDirB, 'other.jsonl',
-      { id: 'uuid-2', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/b' },
-    )
-
-    expect(findMainSession('/project/b', testDir)).not.toBeNull()
-    expect(findMainSession('/project/b', testDir)!.sessionId).toBe('uuid-2')
-  })
-
   it('falls back to oldest session when no session is named "main"', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 'old.jsonl',
+    writeSession(testDir, 'old.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
-    writeSession(projectDir, 'newer.jsonl',
+    writeSession(testDir, 'newer.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
     )
 
@@ -200,11 +182,10 @@ describe('findMainSession', () => {
   })
 
   it('prefers named "main" over unnamed sessions', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 'old.jsonl',
+    writeSession(testDir, 'old.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
-    writeSession(projectDir, 'named.jsonl',
+    writeSession(testDir, 'named.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
       [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
     )
@@ -291,45 +272,31 @@ describe('listSessions', () => {
     expect(result.projects).toHaveLength(0)
   })
 
-  it('returns empty when sessions dir has no project dirs', () => {
+  it('returns empty when sessions dir has no session files', () => {
     mkdirSync(join(testDir, 'other'), { recursive: true })
     const result = listSessions(undefined, testDir)
     expect(result.projects).toHaveLength(0)
   })
 
-  it('groups sessions by project directory', () => {
-    const projectDirA = makeProjectDir(testDir, '/project/a')
-    const projectDirB = makeProjectDir(testDir, '/project/b')
-
-    writeSession(projectDirA, 's1.jsonl',
+  it('lists sessions from a single project directory', () => {
+    writeSession(testDir, 's1.jsonl',
       { id: 'uuid-a1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/project/a' },
       [{ type: 'session_info', id: 'x1', parentId: null, name: 'main' }]
     )
-    writeSession(projectDirA, 's2.jsonl',
+    writeSession(testDir, 's2.jsonl',
       { id: 'uuid-a2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/project/a' }
-    )
-    writeSession(projectDirB, 's1.jsonl',
-      { id: 'uuid-b1', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/project/b' },
-      [{ type: 'session_info', id: 'y1', parentId: null, name: 'main' }]
     )
 
     const result = listSessions(undefined, testDir)
-    expect(result.projects).toHaveLength(2)
-
-    const projectA = result.projects.find(p => p.projectPath === '/project/a')
-    const projectB = result.projects.find(p => p.projectPath === '/project/b')
-    expect(projectA).toBeDefined()
-    expect(projectB).toBeDefined()
-    expect(projectA!.allSessions).toHaveLength(2)
-    expect(projectB!.allSessions).toHaveLength(1)
+    expect(result.projects).toHaveLength(1)
+    expect(result.projects[0].allSessions).toHaveLength(2)
   })
 
   it('marks session named "main" as isMain regardless of age', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 'old.jsonl',
+    writeSession(testDir, 'old.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
-    writeSession(projectDir, 'named-main.jsonl',
+    writeSession(testDir, 'named-main.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
       [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
     )
@@ -342,11 +309,10 @@ describe('listSessions', () => {
   })
 
   it('falls back to oldest session as main if no currentSessionPath', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    writeSession(projectDir, 'old.jsonl',
+    writeSession(testDir, 'old.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
     )
-    writeSession(projectDir, 'newer.jsonl',
+    writeSession(testDir, 'newer.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
     )
 
@@ -356,16 +322,15 @@ describe('listSessions', () => {
   })
 
   it('builds tree from forked sessions with parentSessionPath', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    const mainPath = writeSession(projectDir, 'main.jsonl',
+    const mainPath = writeSession(testDir, 'main.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
       [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
     )
-    writeSession(projectDir, 'fork1.jsonl',
+    writeSession(testDir, 'fork1.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
       [{ type: 'session_info', id: 's2', parentId: 's1', name: 'experiment-1' }]
     )
-    writeSession(projectDir, 'fork2.jsonl',
+    writeSession(testDir, 'fork2.jsonl',
       { id: 'uuid-3', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
       [{ type: 'session_info', id: 's3', parentId: 's1', name: 'experiment-2' }]
     )
@@ -381,16 +346,15 @@ describe('listSessions', () => {
   })
 
   it('builds nested fork tree (grandchild)', () => {
-    const projectDir = makeProjectDir(testDir, '/test/project')
-    const mainPath = writeSession(projectDir, 'main.jsonl',
+    const mainPath = writeSession(testDir, 'main.jsonl',
       { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
       [{ type: 'session_info', id: 's1', parentId: null, name: 'main' }]
     )
-    const childPath = writeSession(projectDir, 'child.jsonl',
+    const childPath = writeSession(testDir, 'child.jsonl',
       { id: 'uuid-2', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: mainPath },
       [{ type: 'session_info', id: 's2', parentId: 's1', name: 'fork-a' }]
     )
-    writeSession(projectDir, 'grandchild.jsonl',
+    writeSession(testDir, 'grandchild.jsonl',
       { id: 'uuid-3', timestamp: '2026-05-26T18:00:00.000Z', cwd: '/test/project', parentSession: childPath },
       [{ type: 'session_info', id: 's3', parentId: 's2', name: 'fork-a-sub' }]
     )

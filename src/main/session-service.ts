@@ -1,6 +1,6 @@
-import { readdirSync, readFileSync, existsSync, statSync, appendFileSync, unlinkSync, rmSync } from 'fs'
-import { join, dirname } from 'path'
-import { homedir } from 'os'
+import { readdirSync, readFileSync, existsSync, statSync, appendFileSync, unlinkSync, rmSync, mkdirSync, writeFileSync } from 'fs'
+import { join, dirname, resolve, basename } from 'path'
+import { randomUUID } from 'crypto'
 import type {
   SessionInfo,
   SessionListResult,
@@ -10,8 +10,16 @@ import type {
   ForkPoint
 } from '../renderer/src/types/session'
 
-export function getSessionDir(): string {
-  return join(homedir(), '.pi', 'agent', 'sessions')
+export function getSessionDir(cwd?: string): string {
+  const projectRoot = cwd ?? process.cwd()
+  const resolvedCwd = resolve(projectRoot)
+  const agentDir = join(resolvedCwd, '.agent-gui')
+  const safePath = `--${resolvedCwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
+  const sessionDir = join(agentDir, 'sessions', safePath)
+  if (!existsSync(sessionDir)) {
+    mkdirSync(sessionDir, { recursive: true })
+  }
+  return sessionDir
 }
 
 export function decodeProjectDir(encodedDir: string): string {
@@ -76,37 +84,27 @@ export function findMainSession(cwd: string, sessionDir?: string): SessionInfo |
   const dir = sessionDir ?? getSessionDir()
   if (!existsSync(dir)) return null
 
-  const projectDirs = readdirSync(dir).filter((name) => {
-    const fullPath = join(dir, name)
-    return statSync(fullPath).isDirectory() && name.startsWith('--') && name.endsWith('--')
-  })
+  const sessionFiles = readdirSync(dir)
+    .filter((name) => name.endsWith('.jsonl'))
+    .map((name) => join(dir, name))
 
-  for (const encodedDir of projectDirs) {
-    const projectPath = join(dir, encodedDir)
-    const sessionFiles = readdirSync(projectPath)
-      .filter((name) => name.endsWith('.jsonl'))
-      .map((name) => join(projectPath, name))
+  for (const filePath of sessionFiles) {
+    const info = parseSessionFile(filePath)
+    if (info && info.cwd === cwd && info.name === 'main') {
+      return info
+    }
+  }
 
-    // First pass: look for a session explicitly named "main"
-    for (const filePath of sessionFiles) {
-      const info = parseSessionFile(filePath)
-      if (info && info.cwd === cwd && info.name === 'main') {
-        return info
-      }
+  const candidates: SessionInfo[] = []
+  for (const filePath of sessionFiles) {
+    const info = parseSessionFile(filePath)
+    if (info && info.cwd === cwd) {
+      candidates.push(info)
     }
-
-    // Second pass: if no named "main" session, use the oldest session for this cwd
-    const candidates: SessionInfo[] = []
-    for (const filePath of sessionFiles) {
-      const info = parseSessionFile(filePath)
-      if (info && info.cwd === cwd) {
-        candidates.push(info)
-      }
-    }
-    if (candidates.length > 0) {
-      candidates.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      return candidates[0]
-    }
+  }
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return candidates[0]
   }
 
   return null
@@ -118,57 +116,44 @@ export function listSessions(_currentSessionPath?: string, sessionDir?: string):
     return { projects: [] }
   }
 
-  let projectDirs: string[]
+  let sessionFiles: string[]
   try {
-    projectDirs = readdirSync(sessionDirPath).filter((name) => {
-      const fullPath = join(sessionDirPath, name)
-      return statSync(fullPath).isDirectory() && name.startsWith('--') && name.endsWith('--')
-    })
+    sessionFiles = readdirSync(sessionDirPath)
+      .filter((name) => name.endsWith('.jsonl'))
+      .map((name) => join(sessionDirPath, name))
   } catch {
     return { projects: [] }
   }
 
-  const projects: ProjectSessionTree[] = []
-
-  for (const encodedDir of projectDirs) {
-    const projectPath = join(sessionDirPath, encodedDir)
-    let sessionFiles: string[]
-    try {
-      sessionFiles = readdirSync(projectPath)
-        .filter((name) => name.endsWith('.jsonl'))
-        .map((name) => join(projectPath, name))
-    } catch {
-      continue
-    }
-
-    const sessions: SessionInfo[] = []
-    for (const filePath of sessionFiles) {
-      const info = parseSessionFile(filePath)
-      if (info) sessions.push(info)
-    }
-
-    if (sessions.length === 0) continue
-
-    sessions.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-
-    const namedMain = sessions.find((s) => s.name === 'main')
-    if (namedMain) {
-      namedMain.isMain = true
-    } else if (sessions.length > 0) {
-      sessions[0].isMain = true
-    }
-
-    const cwd = sessions[0].cwd
-
-    const tree = buildSessionTree(sessions)
-
-    projects.push({
-      projectPath: cwd,
-      encodedDir,
-      root: tree,
-      allSessions: sessions
-    })
+  const sessions: SessionInfo[] = []
+  for (const filePath of sessionFiles) {
+    const info = parseSessionFile(filePath)
+    if (info) sessions.push(info)
   }
+
+  if (sessions.length === 0) {
+    return { projects: [] }
+  }
+
+  sessions.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+  const namedMain = sessions.find((s) => s.name === 'main')
+  if (namedMain) {
+    namedMain.isMain = true
+  } else if (sessions.length > 0) {
+    sessions[0].isMain = true
+  }
+
+  const cwd = sessions[0].cwd
+  const tree = buildSessionTree(sessions)
+  const encodedDir = sessionDirPath.split('/').pop() ?? ''
+
+  const projects: ProjectSessionTree[] = [{
+    projectPath: cwd,
+    encodedDir,
+    root: tree,
+    allSessions: sessions
+  }]
 
   return { projects }
 }
@@ -222,10 +207,26 @@ export function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode | nul
   return root
 }
 
-export function nameSession(sessionPath: string, name: string): boolean {
-  if (!existsSync(sessionPath)) return false
-
+export function nameSession(sessionPath: string, name: string, cwd?: string): boolean {
   try {
+    const dir = dirname(sessionPath)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    if (!existsSync(sessionPath)) {
+      const fileName = basename(sessionPath, '.jsonl')
+      const idPart = fileName.includes('_') ? fileName.split('_').slice(1).join('_') : randomUUID()
+      const header = JSON.stringify({
+        type: 'session',
+        version: 3,
+        id: idPart,
+        timestamp: new Date().toISOString(),
+        cwd: cwd ?? process.cwd(),
+      })
+      writeFileSync(sessionPath, header + '\n')
+    }
+
     const entry = JSON.stringify({
       type: 'session_info',
       name,

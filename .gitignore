@@ -5,6 +5,9 @@ node_modules/
 out/
 dist/
 
+# Agent GUI local data
+.agent-gui/
+
 # Pi reference source (not part of this project)
 ref/
 
