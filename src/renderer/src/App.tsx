@@ -113,7 +113,7 @@ function App(): React.ReactElement {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-900 text-gray-100">
+    <div className="flex h-screen w-screen overflow-hidden bg-white text-gray-900">
       <SessionSidebar
         sessions={sessions}
         currentSession={currentSession}
@@ -126,12 +126,12 @@ function App(): React.ReactElement {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-800 bg-gray-950 px-4 py-2" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 pt-10 pb-2" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
           <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {sidebarCollapsed && (
               <button
                 onClick={() => setSidebarCollapsed(false)}
-                className="rounded p-1 text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 title="Show sessions"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -140,17 +140,17 @@ function App(): React.ReactElement {
               </button>
             )}
             <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-600">
               {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
             </span>
             {activeSessionName && (
               <>
-                <span className="text-xs text-gray-300 font-medium border-l border-gray-700 pl-2">
+                <span className="text-xs text-gray-700 font-medium border-l border-gray-300 pl-2">
                   {activeSessionName}
                 </span>
                 <button
                   onClick={handleClearSession}
-                  className="rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                  className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
                   title="Clear conversation"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -160,10 +160,10 @@ function App(): React.ReactElement {
               </>
             )}
             {isStreaming && (
-              <span className="text-xs text-blue-400 animate-pulse">Streaming...</span>
+              <span className="text-xs text-blue-600 animate-pulse">Streaming...</span>
             )}
             {error && (
-              <span className="text-xs text-red-400" title={error}>Error</span>
+              <span className="text-xs text-red-500" title={error}>Error</span>
             )}
           </div>
           <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>

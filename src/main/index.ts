@@ -12,7 +12,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    backgroundColor: '#111827',
+    backgroundColor: '#ffffff',
     titleBarStyle: 'hiddenInset',
     show: false,
     webPreferences: {
@@ -315,7 +315,7 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
-  nativeTheme.themeSource = 'dark'
+  nativeTheme.themeSource = 'light'
   let mainSession = sessionService.findMainSession(process.cwd())
 
   if (mainSession && !mainSession.name) {

@@ -315,7 +315,7 @@ export const ImageAnnotator = forwardRef<ImageAnnotatorHandle, ImageAnnotatorPro
 
     return (
       <div ref={containerRef} className="relative">
-        <div className="absolute top-2 left-2 z-10 flex gap-1 rounded bg-gray-900/90 p-1">
+        <div className="absolute top-2 left-2 z-10 flex gap-1 rounded bg-white/90 shadow-sm border border-gray-200 p-1">
           {(['select', 'rect', 'circle', 'arrow', 'text'] as AnnotationTool[]).map((tool) => (
             <button
               key={tool}
@@ -323,7 +323,7 @@ export const ImageAnnotator = forwardRef<ImageAnnotatorHandle, ImageAnnotatorPro
               className={`rounded px-2 py-1 text-xs font-medium ${
                 activeTool === tool
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {tool === 'select' ? 'Select' : tool === 'rect' ? 'Rect' : tool === 'circle' ? 'Circle' : tool === 'arrow' ? 'Arrow' : 'Text'}

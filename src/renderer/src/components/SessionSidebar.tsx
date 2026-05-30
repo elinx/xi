@@ -77,8 +77,8 @@ function SessionNode({
       <div
         className={`group flex items-center gap-1 rounded px-2 py-1.5 cursor-pointer transition-colors ${
           isActive
-            ? 'bg-gray-800 text-gray-100'
-            : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200'
+            ? 'bg-gray-100 text-gray-900'
+            : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => onSwitch(node.session.filePath)}
@@ -90,7 +90,7 @@ function SessionNode({
               e.stopPropagation()
               setIsExpanded(!isExpanded)
             }}
-            className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-300"
+            className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-600"
           >
             <svg
               className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -122,7 +122,7 @@ function SessionNode({
               if (e.key === 'Escape') setIsRenaming(false)
             }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 bg-gray-700 rounded px-1 py-0.5 text-xs text-gray-100 outline-none border border-gray-600 focus:border-blue-500"
+            className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
           />
         ) : (
           <span className="flex-1 truncate text-xs">
@@ -130,7 +130,7 @@ function SessionNode({
           </span>
         )}
 
-        <span className="flex-shrink-0 text-[10px] text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
           {formatRelativeTime(node.session.createdAt)}
         </span>
 
@@ -140,7 +140,7 @@ function SessionNode({
               e.stopPropagation()
               onSwitch(node.session.parentSessionPath!)
             }}
-            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-500 hover:text-blue-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-colors"
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
             title="Go to parent session"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -162,9 +162,9 @@ function SessionNode({
             }}
             onBlur={() => setConfirmDelete(false)}
             className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] opacity-0 group-hover:opacity-100 transition-colors ${
-              confirmDelete
-                ? 'bg-red-600 text-white opacity-100'
-                : 'text-gray-500 hover:text-red-400 hover:bg-gray-700'
+                confirmDelete
+                  ? 'bg-red-600 text-white opacity-100'
+                  : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
             }`}
           >
             {confirmDelete ? 'Del' : 'x'}
@@ -238,10 +238,10 @@ function SessionSidebar({
 
   if (isCollapsed) {
     return (
-      <div className="flex flex-col items-center w-12 bg-gray-950 border-r border-gray-800 py-3">
+      <div className="flex flex-col items-center w-12 bg-gray-50 border-r border-gray-200 pt-10 pb-3">
         <button
           onClick={onToggleCollapse}
-          className="rounded p-2 text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+          className="rounded p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           title="Expand sidebar"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -253,13 +253,13 @@ function SessionSidebar({
   }
 
   return (
-    <div className="flex flex-col w-[260px] bg-gray-950 border-r border-gray-800 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800">
+    <div className="flex flex-col w-[260px] bg-gray-50 border-r border-gray-200 overflow-hidden">
+      <div className="flex items-center justify-between px-3 pt-10 pb-3 border-b border-gray-200">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Sessions</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => { setIsCreating(true); setNewSessionName('') }}
-            className="rounded p-1 text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+            className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="New session"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -268,7 +268,7 @@ function SessionSidebar({
           </button>
           <button
             onClick={onToggleCollapse}
-            className="rounded p-1 text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+            className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="Collapse sidebar"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -279,7 +279,7 @@ function SessionSidebar({
       </div>
 
       {isCreating && (
-        <div className="flex items-center gap-1 border-b border-gray-800 px-3 py-2">
+        <div className="flex items-center gap-1 border-b border-gray-200 px-3 py-2">
           <input
             autoFocus
             value={newSessionName}
@@ -289,7 +289,7 @@ function SessionSidebar({
               if (e.key === 'Escape') setIsCreating(false)
             }}
             placeholder="Session name"
-            className="flex-1 min-w-0 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none focus:border-blue-500"
+            className="flex-1 min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-blue-500"
           />
           <button
             onClick={handleCreateSession}
@@ -315,7 +315,7 @@ function SessionSidebar({
               <div key={project.encodedDir} className="mb-1">
                 <button
                   onClick={() => toggleProject(project.projectPath)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   <svg
                     className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -329,7 +329,7 @@ function SessionSidebar({
                     />
                   </svg>
                   <span className="truncate">{projectName}</span>
-                  <span className="ml-auto text-[10px] text-gray-700">{project.allSessions.length}</span>
+                  <span className="ml-auto text-[10px] text-gray-400">{project.allSessions.length}</span>
                 </button>
 
                 {isExpanded && project.root && (

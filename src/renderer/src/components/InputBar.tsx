@@ -57,7 +57,7 @@ function InputBar({ onSend, disabled }: InputBarProps): React.ReactElement {
   }
 
   return (
-    <div className="border-t border-gray-800 bg-gray-900 px-4 py-3">
+    <div className="border-t border-gray-200 bg-white px-4 py-3">
       {pastedImages.length > 0 && (
         <div className="mb-2 flex gap-2">
           {pastedImages.map((img, i) => (
@@ -65,7 +65,7 @@ function InputBar({ onSend, disabled }: InputBarProps): React.ReactElement {
               <img
                 src={`data:${img.mimeType};base64,${img.data}`}
                 alt="pasted"
-                className="h-16 rounded border border-gray-700"
+                className="h-16 rounded border border-gray-200"
               />
               <button
                 onClick={() => setPastedImages((prev) => prev.filter((_, j) => j !== i))}
@@ -87,7 +87,7 @@ function InputBar({ onSend, disabled }: InputBarProps): React.ReactElement {
           disabled={disabled}
           rows={1}
           placeholder={disabled ? 'Pi not connected...' : 'Type a message... (paste images with Ctrl+V)'}
-          className="flex-1 resize-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-600 disabled:opacity-50"
+          className="flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
         />
         <button
           onClick={handleSubmit}

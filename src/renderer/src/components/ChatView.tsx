@@ -27,7 +27,7 @@ interface ChatViewProps {
 
 function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement {
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-sm max-w-none">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
     </div>
   )
@@ -35,10 +35,10 @@ function TextBlockRenderer({ block }: { block: TextBlock }): React.ReactElement 
 
 function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactElement {
   const statusColors: Record<ToolCallBlock['status'], string> = {
-    pending: 'text-gray-400',
-    running: 'text-yellow-400',
-    completed: 'text-green-400',
-    error: 'text-red-400',
+    pending: 'text-gray-500',
+    running: 'text-yellow-600',
+    completed: 'text-green-600',
+    error: 'text-red-500',
   }
 
   const statusIcons: Record<ToolCallBlock['status'], string> = {
@@ -49,20 +49,20 @@ function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactEleme
   }
 
   return (
-    <details className="rounded border border-gray-700 bg-gray-800/50">
+    <details className="rounded border border-gray-200 bg-gray-50">
       <summary className="cursor-pointer px-3 py-2 text-sm">
         <span className={statusColors[block.status]}>{statusIcons[block.status]}</span>
         {' '}
-        <span className="font-mono text-xs text-gray-300">{block.toolName}</span>
+        <span className="font-mono text-xs text-gray-700">{block.toolName}</span>
         {block.toolName === 'bash' && block.args.command && (
-          <span className="ml-2 font-mono text-xs text-gray-500">
+          <span className="ml-2 font-mono text-xs text-gray-400">
             {String(block.args.command).substring(0, 60)}
             {String(block.args.command).length > 60 ? '...' : ''}
           </span>
         )}
       </summary>
-      <div className="border-t border-gray-700 px-3 py-2">
-        <pre className="overflow-x-auto text-xs text-gray-400">
+      <div className="border-t border-gray-200 px-3 py-2">
+        <pre className="overflow-x-auto text-xs text-gray-600">
           {JSON.stringify(block.args, null, 2)}
         </pre>
       </div>
@@ -72,11 +72,11 @@ function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactEleme
 
 function ToolResultRenderer({ block }: { block: ToolResultBlock }): React.ReactElement {
   return (
-    <div className="space-y-2 rounded border border-gray-700 bg-gray-800/30 px-3 py-2">
+    <div className="space-y-2 rounded border border-gray-200 bg-gray-50/50 px-3 py-2">
       {block.content.map((child, i) => {
         if (child.type === 'text') {
           return (
-            <pre key={i} className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-400">
+            <pre key={i} className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-600">
               {(child as TextBlock).content}
             </pre>
           )
@@ -106,14 +106,14 @@ function HtmlBlockRenderer({ block }: { block: HtmlBlock }): React.ReactElement 
   }, [])
 
   return (
-    <div className="my-2 overflow-hidden rounded border border-gray-700">
-      <div className="flex items-center justify-between bg-gray-800/80 px-3 py-1.5">
-        <span className="text-xs font-medium text-gray-400">
+    <div className="my-2 overflow-hidden rounded border border-gray-200">
+      <div className="flex items-center justify-between bg-gray-100 px-3 py-1.5">
+        <span className="text-xs font-medium text-gray-500">
           {block.title ?? 'HTML Preview'}
         </span>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-gray-500 hover:text-gray-300"
+          className="text-xs text-gray-400 hover:text-gray-600"
         >
           {expanded ? 'Collapse' : 'Expand'}
         </button>
@@ -200,14 +200,14 @@ function AnnotatableImageBlock({
           onAnnotationsChange={setAnnotations}
           isActive={true}
         />
-        <div className="flex items-center justify-between border-t border-blue-600 bg-gray-800/90 px-3 py-2">
-          <span className="text-xs text-gray-400">
+        <div className="flex items-center justify-between border-t border-blue-600 bg-gray-100 px-3 py-2">
+          <span className="text-xs text-gray-600">
             {annotations.length} annotation{annotations.length !== 1 ? 's' : ''}
           </span>
           <div className="flex gap-2">
             <button
               onClick={onExitAnnotation}
-              className="rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300 hover:bg-gray-600"
+              className="rounded bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300"
             >
               Cancel
             </button>
@@ -226,7 +226,7 @@ function AnnotatableImageBlock({
   if (isFullscreen) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         onClick={() => {
           setIsFullscreen(false)
           setZoom(1)
@@ -278,7 +278,7 @@ function AnnotatableImageBlock({
   }
 
   return (
-    <div className="my-2 overflow-hidden rounded border border-gray-700">
+    <div className="my-2 overflow-hidden rounded border border-gray-200">
       <div className="relative group">
         <img
           src={block.src}
@@ -295,7 +295,7 @@ function AnnotatableImageBlock({
         </button>
       </div>
       {block.alt && (
-        <div className="border-t border-gray-700 bg-gray-800/50 px-2 py-1 text-xs text-gray-400">
+        <div className="border-t border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">
           {block.alt}
         </div>
       )}
@@ -344,7 +344,7 @@ function ContentBlockRenderer({
         />
       )
     case 'action':
-      return <div className="text-xs text-yellow-400">[Action: {block.actionType}]</div>
+      return <div className="text-xs text-yellow-600">[Action: {block.actionType}]</div>
     case 'html':
       return <HtmlBlockRenderer block={block} />
     default:
@@ -384,7 +384,7 @@ function ForkNameInput({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-8 z-30 w-64 rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+      className="absolute right-0 top-8 z-30 w-64 rounded-lg border border-gray-200 bg-white shadow-xl"
     >
       <div className="px-3 py-2 space-y-1.5">
         <input
@@ -396,7 +396,7 @@ function ForkNameInput({
             if (e.key === 'Escape') onClose()
           }}
           placeholder="Fork session name"
-          className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-100 outline-none focus:border-blue-500"
+          className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-blue-500"
         />
         <button
           onClick={handleConfirm}
@@ -456,12 +456,12 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
   }, [messages])
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-950 px-4 py-6">
+    <div className="flex-1 overflow-y-auto bg-white px-4 py-6">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
-            <p className="text-lg text-gray-500">Start a conversation with Pi</p>
-            <p className="mt-2 text-sm text-gray-600">Type a message below or connect to Pi first</p>
+            <p className="text-lg text-gray-400">Start a conversation with Pi</p>
+            <p className="mt-2 text-sm text-gray-400">Type a message below or connect to Pi first</p>
           </div>
         </div>
       ) : (
@@ -474,19 +474,19 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                 key={msg.id}
                 className={`group relative rounded-lg px-4 py-3 ${
                   msg.role === 'user'
-                    ? 'bg-gray-800 ml-8'
-                    : 'bg-gray-900 mr-4'
+                    ? 'bg-blue-50 ml-8'
+                    : 'bg-gray-50 mr-4'
                 }`}
               >
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-400">
+                  <span className="text-xs font-medium text-gray-500">
                     {msg.role === 'user' ? 'You' : 'Pi'}
                   </span>
                   {msg.role === 'user' && (
                     <div className="relative">
                       <button
                         onClick={() => handleForkClick(msg.id, msg.piEntryId)}
-                        className="rounded px-2 py-0.5 text-xs text-gray-500 opacity-0 transition-opacity hover:text-gray-300 hover:bg-gray-700 group-hover:opacity-100"
+                        className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                       >
                         Fork
                       </button>
@@ -515,11 +515,11 @@ function ChatView({ messages, onSendPrompt, pendingUiRequests, respondToUiReques
                   ))}
                 </div>
                 {msgForkPoints.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-700/50 pt-2">
+                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                     {msgForkPoints.map((fp, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 rounded-full bg-purple-900/40 px-2 py-0.5 text-[10px] text-purple-300"
+                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
