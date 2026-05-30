@@ -126,8 +126,8 @@ function App(): React.ReactElement {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-800 bg-gray-950 px-4 py-2">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between border-b border-gray-800 bg-gray-950 px-4 py-2" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+          <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {sidebarCollapsed && (
               <button
                 onClick={() => setSidebarCollapsed(false)}
@@ -166,7 +166,7 @@ function App(): React.ReactElement {
               <span className="text-xs text-red-400" title={error}>Error</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {!isConnected && (
               <button
                 onClick={handleConnect}
