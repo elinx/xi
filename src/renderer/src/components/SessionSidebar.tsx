@@ -66,30 +66,36 @@ function GuideLine({ color }: { color: string }) {
   )
 }
 
-function GuideBranch({ color }: { color: string }) {
+function GuideBranch({ color, branchColor, bottomColor }: { color: string; branchColor?: string; bottomColor?: string }) {
+  const brColor = branchColor ?? color
+  const btColor = bottomColor ?? color
   return (
     <div
       className="flex-shrink-0 relative pointer-events-none"
       style={{ width: SLOT_W, alignSelf: 'stretch' }}
     >
+      {/* 上半段竖线 + 圆角 + 水平分支：用 border 绘制，与 GuideElbow 同样的圆角效果 */}
       <div
         className="absolute"
         style={{
           left: LINE_LEFT,
           top: 0,
-          bottom: 0,
-          width: 1,
-          backgroundColor: color,
+          height: '50%',
+          width: SLOT_W - LINE_LEFT - 1,
+          borderLeft: `1px solid ${color}`,
+          borderBottom: `1px solid ${brColor}`,
+          borderBottomLeftRadius: 4,
         }}
       />
+      {/* 下半段竖线：从50%到底部，后续兄弟是否在 active path 上 */}
       <div
         className="absolute"
         style={{
           left: LINE_LEFT,
           top: '50%',
-          width: SLOT_W - LINE_LEFT - 1,
-          height: 1,
-          backgroundColor: color,
+          bottom: 0,
+          width: 1,
+          backgroundColor: btColor,
         }}
       />
     </div>
@@ -154,8 +160,14 @@ function DotSlot({
       </div>
       {hasChildren && isExpanded && (
         <div
-          className="w-px flex-1"
-          style={{ backgroundColor: gutterActive ? '#3b82f6' : '#e5e7eb' }}
+          className="absolute"
+          style={{
+            left: LINE_LEFT,
+            top: 24,
+            bottom: 0,
+            width: 1,
+            backgroundColor: gutterActive ? '#3b82f6' : '#e5e7eb',
+          }}
         />
       )}
     </div>
@@ -175,7 +187,7 @@ function SessionNode({
   onRenameTriggered,
 }: {
   node: SessionTreeNode
-  ancestorLines: { hasLine: boolean; color: string }[]
+  ancestorLines: { hasLine: boolean; color: string; branchColor?: string; bottomColor?: string }[]
   currentSessionPath: string | null
   isOnActivePath: boolean
   onSwitch: (path: string) => void
@@ -226,16 +238,10 @@ function SessionNode({
     return ancestorLines.map((entry, i) => {
       const isConnector = i === ancestorLines.length - 1
       if (isConnector) {
-        if (isOnActivePath) {
-          if (entry.hasLine) {
-            return <GuideBranch key={i} color={entry.color} />
-          }
-          return <GuideElbow key={i} color={entry.color} />
-        }
         if (entry.hasLine) {
-          return <GuideLine key={i} color={entry.color} />
+          return <GuideBranch key={i} color={entry.color} branchColor={entry.branchColor} bottomColor={entry.bottomColor} />
         }
-        return <GuideSlot key={i} />
+        return <GuideElbow key={i} color={entry.color} />
       }
       if (entry.hasLine) {
         return <GuideLine key={i} color={entry.color} />
@@ -362,14 +368,23 @@ function SessionNode({
                   currentSessionPath === sibling.session.filePath ||
                   isDescendantOf(sibling, currentSessionPath)
               )
+            const branchColor = childIsActivePath ? '#3b82f6' : '#e5e7eb'            // 水平分支：当前节点是否 active
+            const continuationColor = laterSiblingOnActivePath ? '#3b82f6' : '#e5e7eb' // 下半段竖线：后续兄弟是否 active
             const onPath = childIsActivePath || laterSiblingOnActivePath
-            const connectorColor = onPath ? '#3b82f6' : '#e5e7eb'
+            const verticalTopColor = onPath ? '#3b82f6' : '#e5e7eb'                  // 上半段竖线：整条线是否在 active path 上
             const newAncestorLines = [
               ...ancestorLines.map((entry) => ({
                 hasLine: entry.hasLine,
                 color: onPath ? '#3b82f6' : entry.color,
+                branchColor: entry.branchColor,
+                bottomColor: entry.bottomColor,
               })),
-              { hasLine: i < node.children.length - 1, color: connectorColor },
+              {
+                hasLine: i < node.children.length - 1,
+                color: verticalTopColor,
+                branchColor: branchColor,
+                bottomColor: i < node.children.length - 1 ? continuationColor : undefined,
+              },
             ]
             return (
               <SessionNode
