@@ -330,30 +330,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:clearSession', async () => {
     try {
       const stateData = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const sessionPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
+      const oldPath = typeof stateData.sessionPath === 'string' ? stateData.sessionPath : null
       const sessionName = typeof stateData.sessionName === 'string' ? stateData.sessionName : null
 
-      if (!sessionPath) {
+      if (!oldPath) {
         return { success: false, error: 'No active session to clear' }
       }
 
-      await piBridge?.stop()
-      piBridge = null
-
-      sessionService.deleteSession(sessionPath)
-
-      initPiBridge(undefined)
-      await piBridge?.start()
+      await sendRpcCommand({ type: 'new_session' })
 
       const newName = sessionName ?? 'main'
       try {
         await sendRpcCommand({ type: 'set_session_name', name: newName })
       } catch {}
+
       const postState = (await sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
       const newPath = typeof postState.sessionPath === 'string' ? postState.sessionPath : null
       if (newPath) {
         sessionService.nameSession(newPath, newName)
       }
+
+      sessionService.deleteSession(oldPath)
 
       return { success: true }
     } catch (err: unknown) {
