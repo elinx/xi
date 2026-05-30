@@ -24,6 +24,8 @@ interface UsePiRpcReturn {
   loadHistory: () => Promise<void>
   forkPoints: ForkPoint[]
   loadForkPoints: (sessionPath: string) => Promise<void>
+  onAgentEnd: (() => void) | null
+  setOnAgentEnd: (cb: (() => void) | null) => void
 }
 
 export function usePiRpc(): UsePiRpcReturn {
@@ -77,6 +79,7 @@ export function usePiRpc(): UsePiRpcReturn {
           currentAssistantId.current = null
           currentContentBlocks.current.clear()
           toolCallArgsBuffer.current.clear()
+          onAgentEndRef.current?.()
           break
 
         case 'message_start': {
@@ -421,6 +424,11 @@ export function usePiRpc(): UsePiRpcReturn {
   }, [])
 
   const [forkPoints, setForkPoints] = useState<ForkPoint[]>([])
+  const onAgentEndRef = useRef<(() => void) | null>(null)
+
+  const setOnAgentEnd = useCallback((cb: (() => void) | null) => {
+    onAgentEndRef.current = cb
+  }, [])
 
   const loadForkPoints = useCallback(async (sessionPath: string) => {
     type ExtendedApiWithForkPoints = typeof window.api & { getForkPoints: (path: string) => Promise<ForkPoint[]> }
@@ -522,5 +530,5 @@ export function usePiRpc(): UsePiRpcReturn {
     setMessages(chatMessages)
   }, [clearMessages])
 
-  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints }
+  return { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd }
 }

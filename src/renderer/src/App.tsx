@@ -16,7 +16,7 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 }
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints } = usePiRpc()
+  const { messages, isConnected, isStreaming, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd } = usePiRpc()
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -34,6 +34,7 @@ function App(): React.ReactElement {
     if (!result.ok && result.error) {
       setError(result.error)
     }
+    refresh()
   }
 
   // Auto-start Pi on mount
@@ -86,6 +87,10 @@ function App(): React.ReactElement {
       loadForkPoints(currentSession.filePath)
     }
   }, [isConnected, currentSession?.filePath, loadForkPoints])
+
+  useEffect(() => {
+    setOnAgentEnd(() => refresh)
+  }, [setOnAgentEnd, refresh])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
