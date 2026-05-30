@@ -444,7 +444,10 @@ export function usePiRpc(): UsePiRpcReturn {
       return
     }
 
-    if (!Array.isArray(piMessages) || piMessages.length === 0) return
+    if (!Array.isArray(piMessages) || piMessages.length === 0) {
+      clearMessages()
+      return
+    }
 
     const chatMessages: ChatMessage[] = []
 

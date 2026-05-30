@@ -68,6 +68,7 @@ function App(): React.ReactElement {
     clearMessages()
     const ok = await clearSession()
     if (ok) {
+      clearMessages()
       await loadHistory()
       await refresh()
       setActiveSessionPath(null)
