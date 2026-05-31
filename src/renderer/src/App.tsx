@@ -190,9 +190,7 @@ function App(): React.ReactElement {
                 </button>
               </>
             )}
-            {isStreaming && (
-              <span className="text-xs text-blue-600 animate-pulse">Streaming...</span>
-            )}
+
             {error && (
               <span className="text-xs text-red-500" title={error}>Error</span>
             )}
@@ -245,14 +243,7 @@ function App(): React.ReactElement {
                 Connect to Pi
               </button>
             )}
-            {isStreaming && (
-              <button
-                onClick={abort}
-                className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
-              >
-                Stop (Esc)
-              </button>
-            )}
+
           </div>
         </div>
 
@@ -269,7 +260,7 @@ function App(): React.ReactElement {
           viewMode={viewMode}
         />
 
-        <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} />
+        <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
       </div>
     </div>
   )
