@@ -4,16 +4,27 @@ import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
+// Override app name & dock icon so macOS shows "Xi" instead of "Electron"
+app.setName('Xi')
+if (process.platform === 'darwin') {
+  try {
+    const dockIconPath = join(__dirname, 'icon.png')
+    app.dock.setIcon(dockIconPath)
+  } catch {}
+}
+
 let mainWindow: BrowserWindow | null = null
 let piBridge: PiSDKBridge | null = null
 let initialSessionPath: string | undefined
 
 function createWindow(): void {
+  const iconPath = join(__dirname, 'icon.png')
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     backgroundColor: '#ffffff',
     titleBarStyle: 'hiddenInset',
+    icon: iconPath,
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
