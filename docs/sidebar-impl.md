@@ -50,7 +50,7 @@
 | 空心/实心圆点 | 空心：`bg-white border-gray-300`，hover `border-blue-500`；实心：`bg-blue-500 border-blue-500` | 无 |
 | 竖线 `bg-gray-200` | 使用 `#e5e7eb`（gray-200 的 hex 值） | 无 |
 | 示意图用直角连接 | **实现用圆角 elbow（`border-bottom-left-radius: 4px`）** | 见偏差 #3 |
-| 选中节点到根路径高亮 | `ancestorLines: { hasLine: boolean; color: string }[]` 传递路径颜色 | spec 无此设计 |
+| 选中节点到根路径高亮 | `ancestorLines: { hasLine, highlight, branchActive }[]` 传递路径状态 | spec 无此设计，详见 `doc/sidebar-tree-line-fix.md` |
 
 四种 Guide 组件：
 
@@ -63,8 +63,16 @@ GuideSlot   — 空 slot（祖先 level 无后续兄弟时）
 
 `ancestorLines` 传递规则：
 - `hasLine`：该 level 的祖先是否有后续兄弟（决定竖线是否延伸）
-- `color`：`#3b82f6`（active path 上）或 `#e5e7eb`（不在 path 上）
-- 颜色根据 `childIsActivePath || laterSiblingOnActivePath` 决定
+- `highlight`：该层竖线是否需要蓝色覆盖（路径经过该层）
+- `branchActive`：路径是否在该层拐弯进入当前子树
+
+高亮渲染规则：
+- **GuideLine**：`highlight && !branchActive` → 蓝，否则灰
+- **GuideBranch**：`active` 控制上半段+拐角+横线颜色；`highlight && !branchActive` 控制全高蓝色覆盖层
+- **GuideElbow**：`active` 控制颜色
+- **DotSlot**：`hasChildOnActivePath` 控制下方竖线颜色
+
+核心逻辑：路径拐弯处（branchActive=true）的竖线灰，路径直通处（branchActive=false）的竖线蓝。详见 `doc/sidebar-tree-line-fix.md`。
 
 ### 拖拽调整宽度
 
@@ -113,9 +121,11 @@ GuideSlot   — 空 slot（祖先 level 无后续兄弟时）
 
 ### #4 Active Path 高亮（spec 无此设计）
 
-**实际实现**：选中节点到根路径上的所有线条和圆点高亮为蓝色
+**实际实现**：选中节点到根路径上的线条和圆点高亮为蓝色
 
-**理由**：用户明确要求"选中某一个的时候能不能让对应的到根目录的线都高亮"。实现通过 `ancestorLines` 的 `color` 字段传递，每个子节点计算 `childIsActivePath || laterSiblingOnActivePath` 决定颜色。
+**理由**：用户明确要求"选中某一个的时候能不能让对应的到根目录的线都高亮"。
+
+**实现细节**：通过 `ancestorLines` 的 `{ hasLine, highlight, branchActive }` 传递路径状态。高亮规则区分路径是否在该层拐弯：路径拐弯处（branchActive=true）的竖线灰，路径直通处（branchActive=false）的竖线蓝。这样保证蓝线只在激活路径上连续，不会错误地高亮最外层结构线。详见 `doc/sidebar-tree-line-fix.md`。
 
 ---
 
