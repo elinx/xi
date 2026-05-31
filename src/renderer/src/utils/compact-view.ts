@@ -69,7 +69,7 @@ export function getAgentSummary(messages: ChatMessage[]): string {
           break
         }
         case 'text': {
-          if (textSummary === null) {
+          if (textSummary === null && !(block as TextBlock).subtype) {
             textSummary = firstLine((block as TextBlock).content)
           }
           break

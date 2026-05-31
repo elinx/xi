@@ -204,13 +204,13 @@ export function usePiRpc(): UsePiRpcReturn {
               break
 
             case 'thinking_start':
-              currentContentBlocks.current.set(ame.contentIndex, { type: 'text', content: '💭 ' })
+              currentContentBlocks.current.set(ame.contentIndex, { type: 'text', content: '', subtype: 'thinking' })
               break
 
             case 'thinking_delta':
               updateContentBlock(ame.contentIndex, (block) => {
                 if (block.type === 'text') {
-                  return { ...block, content: block.content + ame.delta }
+                  return { ...block, content: block.content + ame.delta, subtype: block.subtype }
                 }
                 return block
               })
@@ -219,7 +219,7 @@ export function usePiRpc(): UsePiRpcReturn {
             case 'thinking_end':
               updateContentBlock(ame.contentIndex, (block) => {
                 if (block.type === 'text') {
-                  return { ...block, content: '💭 ' + ame.content }
+                  return { ...block, content: ame.content, subtype: block.subtype }
                 }
                 return block
               })
@@ -295,32 +295,8 @@ export function usePiRpc(): UsePiRpcReturn {
 
         case 'message_end': {
           const msg = event.message
-          if (msg.role === 'toolResult') {
-            const toolResultMsg = msg as PiToolResultMessage
-            const extraBlocks: ContentBlock[] = []
-
-            for (const content of toolResultMsg.content) {
-              if (content.type === 'text') {
-                extraBlocks.push({ type: 'text', content: content.text })
-              } else if (content.type === 'image') {
-                const img = content as PiImageContent
-                extraBlocks.push({
-                  type: 'image',
-                  src: `data:${img.mimeType};base64,${img.data}`,
-                  alt: 'Screenshot',
-                })
-              }
-            }
-
-            if (extraBlocks.length > 0 && currentAssistantId.current) {
-              setMessages((prev) =>
-                prev.map((m) => {
-                  if (m.id !== currentAssistantId.current) return m
-                  return { ...m, blocks: [...m.blocks, ...extraBlocks] }
-                }),
-              )
-            }
-          }
+          // toolResult messages are now handled in tool_execution_end
+          // to avoid duplicate rendering.
           if (msg.role === 'assistant') {
             const assistantMsg = msg as PiAssistantMessage
             if (assistantMsg.usage && assistantMsg.responseId && !countedResponseIds.current.has(assistantMsg.responseId)) {
@@ -370,19 +346,16 @@ export function usePiRpc(): UsePiRpcReturn {
           const toolArgs = pendingToolCallArgs.current.get(toolEvent.toolCallId)
           pendingToolCallArgs.current.delete(toolEvent.toolCallId)
 
-          const extraBlocks: ContentBlock[] = []
+          const resultBlocks: ContentBlock[] = []
 
-          const hasImageContent = toolEvent.result?.content?.some(
-            (c: Record<string, unknown>) => c.type === 'image'
-          )
-
-          if (hasImageContent) {
+          // Collect tool output content
+          if (toolEvent.result?.content) {
             for (const c of toolEvent.result.content as Array<Record<string, unknown>>) {
               if (c.type === 'text' && typeof c.text === 'string') {
-                extraBlocks.push({ type: 'text', content: c.text })
+                resultBlocks.push({ type: 'text', content: c.text })
               } else if (c.type === 'image') {
                 const img = c as unknown as PiImageContent
-                extraBlocks.push({
+                resultBlocks.push({
                   type: 'image',
                   src: `data:${img.mimeType};base64,${img.data}`,
                   alt: `Result from ${toolEvent.toolName}`,
@@ -398,47 +371,33 @@ export function usePiRpc(): UsePiRpcReturn {
             toolArgs.path.endsWith('.html') &&
             typeof toolArgs.content === 'string'
           ) {
-            extraBlocks.push({
+            resultBlocks.push({
               type: 'html',
               content: toolArgs.content,
               title: toolArgs.path.split('/').pop(),
             })
           }
 
-          if (extraBlocks.length > 0) {
-            setMessages((prev) =>
-              prev.map((msg) => {
-                if (msg.id !== currentAssistantId.current) return msg
-                return {
-                  ...msg,
-                  blocks: [
-                    ...msg.blocks.map((block) => {
-                      if (block.type === 'tool_call' && block.status === 'running') {
-                        return { ...block, status: 'completed' as const }
-                      }
-                      return block
-                    }),
-                    ...extraBlocks,
-                  ],
+          // Build the tool_result block to append after tool_call
+          const toolResultBlock: ContentBlock | null = resultBlocks.length > 0
+            ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks }
+            : null
+
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== currentAssistantId.current) return msg
+              const updatedBlocks = msg.blocks.map((block) => {
+                if (block.type === 'tool_call' && block.status === 'running') {
+                  return { ...block, status: 'completed' as const }
                 }
-              }),
-            )
-          } else {
-            setMessages((prev) =>
-              prev.map((msg) => {
-                if (msg.id !== currentAssistantId.current) return msg
-                return {
-                  ...msg,
-                  blocks: msg.blocks.map((block) => {
-                    if (block.type === 'tool_call' && block.status === 'running') {
-                      return { ...block, status: 'completed' as const }
-                    }
-                    return block
-                  }),
-                }
-              }),
-            )
-          }
+                return block
+              })
+              if (toolResultBlock) {
+                return { ...msg, blocks: [...updatedBlocks, toolResultBlock] }
+              }
+              return { ...msg, blocks: updatedBlocks }
+            }),
+          )
           break
         }
 
@@ -592,7 +551,7 @@ export function usePiRpc(): UsePiRpcReturn {
             if (c.type === 'text') {
               blocks.push({ type: 'text', content: c.text })
             } else if (c.type === 'thinking') {
-              blocks.push({ type: 'text', content: '\u{1F4AD} ' + c.thinking })
+              blocks.push({ type: 'text', content: c.thinking, subtype: 'thinking' })
             } else if (c.type === 'toolCall') {
               blocks.push({
                 type: 'tool_call',
@@ -614,19 +573,27 @@ export function usePiRpc(): UsePiRpcReturn {
         const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
         if (lastAssistant) {
           const content = msg.content as PiContentBlock[]
+          const resultBlocks: ContentBlock[] = []
           if (Array.isArray(content)) {
             for (const c of content) {
               if (c.type === 'text') {
-                lastAssistant.blocks.push({ type: 'text', content: c.text })
+                resultBlocks.push({ type: 'text', content: c.text })
               } else if (c.type === 'image') {
                 const img = c as PiImageContent
-                lastAssistant.blocks.push({
+                resultBlocks.push({
                   type: 'image',
                   src: `data:${img.mimeType};base64,${img.data}`,
                   alt: `Result from ${msg.toolName as string}`,
                 })
               }
             }
+          }
+          if (resultBlocks.length > 0) {
+            lastAssistant.blocks.push({
+              type: 'tool_result',
+              toolCallId: msg.toolCallId as string || '',
+              content: resultBlocks,
+            })
           }
         }
       }

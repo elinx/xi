@@ -38,6 +38,11 @@ interface ChatViewProps {
 }
 
 function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreaming?: boolean }): React.ReactElement {
+  // Thinking content uses its own renderer
+  if (block.subtype === 'thinking') {
+    return <ThinkingBlockRenderer content={block.content} isStreaming={isStreaming} />
+  }
+
   // During streaming, skip expensive ReactMarkdown parsing to reduce flicker.
   // Use lightweight <pre>-based rendering; switch to full markdown once stable.
   if (isStreaming) {
@@ -55,65 +60,206 @@ function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreami
   )
 }
 
-const ToolCallRenderer = memo(function ToolCallRenderer({ block }: { block: ToolCallBlock }): React.ReactElement {
-  const statusColors: Record<ToolCallBlock['status'], string> = {
-    pending: 'text-gray-500',
-    running: 'text-yellow-600',
-    completed: 'text-green-600',
-    error: 'text-red-500',
-  }
+function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
+  const [collapsed, setCollapsed] = useState(true)
+  const lineCount = content.split('\n').length
+  const firstLine = content.split('\n')[0] || 'Thinking...'
 
-  const statusIcons: Record<ToolCallBlock['status'], string> = {
-    pending: '\u25CB',
-    running: '\u25D4',
-    completed: '\u25CF',
-    error: '\u2717',
-  }
-
-  return (
-    <details className="rounded border border-gray-200 bg-gray-50">
-      <summary className="cursor-pointer px-3 py-2 text-sm">
-        <span className={statusColors[block.status]}>{statusIcons[block.status]}</span>
-        {' '}
-        <span className="font-mono text-xs text-gray-700">{block.toolName}</span>
-        {block.toolName === 'bash' && block.args.command && (
-          <span className="ml-2 font-mono text-xs text-gray-400">
-            {String(block.args.command).substring(0, 60)}
-            {String(block.args.command).length > 60 ? '...' : ''}
-          </span>
-        )}
-      </summary>
-      <div className="border-t border-gray-200 px-3 py-2">
-        <pre className="overflow-x-auto text-xs text-gray-600">
-          {JSON.stringify(block.args, null, 2)}
-        </pre>
+  if (isStreaming) {
+    return (
+      <div className="my-2 rounded-lg border-l-3 border-purple-300 bg-purple-50/60 px-3 py-2">
+        <div className="flex items-center gap-2 text-xs font-medium text-purple-600">
+          <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Thinking...
+        </div>
+        <div className="mt-1 whitespace-pre-wrap text-xs italic text-purple-500/80">
+          {content}
+        </div>
       </div>
-    </details>
-  )
-})
+    )
+  }
 
-function ToolResultRenderer({ block }: { block: ToolResultBlock }): React.ReactElement {
   return (
-    <div className="space-y-2 rounded border border-gray-200 bg-gray-50/50 px-3 py-2">
-      {block.content.map((child, i) => {
-        if (child.type === 'text') {
-          return (
-            <pre key={i} className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-600">
-              {(child as TextBlock).content}
-            </pre>
-          )
-        }
-        if (child.type === 'image') {
-          return <ImageBlockRenderer key={i} block={child as ImageBlock} />
-        }
-        if (child.type === 'html') {
-          return <HtmlBlockRenderer key={i} block={child as HtmlBlock} />
-        }
-        return null
-      })}
+    <div className="my-2 rounded-lg border-l-3 border-purple-300 bg-purple-50/60">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-purple-600 hover:bg-purple-50 transition-colors"
+      >
+        <svg
+          className={`h-3 w-3 transition-transform ${collapsed ? '' : 'rotate-90'}`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        </svg>
+        <span>Thinking</span>
+        <span className="text-purple-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
+      </button>
+      {!collapsed && (
+        <div className="px-3 pb-2 whitespace-pre-wrap text-xs italic text-purple-700/70 leading-relaxed">
+          {content}
+        </div>
+      )}
+      {collapsed && (
+        <div className="px-3 pb-2 text-xs italic text-purple-400 truncate">
+          {firstLine}
+        </div>
+      )}
     </div>
   )
 }
+
+const COLLAPSE_THRESHOLD = 15
+
+const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { block: ToolCallBlock; result?: ToolResultBlock }): React.ReactElement {
+  // Always collapsed by default
+  const [expanded, setExpanded] = useState(false)
+
+  // Tool-specific header info
+  const toolIcon: Record<string, string> = {
+    bash: '▶',
+    read: '📄',
+    edit: '✏️',
+    write: '📝',
+  }
+  const icon = toolIcon[block.toolName] ?? '🔧'
+
+  // Build header summary based on tool type
+  let headerSummary = ''
+  switch (block.toolName) {
+    case 'bash':
+      headerSummary = block.args.command
+        ? String(block.args.command).length > 80
+          ? String(block.args.command).substring(0, 80) + '...'
+          : String(block.args.command)
+        : ''
+      break
+    case 'read':
+      headerSummary = block.args.path ? String(block.args.path) : ''
+      break
+    case 'edit':
+      headerSummary = block.args.path ? String(block.args.path) : ''
+      break
+    case 'write':
+      headerSummary = block.args.path ? String(block.args.path) : ''
+      break
+    default:
+      headerSummary = ''
+  }
+
+  // Status indicator
+  const statusEl = (() => {
+    switch (block.status) {
+      case 'running':
+        return (
+          <svg className="h-3.5 w-3.5 animate-spin text-yellow-500" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )
+      case 'completed':
+        return <span className="text-green-500 text-xs">✓</span>
+      case 'error':
+        return <span className="text-red-500 text-xs">✗</span>
+      case 'pending':
+        return <span className="text-gray-400 text-xs">⋯</span>
+    }
+  })()
+
+  // Result text content
+  const resultText = result
+    ? result.content.filter((c): c is TextBlock => c.type === 'text').map((c) => c.content).join('\n')
+    : ''
+  const resultLines = resultText.split('\n')
+  const resultLineCount = resultLines.length
+  const resultIsLong = resultLineCount > COLLAPSE_THRESHOLD
+  const [outputCollapsed, setOutputCollapsed] = useState(true)
+  const displayResult = (outputCollapsed && resultIsLong)
+    ? resultLines.slice(0, COLLAPSE_THRESHOLD).join('\n')
+    : resultText
+
+  return (
+    <div className="my-1 overflow-hidden rounded-lg border border-gray-200">
+      {/* Header line — always visible */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-2 bg-gray-50 px-3 py-1.5 text-left hover:bg-gray-100 transition-colors"
+      >
+        <span className="text-xs">{icon}</span>
+        <span className="font-mono text-xs font-medium text-gray-700">{block.toolName}</span>
+        {headerSummary && (
+          <span className="flex-1 truncate font-mono text-xs text-gray-400">{headerSummary}</span>
+        )}
+        {!headerSummary && <span className="flex-1" />}
+        {statusEl}
+        <svg
+          className={`h-3 w-3 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {/* Expandable details */}
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {/* Args */}
+          <div className="bg-gray-50/50 px-3 py-2">
+            <pre className="overflow-x-auto text-xs text-gray-600">
+              {JSON.stringify(block.args, null, 2)}
+            </pre>
+          </div>
+          {/* Output */}
+          {resultText.trim().length > 0 && (
+            <div className="border-t border-gray-100">
+              <div className="flex items-center justify-between bg-gray-50/30 px-3 py-1">
+                <span className="text-xs text-gray-400">
+                  Output{resultLineCount > 1 ? ` (${resultLineCount} lines)` : ''}
+                </span>
+                {resultIsLong && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setOutputCollapsed(!outputCollapsed) }}
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    {outputCollapsed ? `Show all ${resultLineCount} lines` : 'Collapse'}
+                  </button>
+                )}
+              </div>
+              <div className="bg-white px-3 py-2 overflow-x-auto">
+                <pre className="whitespace-pre-wrap text-xs font-mono text-gray-600">
+                  {displayResult}
+                </pre>
+                {outputCollapsed && resultIsLong && (
+                  <div className="mt-1 text-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setOutputCollapsed(false) }}
+                      className="text-xs text-blue-500 hover:underline"
+                    >
+                      ▸ Show all {resultLineCount} lines
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Non-text result content (images, html) */}
+          {result && result.content.map((child, i) => {
+            if (child.type === 'image') {
+              return <ImageBlockRenderer key={`img-${i}`} block={child as ImageBlock} />
+            }
+            if (child.type === 'html') {
+              return <HtmlBlockRenderer key={`html-${i}`} block={child as HtmlBlock} />
+            }
+            return null
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
 
 function HtmlBlockRenderer({ block }: { block: HtmlBlock }): React.ReactElement {
   const [expanded, setExpanded] = useState(true)
@@ -325,6 +471,79 @@ function AnnotatableImageBlock({
   )
 }
 
+/**
+ * Render all blocks of a message.
+ * Merges consecutive tool_call + tool_result into a single visual unit.
+ */
+function MessageBlocksRenderer({
+  msg,
+  isStreaming,
+  streamingMessageId,
+  annotatingTarget,
+  onEnterAnnotation,
+  onExitAnnotation,
+  onSendFeedback,
+}: {
+  msg: ChatMessage
+  isStreaming: boolean
+  streamingMessageId: string | null
+  annotatingTarget: { messageId: string; blockIndex: number } | null
+  onEnterAnnotation: (messageId: string, blockIndex: number) => void
+  onExitAnnotation: () => void
+  onSendFeedback: (description: string, imageData: string) => void
+}): React.ReactElement {
+  // Build paired rendering: tool_call + tool_result → one ToolCallRenderer
+  const rendered: React.ReactElement[] = []
+  const skipIndices = new Set<number>()
+
+  for (let i = 0; i < msg.blocks.length; i++) {
+    if (skipIndices.has(i)) continue
+    const block = msg.blocks[i]
+
+    if (block.type === 'tool_call') {
+      // Check if next block is a matching tool_result
+      const next = msg.blocks[i + 1]
+      const result = (next?.type === 'tool_result') ? next as ToolResultBlock : undefined
+      if (result) skipIndices.add(i + 1)
+      rendered.push(
+        <ToolCallRenderer key={`tc-${i}`} block={block} result={result} />
+      )
+    } else if (block.type === 'tool_result') {
+      // Orphan tool_result (no preceding tool_call) — render inline
+      rendered.push(
+        <OrphanToolResultRenderer key={`tr-${i}`} block={block} />
+      )
+    } else {
+      rendered.push(
+        <ContentBlockRenderer
+          key={`cb-${i}`}
+          block={block}
+          messageId={msg.id}
+          blockIndex={i}
+          isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
+          annotatingTarget={annotatingTarget}
+          onEnterAnnotation={onEnterAnnotation}
+          onExitAnnotation={onExitAnnotation}
+          onSendFeedback={onSendFeedback}
+        />
+      )
+    }
+  }
+
+  return <div className="space-y-2">{rendered}</div>
+}
+
+/** Render a tool_result that has no matching tool_call (rare edge case) */
+function OrphanToolResultRenderer({ block }: { block: ToolResultBlock }): React.ReactElement {
+  const textItems = block.content.filter((c): c is TextBlock => c.type === 'text')
+  const fullText = textItems.map((c) => c.content).join('\n')
+  return (
+    <div className="my-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 overflow-x-auto">
+      <pre className="whitespace-pre-wrap text-xs font-mono text-gray-600">{fullText}</pre>
+    </div>
+  )
+}
+
 const ContentBlockRenderer = memo(function ContentBlockRenderer({
   block,
   messageId,
@@ -347,10 +566,6 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   switch (block.type) {
     case 'text':
       return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} />
-    case 'tool_call':
-      return <ToolCallRenderer block={block} />
-    case 'tool_result':
-      return <ToolResultRenderer block={block} />
     case 'image':
       return (
         <AnnotatableImageBlock
@@ -594,21 +809,15 @@ function TurnCard({
                       )}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    {msg.blocks.map((block, i) => (
-                      <ContentBlockRenderer
-                        key={i}
-                        block={block}
-                        messageId={msg.id}
-                        blockIndex={i}
-                        isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
-                        annotatingTarget={annotatingTarget}
-                        onEnterAnnotation={onEnterAnnotation}
-                        onExitAnnotation={onExitAnnotation}
-                        onSendFeedback={onSendFeedback}
-                      />
-                    ))}
-                  </div>
+                  <MessageBlocksRenderer
+                    msg={msg}
+                    isStreaming={isStreaming}
+                    streamingMessageId={streamingMessageId}
+                    annotatingTarget={annotatingTarget}
+                    onEnterAnnotation={onEnterAnnotation}
+                    onExitAnnotation={onExitAnnotation}
+                    onSendFeedback={onSendFeedback}
+                  />
                   {msgForkPoints.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                       {msgForkPoints.map((fp, idx) => (
@@ -734,21 +943,15 @@ function OutlineRow({
                       )}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    {msg.blocks.map((block, i) => (
-                      <ContentBlockRenderer
-                        key={i}
-                        block={block}
-                        messageId={msg.id}
-                        blockIndex={i}
-                        isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
-                        annotatingTarget={annotatingTarget}
-                        onEnterAnnotation={onEnterAnnotation}
-                        onExitAnnotation={onExitAnnotation}
-                        onSendFeedback={onSendFeedback}
-                      />
-                    ))}
-                  </div>
+                  <MessageBlocksRenderer
+                    msg={msg}
+                    isStreaming={isStreaming}
+                    streamingMessageId={streamingMessageId}
+                    annotatingTarget={annotatingTarget}
+                    onEnterAnnotation={onEnterAnnotation}
+                    onExitAnnotation={onExitAnnotation}
+                    onSendFeedback={onSendFeedback}
+                  />
                   {msgForkPoints.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                       {msgForkPoints.map((fp, idx) => (
@@ -904,21 +1107,15 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                     )}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {msg.blocks.map((block, i) => (
-                    <ContentBlockRenderer
-                      key={i}
-                      block={block}
-                      messageId={msg.id}
-                      blockIndex={i}
-                      isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
-                      annotatingTarget={annotatingTarget}
-                      onEnterAnnotation={handleEnterAnnotation}
-                      onExitAnnotation={handleExitAnnotation}
-                      onSendFeedback={handleSendFeedback}
-                    />
-                  ))}
-                </div>
+                <MessageBlocksRenderer
+                  msg={msg}
+                  isStreaming={isStreaming}
+                  streamingMessageId={streamingMessageId}
+                  annotatingTarget={annotatingTarget}
+                  onEnterAnnotation={handleEnterAnnotation}
+                  onExitAnnotation={handleExitAnnotation}
+                  onSendFeedback={handleSendFeedback}
+                />
                 {msgForkPoints.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                     {msgForkPoints.map((fp, idx) => (

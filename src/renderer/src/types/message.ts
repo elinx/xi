@@ -17,6 +17,7 @@ export type ContentBlock =
 export interface TextBlock {
   type: 'text';
   content: string;
+  subtype?: 'thinking';
 }
 
 export interface ImageBlock {
