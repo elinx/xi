@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Xi /ksi/ — The next-generation AI coding tool",
   "main": "./out/main/index.js",
-  "author": "Earendil Works",
+  "author": {
+    "name": "Earendil Works",
+    "email": "elinx@users.noreply.github.com"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
