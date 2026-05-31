@@ -7,6 +7,11 @@ dist/
 
 # Agent GUI local data
 .xi/
+
+# Agent tool configs (local / sensitive)
+.claude/
+.pi/
+.sisyphus/
 .playwright-cli/
 
 # Pi reference source (not part of this project)
@@ -34,6 +39,3 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
-
-# Sisyphus internal state
-.sisyphus/run-continuation/
