@@ -38,8 +38,8 @@ When context is infinite, you don't compact — you **fork**. Each fork is a ses
 
 **Xi** (ξ) — the 14th letter of the Greek alphabet.
 
-Pronunciation: **/ksi/** in Greek (like "ksee"), commonly anglicized as **/zaɪ/** or **/ʃiː/** ("shee").
-Take your pick — we won't judge.
+Pronunciation: **/ksi/** in Greek (like "ksee"), commonly anglicized as **/zaɪ/** in English.
+The Chinese character **溪** (xī) is pronounced **/ʃiː/** ("shee") — same letter, two languages, two sounds.
 
 The Chinese character **溪** (xī) means **stream** — a body of water that naturally forks into branches as it flows through terrain. This is no coincidence:
 
