@@ -67,7 +67,7 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
 
   if (isStreaming) {
     return (
-      <div className="my-2 rounded-lg border-l-3 border-purple-300 bg-purple-50/60 px-3 py-2">
+      <div className="py-2 border-l-3 border-purple-300 pl-3">
         <div className="flex items-center gap-2 text-xs font-medium text-purple-600">
           <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -83,10 +83,10 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
   }
 
   return (
-    <div className="my-2 rounded-lg border-l-3 border-purple-300 bg-purple-50/60">
+    <div className="py-2 border-l-3 border-purple-300 pl-3">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-purple-600 hover:bg-purple-50 transition-colors"
+        className="flex w-full items-center gap-2 text-left text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors"
       >
         <svg
           className={`h-3 w-3 transition-transform ${collapsed ? '' : 'rotate-90'}`}
@@ -99,12 +99,12 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
         <span className="text-purple-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
       </button>
       {!collapsed && (
-        <div className="px-3 pb-2 whitespace-pre-wrap text-xs italic text-purple-700/70 leading-relaxed">
+        <div className="whitespace-pre-wrap text-xs italic text-purple-700/70 leading-relaxed">
           {content}
         </div>
       )}
       {collapsed && (
-        <div className="px-3 pb-2 text-xs italic text-purple-400 truncate">
+        <div className="text-xs italic text-purple-400 truncate">
           {firstLine}
         </div>
       )}
@@ -182,21 +182,21 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
     : resultText
 
   return (
-    <div className="my-1 overflow-hidden rounded-lg border border-gray-200">
+    <div className="py-1 border-t border-gray-200/50 first:border-t-0">
       {/* Header line — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 bg-gray-50 px-3 py-1.5 text-left hover:bg-gray-100 transition-colors"
+        className="flex w-full items-center gap-2 py-1 text-left text-gray-600 hover:text-gray-900 transition-colors"
       >
         <span className="text-xs">{icon}</span>
-        <span className="font-mono text-xs font-medium text-gray-700">{block.toolName}</span>
+        <span className="font-mono text-xs font-medium">{block.toolName}</span>
         {headerSummary && (
           <span className="flex-1 truncate font-mono text-xs text-gray-400">{headerSummary}</span>
         )}
         {!headerSummary && <span className="flex-1" />}
         {statusEl}
         <svg
-          className={`h-3 w-3 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          className={`h-3 w-3 text-gray-300 transition-transform ${expanded ? 'rotate-90' : ''}`}
           fill="currentColor"
           viewBox="0 0 20 20"
         >
@@ -205,17 +205,15 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
       </button>
       {/* Expandable details */}
       {expanded && (
-        <div className="border-t border-gray-100">
+        <div className="ml-4 border-l-2 border-gray-200 pl-3 py-1">
           {/* Args */}
-          <div className="bg-gray-50/50 px-3 py-2">
-            <pre className="overflow-x-auto text-xs text-gray-600">
-              {JSON.stringify(block.args, null, 2)}
-            </pre>
-          </div>
+          <pre className="overflow-x-auto text-xs text-gray-500">
+            {JSON.stringify(block.args, null, 2)}
+          </pre>
           {/* Output */}
           {resultText.trim().length > 0 && (
-            <div className="border-t border-gray-100">
-              <div className="flex items-center justify-between bg-gray-50/30 px-3 py-1">
+            <div className="mt-1">
+              <div className="flex items-center justify-between py-0.5">
                 <span className="text-xs text-gray-400">
                   Output{resultLineCount > 1 ? ` (${resultLineCount} lines)` : ''}
                 </span>
@@ -228,21 +226,19 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
                   </button>
                 )}
               </div>
-              <div className="bg-white px-3 py-2 overflow-x-auto">
-                <pre className="whitespace-pre-wrap text-xs font-mono text-gray-600">
-                  {displayResult}
-                </pre>
-                {outputCollapsed && resultIsLong && (
-                  <div className="mt-1 text-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setOutputCollapsed(false) }}
-                      className="text-xs text-blue-500 hover:underline"
-                    >
-                      ▸ Show all {resultLineCount} lines
-                    </button>
-                  </div>
-                )}
-              </div>
+              <pre className="whitespace-pre-wrap text-xs font-mono text-gray-500">
+                {displayResult}
+              </pre>
+              {outputCollapsed && resultIsLong && (
+                <div className="text-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setOutputCollapsed(false) }}
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    ▸ Show all {resultLineCount} lines
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {/* Non-text result content (images, html) */}
@@ -472,8 +468,89 @@ function AnnotatableImageBlock({
 }
 
 /**
- * Render all blocks of a message.
- * Merges consecutive tool_call + tool_result into a single visual unit.
+ * Render blocks from multiple merged messages as one unit.
+ * Collects all tool_call/tool_result pairs across messages into one group.
+ */
+function MergedBlocksRenderer({
+  messages,
+  isStreaming,
+  streamingMessageId,
+  annotatingTarget,
+  onEnterAnnotation,
+  onExitAnnotation,
+  onSendFeedback,
+}: {
+  messages: ChatMessage[]
+  isStreaming: boolean
+  streamingMessageId: string | null
+  annotatingTarget: { messageId: string; blockIndex: number } | null
+  onEnterAnnotation: (messageId: string, blockIndex: number) => void
+  onExitAnnotation: () => void
+  onSendFeedback: (description: string, imageData: string) => void
+}): React.ReactElement {
+  // Flatten all blocks, track which message each came from
+  const allBlocks: { block: ContentBlock; msgId: string; blockIdx: number }[] = []
+  for (const msg of messages) {
+    msg.blocks.forEach((block, idx) => {
+      allBlocks.push({ block, msgId: msg.id, blockIdx: idx })
+    })
+  }
+
+  // Identify paired tool_result indices (right after their tool_call)
+  const pairedResultIndices = new Set<number>()
+  for (let j = 0; j < allBlocks.length; j++) {
+    if (allBlocks[j].block.type === 'tool_call' && allBlocks[j + 1]?.block.type === 'tool_result') {
+      pairedResultIndices.add(j + 1)
+    }
+  }
+
+  // Render blocks in original order
+  const elements: React.ReactElement[] = []
+
+  for (let j = 0; j < allBlocks.length; j++) {
+    const { block, msgId, blockIdx } = allBlocks[j]
+
+    // Skip paired tool_result (will be rendered inside its tool_call)
+    if (pairedResultIndices.has(j)) continue
+
+    if (block.type === 'tool_call') {
+      const result = allBlocks[j + 1]?.block.type === 'tool_result' ? allBlocks[j + 1].block as ToolResultBlock : undefined
+      elements.push(
+        <ToolCallRenderer key={`tc-${j}`} block={block} result={result} />
+      )
+      continue
+    }
+
+    if (block.type === 'tool_result') {
+      // Orphan tool_result
+      elements.push(
+        <OrphanToolResultRenderer key={`tr-${j}`} block={block} />
+      )
+      continue
+    }
+
+    elements.push(
+      <ContentBlockRenderer
+        key={`cb-${j}`}
+        block={block}
+        messageId={msgId}
+        blockIndex={blockIdx}
+        isStreamingBlock={isStreaming && streamingMessageId === msgId && block.type === 'text'}
+        annotatingTarget={annotatingTarget}
+        onEnterAnnotation={onEnterAnnotation}
+        onExitAnnotation={onExitAnnotation}
+        onSendFeedback={onSendFeedback}
+      />
+    )
+  }
+
+  return <div className="space-y-3">{elements}</div>
+}
+
+/**
+ * Render all blocks of a single message.
+ * Collects all tool_call/tool_result pairs from the message into one card.
+ * Other blocks render normally in order.
  */
 function MessageBlocksRenderer({
   msg,
@@ -492,45 +569,55 @@ function MessageBlocksRenderer({
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
 }): React.ReactElement {
-  // Build paired rendering: tool_call + tool_result → one ToolCallRenderer
-  const rendered: React.ReactElement[] = []
-  const skipIndices = new Set<number>()
-
-  for (let i = 0; i < msg.blocks.length; i++) {
-    if (skipIndices.has(i)) continue
-    const block = msg.blocks[i]
-
-    if (block.type === 'tool_call') {
-      // Check if next block is a matching tool_result
-      const next = msg.blocks[i + 1]
-      const result = (next?.type === 'tool_result') ? next as ToolResultBlock : undefined
-      if (result) skipIndices.add(i + 1)
-      rendered.push(
-        <ToolCallRenderer key={`tc-${i}`} block={block} result={result} />
-      )
-    } else if (block.type === 'tool_result') {
-      // Orphan tool_result (no preceding tool_call) — render inline
-      rendered.push(
-        <OrphanToolResultRenderer key={`tr-${i}`} block={block} />
-      )
-    } else {
-      rendered.push(
-        <ContentBlockRenderer
-          key={`cb-${i}`}
-          block={block}
-          messageId={msg.id}
-          blockIndex={i}
-          isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
-          annotatingTarget={annotatingTarget}
-          onEnterAnnotation={onEnterAnnotation}
-          onExitAnnotation={onExitAnnotation}
-          onSendFeedback={onSendFeedback}
-        />
-      )
+  // Identify paired tool_result indices (right after their tool_call)
+  const pairedResultIndices = new Set<number>()
+  for (let j = 0; j < msg.blocks.length; j++) {
+    if (msg.blocks[j].type === 'tool_call' && msg.blocks[j + 1]?.type === 'tool_result') {
+      pairedResultIndices.add(j + 1)
     }
   }
 
-  return <div className="space-y-2">{rendered}</div>
+  // Render blocks in original order
+  const elements: React.ReactElement[] = []
+
+  for (let j = 0; j < msg.blocks.length; j++) {
+    const block = msg.blocks[j]
+
+    // Skip paired tool_result (will be rendered inside its tool_call)
+    if (pairedResultIndices.has(j)) continue
+
+    if (block.type === 'tool_call') {
+      const result = msg.blocks[j + 1]?.type === 'tool_result' ? msg.blocks[j + 1] as ToolResultBlock : undefined
+      elements.push(
+        <ToolCallRenderer key={`tc-${j}`} block={block} result={result} />
+      )
+      continue
+    }
+
+    if (block.type === 'tool_result') {
+      // Orphan tool_result
+      elements.push(
+        <OrphanToolResultRenderer key={`tr-${j}`} block={block} />
+      )
+      continue
+    }
+
+    elements.push(
+      <ContentBlockRenderer
+        key={`cb-${j}`}
+        block={block}
+        messageId={msg.id}
+        blockIndex={j}
+        isStreamingBlock={isStreaming && streamingMessageId === msg.id && block.type === 'text'}
+        annotatingTarget={annotatingTarget}
+        onEnterAnnotation={onEnterAnnotation}
+        onExitAnnotation={onExitAnnotation}
+        onSendFeedback={onSendFeedback}
+      />
+    )
+  }
+
+  return <div className="space-y-3">{elements}</div>
 }
 
 /** Render a tool_result that has no matching tool_call (rare edge case) */
@@ -1075,65 +1162,81 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
         </div>
       ) : viewMode === 'normal' ? (
         <div className="mx-auto max-w-3xl space-y-4">
-          {messages.map((msg) => {
-            const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+          {(() => {
+            // Merge consecutive assistant messages into one card
+            const groups: { role: 'user' | 'assistant'; msgs: ChatMessage[] }[] = []
+            for (const msg of messages) {
+              if (msg.role === 'system') continue
+              const last = groups[groups.length - 1]
+              if (last && last.role === msg.role) {
+                last.msgs.push(msg)
+              } else {
+                groups.push({ role: msg.role as 'user' | 'assistant', msgs: [msg] })
+              }
+            }
 
-            return (
-              <div
-                key={msg.id}
-                className={`group relative rounded-lg px-4 py-3 ${
-                  msg.role === 'user'
-                    ? 'bg-blue-50'
-                    : 'bg-gray-50'
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">
-                    {msg.role === 'user' ? 'You' : 'Pi'}
-                  </span>
-                  <div className="relative">
-                    <button
-                      onClick={() => handleForkClick(msg.id, msg.piEntryId)}
-                      className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                    >
-                      Fork
-                    </button>
-                    {forkInputMessageId === msg.id && forkEntryId && (
-                      <ForkNameInput
-                        onForkAtEntry={onForkAtEntry}
-                        onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
-                        defaultEntryId={forkEntryId}
-                      />
-                    )}
-                  </div>
-                </div>
-                <MessageBlocksRenderer
-                  msg={msg}
-                  isStreaming={isStreaming}
-                  streamingMessageId={streamingMessageId}
-                  annotatingTarget={annotatingTarget}
-                  onEnterAnnotation={handleEnterAnnotation}
-                  onExitAnnotation={handleExitAnnotation}
-                  onSendFeedback={handleSendFeedback}
-                />
-                {msgForkPoints.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                    {msgForkPoints.map((fp, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+            return groups.map((group, gi) => {
+              const isUser = group.role === 'user'
+              const allBlocks = group.msgs.flatMap((m) => m.blocks)
+              // Use the first message's id for fork targeting
+              const firstMsg = group.msgs[0]
+              const msgForkPoints = forkPoints.filter((fp) => group.msgs.some((m) => m.piEntryId === fp.entryId))
+
+              return (
+                <div
+                  key={gi}
+                  className={`group relative rounded-lg px-4 py-3 ${
+                    isUser ? 'bg-blue-50' : 'bg-gray-50'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">
+                      {isUser ? 'You' : 'Pi'}
+                    </span>
+                    <div className="relative">
+                      <button
+                        onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
+                        className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                       >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                        </svg>
-                        forked: {fp.childName || '(unnamed)'}
-                      </span>
-                    ))}
+                        Fork
+                      </button>
+                      {forkInputMessageId === firstMsg.id && forkEntryId && (
+                        <ForkNameInput
+                          onForkAtEntry={onForkAtEntry}
+                          onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
+                          defaultEntryId={forkEntryId}
+                        />
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            )
-          })}
+                  <MergedBlocksRenderer
+                    messages={group.msgs}
+                    isStreaming={isStreaming}
+                    streamingMessageId={streamingMessageId}
+                    annotatingTarget={annotatingTarget}
+                    onEnterAnnotation={handleEnterAnnotation}
+                    onExitAnnotation={handleExitAnnotation}
+                    onSendFeedback={handleSendFeedback}
+                  />
+                  {msgForkPoints.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
+                      {msgForkPoints.map((fp, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                          </svg>
+                          forked: {fp.childName || '(unnamed)'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          })()}
           <div ref={bottomRef} />
         </div>
       ) : viewMode === 'turn' ? (

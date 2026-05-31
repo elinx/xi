@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { ChatMessage, ContentBlock } from '../types/message'
+import type { ChatMessage, ContentBlock, ToolCallBlock } from '../types/message'
 import type {
   AgentSessionEvent,
   MessageUpdateEvent,
@@ -386,14 +386,17 @@ export function usePiRpc(): UsePiRpcReturn {
           setMessages((prev) =>
             prev.map((msg) => {
               if (msg.id !== currentAssistantId.current) return msg
-              const updatedBlocks = msg.blocks.map((block) => {
+              const updatedBlocks = [] as ContentBlock[]
+              for (const block of msg.blocks) {
                 if (block.type === 'tool_call' && block.status === 'running') {
-                  return { ...block, status: 'completed' as const }
+                  updatedBlocks.push({ ...block, status: 'completed' as const })
+                  // Insert tool_result right after its tool_call
+                  if (toolResultBlock && (block as ToolCallBlock).toolName === toolEvent.toolName) {
+                    updatedBlocks.push(toolResultBlock)
+                  }
+                } else {
+                  updatedBlocks.push(block)
                 }
-                return block
-              })
-              if (toolResultBlock) {
-                return { ...msg, blocks: [...updatedBlocks, toolResultBlock] }
               }
               return { ...msg, blocks: updatedBlocks }
             }),

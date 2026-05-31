@@ -1,44 +1,34 @@
 # Tool Output & Thinking Content Redesign Spec
 
-## 问题
-
-1. **Tool Result 裸渲染**：工具输出直接用 `<pre>` 显示，大段内容无折叠、无标题
-2. **Tool Call 信息不足**：header 只显示工具名，read/edit/write 无摘要
-3. **Thinking 内容无法区分**：推理过程和正式回复混在一起
-4. **Tool Call + Result 分离**：命令和输出是两个独立卡片，不自然
-
-## 方案
-
-### 核心思路：Tool Call 就是"一步操作"，输出是它的附属
-
-`tool_call` + `tool_result` 合并成一个视觉单元：
-- **默认**：一行摘要（图标 + 工具名 + 命令/路径 + 状态）
-- **展开**：显示 args + 输出（超 15 行自动折叠）
+## 改动总结
 
 ### 数据层
 
 - `TextBlock` 新增 `subtype?: 'thinking'`
-- `tool_execution_end` 输出包装为 `tool_result` block（紧跟 `tool_call`）
-- `message_end` 不再处理 toolResult（避免重复）
+- `tool_execution_end`：输出包装为 `tool_result` block，**插入到对应 `tool_call` 后面**（而非 append 到末尾）
+- `message_end`：不再处理 toolResult（避免重复）
 - thinking 事件生成 `subtype: 'thinking'` 的 TextBlock
+- `loadHistory`：toolResult 包装为 `tool_result`；thinking 使用 `subtype: 'thinking'`
 
 ### 渲染层
 
-**ToolCallRenderer**（合并了 tool_result）：
-- 亮色主题（`bg-gray-50` header）
-- 工具图标：bash→▶, read→📄, edit→✏️, write→📝
-- 一行摘要：工具名 + 命令/路径截断 + 状态(✓/✗/spinner)
-- 默认折叠，点击展开
-- 展开后：args JSON + Output（带折叠）
+**连续 assistant messages 合并**：
+- normal 视图中，连续的 assistant messages 合并成一个 "Pi" 卡片
+- 用 `MergedBlocksRenderer` 扁平化所有 blocks，保持原序渲染
 
-**MessageBlocksRenderer**：
-- 检测 `tool_call` + `tool_result` 连续 blocks
-- 合并渲染为一个 `ToolCallRenderer`，把 result 传进去
-- 孤立 `tool_result` 用 `OrphanToolResultRenderer` 兜底
+**ToolCallRenderer**（合并了 tool_result）：
+- 亮色，无边框/背景，一行摘要（图标+工具名+路径+状态）
+- 条目间用 `border-t border-gray-200/50` 分隔
+- 默认折叠，点击展开
+- 展开后：左侧竖线缩进，显示 args + output（>15行折叠）
 
 **ThinkingBlockRenderer**：
-- 紫色左边线 + 浅紫背景
+- 紫色左边线，无边框/背景
 - 默认折叠，streaming 时显示 spinner
+
+**tool_call + tool_result 配对**：
+- `tool_result` 紧跟 `tool_call` 后面插入，渲染时嵌在 `ToolCallRenderer` 内
+- 每个 tool_call 在原位渲染，不改变顺序
 
 ### 修改的文件
 
@@ -50,21 +40,18 @@
 ### 视觉效果
 
 ```
-📄 read  src/App.tsx                           ✓   ← 默认一行
-▶ bash  npm run build                          ✓   ← 默认一行
-✏️ edit  src/App.tsx                           ✓   ← 默认一行
-
-点击展开后：
-┌─ ▶ bash  npm run build                      ✓  ▸ ────────────┐
-│  {                                                              │
-│    "command": "npm run build"                                   │  args
-│  }                                                              │
-│  Output (42 lines)                              Show all        │
-│  > build                                                        │
-│  > tsc                                                          │  输出
-│  ...                                                            │
-└─────────────────────────────────────────────────────────────────┘
-
-│ ▸ Thinking (8 lines)                                            ← 折叠
-│   Let me analyze the file structure...                          
+┌─ Pi ────────────────────────────────────────┐
+│                                              │
+│  ▸ Thinking (8 lines)                       │  ← 紫色左边线，折叠
+│                                              │
+│  📄 read  src/App.tsx                    ✓   │  ← 一行摘要
+│  ─────────────────────────────────────────── │
+│  ✏️ edit  src/App.tsx                    ✓   │
+│  ─────────────────────────────────────────── │
+│  ▶ bash  npm run build                   ✓   │
+│                                              │
+│  我看了这个文件，做了以下修改...              │  ← 正常 prose
+│  构建通过了。                                │
+│                                              │
+└──────────────────────────────────────────────┘
 ```
