@@ -632,6 +632,7 @@ function SessionSidebar({
     y: number
     session: SessionInfo
   } | null>(null)
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [triggerRenamePath, setTriggerRenamePath] = useState<string | null>(null)
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
 
@@ -642,6 +643,7 @@ function SessionSidebar({
     e.preventDefault()
     e.stopPropagation()
     setContextMenu({ x: e.clientX, y: e.clientY, session })
+    setContextMenuPos(null) // will be adjusted in useEffect
   }, [])
 
   const handleRenameTriggered = useCallback(() => {
@@ -667,6 +669,23 @@ function SessionSidebar({
       document.removeEventListener('click', handleClick)
       document.removeEventListener('keydown', handleKeyDown)
     }
+  }, [contextMenu])
+
+  // Adjust context menu position to keep it within viewport
+  useEffect(() => {
+    if (!contextMenu) return
+    const el = document.querySelector('[data-context-menu]') as HTMLDivElement | null
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    let x = contextMenu.x
+    let y = contextMenu.y
+    if (x + rect.width > vw) x = vw - rect.width - 4
+    if (y + rect.height > vh) y = vh - rect.height - 4
+    if (x < 0) x = 4
+    if (y < 0) y = 4
+    setContextMenuPos({ x, y })
   }, [contextMenu])
 
   if (isCollapsed) {
@@ -713,8 +732,9 @@ function SessionSidebar({
 
       {contextMenu && (
         <div
+          data-context-menu
           className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-xs min-w-[140px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{ left: contextMenuPos?.x ?? contextMenu.x, top: contextMenuPos?.y ?? contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <div
