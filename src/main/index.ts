@@ -112,10 +112,9 @@ function registerIpcHandlers(): void {
         try {
           await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
         } catch {}
-        const sessionPath = piBridge!.sessionFilePath
-        if (sessionPath) {
-          sessionService.nameSession(sessionPath, 'main', process.cwd())
-        }
+        try {
+          await piBridge!.sendRpcCommand({ type: 'flush_session' })
+        } catch {}
       }
       return { ok: true }
     } catch (err: unknown) {
@@ -169,11 +168,7 @@ function registerIpcHandlers(): void {
           await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
         } catch {}
         try {
-          const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const childPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-          if (childPath) {
-            sessionService.nameSession(childPath, name)
-          }
+          await piBridge!.sendRpcCommand({ type: 'flush_session' })
         } catch {}
       }
 
@@ -196,13 +191,32 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:newSession', async (_event, parentSessionPath?: string) => {
+  ipcMain.handle('session:newSession', async (_event, name: string, parentSessionPath?: string) => {
     try {
+      // 1. Tell Pi to create a new session (with parentSession in header)
       const command: Record<string, unknown> = { type: 'new_session' }
       if (parentSessionPath) {
         command.parentSession = parentSessionPath
       }
       await piBridge!.sendRpcCommand(command)
+
+      // 2. Set the session name via Pi RPC (adds session_info entry in memory)
+      if (name) {
+        try {
+          await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
+        } catch {}
+      }
+
+      // 3. Force-flush the session file to disk.
+      //    Pi defers file creation until the first assistant message,
+      //    but we need the file now so the sidebar displays correctly.
+      //    The flush command also sets Pi's internal 'flushed' flag so
+      //    subsequent _persist calls use appendFileSync instead of
+      //    openSync('wx') which would fail on an existing file.
+      try {
+        await piBridge!.sendRpcCommand({ type: 'flush_session' })
+      } catch {}
+
       return { success: true }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -273,11 +287,9 @@ function registerIpcHandlers(): void {
         try {
           await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
         } catch {}
-        const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-        const newPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-        if (newPath) {
-          sessionService.nameSession(newPath, 'main')
-        }
+        try {
+          await piBridge!.sendRpcCommand({ type: 'flush_session' })
+        } catch {}
         sessionService.deleteSession(sessionPath)
         return { success: true }
       }
@@ -321,11 +333,9 @@ function registerIpcHandlers(): void {
         await piBridge!.sendRpcCommand({ type: 'set_session_name', name: newName })
       } catch {}
 
-      const postState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const newPath = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-      if (newPath) {
-        sessionService.nameSession(newPath, newName)
-      }
+      try {
+        await piBridge!.sendRpcCommand({ type: 'flush_session' })
+      } catch {}
 
       sessionService.deleteSession(oldPath)
 

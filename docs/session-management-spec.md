@@ -83,7 +83,8 @@ main.jsonl          (no parentSession)
 - **All new sessions and forks require user-provided names** — no auto-naming
 - Unnamed sessions display their creation time (e.g. "May 29 16:24") instead of "Untitled"
 - Names are persisted by appending `{"type":"session_info","name":"..."}` to the JSONL file
-- Names are written via both RPC (`set_session_name`) and file fallback (`nameSession()`) for resilience
+- For new sessions: name is set via `set_session_name` RPC, then `flush_session` writes the file with all entries (header + session_info) to disk. `nameSession()` is NOT called for new sessions to avoid conflicting with Pi's lazy-flush mechanism
+- For existing sessions (rename): name is set via `set_session_name` RPC, then `nameSession()` appends session_info to the already-flushed file as a fallback
 
 ### 3.3 Fork
 
@@ -136,7 +137,20 @@ Each session can be marked as **completed** to indicate the user is done with it
 - When the last session in a project directory is deleted, the project directory is removed
 - Delete is a two-step confirmation: hover shows `x`, click shows red `Del`, click again executes
 
-### 3.6 Fork
+### 3.6 New Child Session
+
+Each session node in the sidebar has a **"+"** button (visible on hover). Clicking it creates a **child session** under that session. The child session is blank (no conversation history), unlike a fork which copies history.
+
+**New child session flow (sidebar)**:
+1. User clicks "+" button on any session node → inline name input appears
+2. User types a session name → presses Enter (or clicks Create button)
+3. Frontend calls `onNewSession(name, parentSessionPath)` where `parentSessionPath` is the clicked session's file path
+4. Main process: `new_session` RPC (with parentSession) → `set_session_name` RPC → `flush_session` RPC
+5. The new session becomes active and appears in the sidebar as a child of the parent session
+
+**Why `flush_session` is needed**: Pi's `newSession()` only creates the session in memory (deferred file write). The file is not written until the first assistant response. `flush_session` calls `sessionManager._rewriteFile()` + sets `flushed=true`, which: (1) writes the file with the correct header (including `parentSession`), and (2) prevents Pi's subsequent `_persist` from using `openSync('wx')` which would fail on an existing file. This mirrors what `createBranchedSession` does when it has assistant messages.
+
+### 3.7 Fork
 
 When a session is active, a **Fork** button appears in the sidebar session node. Clicking it creates a new session that forks from the **last user message** in the current conversation — i.e., the new session shares the entire conversation history and then diverges.
 
@@ -149,7 +163,7 @@ When a session is active, a **Fork** button appears in the sidebar session node.
 
 This is a shortcut for the most common fork use case — forking from the end of the conversation. The existing ForkPopover (fork from any message) remains available in ChatView.
 
-### 3.7 Session Status Toggle
+### 3.8 Session Status Toggle
 
 Users can toggle a session between `active` and `completed` via the right-click context menu:
 
@@ -174,7 +188,7 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `findMainSession()` | `(cwd, sessionDir?) → SessionInfo \| null` | Find named "main" or oldest for cwd |
 | `listSessions()` | `(currentSessionPath?, sessionDir?) → SessionListResult` | List all sessions grouped by project |
 | `buildSessionTree()` | `(sessions) → SessionTreeNode \| null` | Build parent-child tree from SessionInfo[] |
-| `nameSession()` | `(sessionPath, name) → boolean` | Append session_info entry to JSONL |
+| `nameSession()` | `(sessionPath, name) → boolean` | Append session_info entry to existing JSONL; no-op if file doesn't exist |
 | `setSessionStatus()` | `(sessionPath, status: 'active' \| 'completed') → boolean` | Append session_info entry with status to JSONL |
 | `deleteSession()` | `(sessionPath, sessionDir?) → boolean` | Delete file + cleanup empty directory |
 | `addForkPoint()` | `(sessionPath, entryId, childName) → boolean` | Append fork_point entry to JSONL |
@@ -188,7 +202,7 @@ Pure functions operating on the filesystem. All functions that access the sessio
 | `session:getForkMessages` | `get_fork_messages` | Returns forkable user messages |
 | `session:forkAtEntry` | `get_state` → `fork` → `set_session_name` → `get_state` | Records fork point in parent |
 | `session:switchSession` | `switch_session` | Passes sessionPath |
-| `session:newSession` | `new_session` | Optionally passes parentSession |
+| `session:newSession` | `new_session` → `set_session_name` → `flush_session` | Passes parentSession; flush ensures file written with correct header |
 | `session:renameSession` | `set_session_name` + `nameSession()` | RPC first, file fallback always |
 | `session:getCurrentSession` | `get_state` → `listSessions()` → find | Matches by sessionPath |
 | `session:deleteSession` | `get_state` (check if active) → if active: `new_session` + `deleteSession()`; else: `deleteSession()` | Handles active session deletion by creating new session first |
@@ -217,7 +231,7 @@ sendRpcCommand({ type: "fork", entryId })
 | `session:getForkMessages` | renderer → main | (none) |
 | `session:forkAtEntry` | renderer → main | `entryId: string, name?: string` |
 | `session:switchSession` | renderer → main | `sessionPath: string` |
-| `session:newSession` | renderer → main | `parentSessionPath?: string` |
+| `session:newSession` | renderer → main | `name: string, parentSessionPath?: string` |
 | `session:renameSession` | renderer → main | `name: string` |
 | `session:getCurrentSession` | renderer → main | (none) |
 | `session:refreshSessions` | renderer → main | (none) |
@@ -244,7 +258,7 @@ sendRpcCommand({ type: "fork", entryId })
 - `currentSession: SessionInfo | null` — active session (from RPC)
 - `forkAtEntry(entryId, name)` — fork with user-provided name
 - `switchSession(sessionPath)` — switch to different session
-- `newSession(name, parentSessionPath?)` — create + rename
+- `newSession(name, parentSessionPath?)` — create child session with name under specified parent
 - `deleteSession(sessionPath)` — delete non-active session
 - `setSessionStatus(sessionPath, status)` — toggle session active/completed
 - `refresh()` — reload sessions + currentSession
@@ -306,7 +320,7 @@ For unnamed sessions, `getDisplayName()` shows creation time: `"May 29 16:24"`
 - **Parent link**: `↑ parent` text below forked sessions, click to switch to parent
 - **Completed session visual**: Gray text (`text-gray-400`) + strikethrough (`line-through`) + gray dot (`bg-gray-300 border-gray-300`). Stays in original tree position — no grouping or separate section.
 - **Right-click context menu**: Includes "Mark as completed" / "Mark as active" toggle based on current status
-- **New session**: `+` button opens inline name input, requires name before creating
+- **New child session**: `+` button on each session node (visible on hover); click → inline name input; creates a blank child session under that node
 
 ### 5.2 ChatView Fork Markers
 
@@ -773,7 +787,8 @@ clearMessages():
 | `{ type: "get_fork_messages" }` | GUI → Pi | `{ messages: [{ entryId, text }] }` |
 | `{ type: "fork", entryId }` | GUI → Pi | Creates new session from entry |
 | `{ type: "switch_session", sessionPath }` | GUI → Pi | Switches Pi to different session |
-| `{ type: "new_session", parentSession? }` | GUI → Pi | Creates blank session |
+| `{ type: "new_session", parentSession? }` | GUI → Pi | Creates blank session (with optional parent) |
+| `{ type: "flush_session" }` | GUI → Pi | Force-write session file to disk; sets `flushed=true` |
 | `{ type: "set_session_name", name }` | GUI → Pi | Sets name in Pi's state |
 | `{ type: "soft_peek", sessionPath }` | GUI → Pi | Reads messages from a session without switching runtime (§6.6.7) |
 
@@ -832,7 +847,7 @@ type ContentBlock =
 |----------|----------|
 | RPC timeout (30s) | Promise rejects, caller shows error or silently fails |
 | `get_state` fails | `listSessions()` returns with no currentSessionPath marked |
-| `set_session_name` RPC fails | Falls back to `nameSession()` direct file write |
+| `set_session_name` RPC fails | Fork/new-session flows rely on `flush_session` instead; rename falls back to `nameSession()` if file exists |
 | Delete active session | Backend creates new session first, then deletes old session file; similar to clearSession |
 | Set session status on non-existent file | `setSessionStatus()` returns `false` |
 | Delete when Pi disconnected | Safety check skipped (try/catch around get_state), delete proceeds |

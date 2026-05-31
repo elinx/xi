@@ -91,12 +91,13 @@ describe('SessionSidebar component contract', () => {
   // Test that the component's callback props are wired correctly
   // by verifying the data flows through the expected interfaces
 
-  it('onNewSession receives a name string from user input', () => {
+  it('onNewSession receives name and parentSessionPath', () => {
     const onNewSession = vi.fn()
-    // Simulate: user types "experiment-1" and clicks Create
-    const userInput = 'experiment-1'
-    onNewSession(userInput)
-    expect(onNewSession).toHaveBeenCalledWith('experiment-1')
+    // Simulate: user clicks "+" on a session and types "experiment-1"
+    const name = 'experiment-1'
+    const parentPath = '/sessions/parent.jsonl'
+    onNewSession(name, parentPath)
+    expect(onNewSession).toHaveBeenCalledWith('experiment-1', '/sessions/parent.jsonl')
   })
 
   it('onSwitchSession receives a session file path', () => {

@@ -53,8 +53,8 @@ const api = {
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),
 
-  newSession: (parentSessionPath?: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('session:newSession', parentSessionPath),
+  newSession: (name: string, parentSessionPath?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:newSession', name, parentSessionPath),
 
   renameSession: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:renameSession', name),

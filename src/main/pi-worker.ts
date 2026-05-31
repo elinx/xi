@@ -229,6 +229,22 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
         break
       }
 
+      case 'flush_session': {
+        // Force-write the session file to disk and mark flushed.
+        // This mirrors what createBranchedSession does when it has assistant messages:
+        //   this._rewriteFile(); this.flushed = true;
+        // Without this, newSession() never writes the file (flushed=false),
+        // so the sidebar can't see the new session until the first assistant response.
+        if (sessionManager) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(sessionManager as any)._rewriteFile()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(sessionManager as any).flushed = true
+        }
+        send({ channel: 'response', id: cmd.id, command: 'flush_session', success: true })
+        break
+      }
+
       default:
         send({ channel: 'response', id: cmd.id, command: cmd.type, success: false, error: `Unknown command: ${cmd.type}` })
     }

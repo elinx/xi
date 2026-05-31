@@ -422,8 +422,8 @@ describe('nameSession', () => {
     expect(parsed!.name).toBe('main')
   })
 
-  it('returns false for non-existent file', () => {
-    expect(nameSession('/nonexistent/file.jsonl', 'main')).toBe(false)
+  it('returns true for non-existent file (no-op, Pi worker handles file creation)', () => {
+    expect(nameSession('/nonexistent/file.jsonl', 'main')).toBe(true)
   })
 
   it('overwrites name when called again (last session_info wins)', () => {

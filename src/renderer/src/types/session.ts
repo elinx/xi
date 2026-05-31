@@ -91,8 +91,8 @@ export interface SessionIpcApi {
   forkAtEntry: (entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
   /** Switch to a different session. */
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
-  /** Create a new session, optionally with a parent. */
-  newSession: (parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
+  /** Create a new session with a name and optional parent. */
+  newSession: (name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
   /** Rename a session. */
   renameSession: (name: string) => Promise<{ success: boolean; error?: string }>
   /** Get current session state. */

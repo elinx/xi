@@ -65,12 +65,11 @@ function App(): React.ReactElement {
     }
   }, [activeSessionPath, clearMessages, switchSession, loadHistory, loadForkPoints, refresh])
 
-  const handleNewSession = useCallback(async (name: string) => {
-    const parentPath = currentSession?.filePath
+  const handleNewSession = useCallback(async (name: string, parentSessionPath: string) => {
     clearMessages()
-    const result = await newSession(name, parentPath)
+    const result = await newSession(name, parentSessionPath)
     if (result) await refresh()
-  }, [clearMessages, newSession, currentSession, refresh])
+  }, [clearMessages, newSession, refresh])
 
   const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
     clearMessages()

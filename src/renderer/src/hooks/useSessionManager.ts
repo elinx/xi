@@ -73,9 +73,8 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
   }, [loadSessions, loadCurrentSession])
 
   const newSession = useCallback(async (name: string, parentSessionPath?: string): Promise<boolean> => {
-    const result = await api.newSession(parentSessionPath)
+    const result = await api.newSession(name, parentSessionPath)
     if (result.success) {
-      await api.renameSession(name)
       await loadSessions()
       await loadCurrentSession()
       return true

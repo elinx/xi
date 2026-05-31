@@ -1,6 +1,5 @@
-import { readdirSync, readFileSync, existsSync, statSync, appendFileSync, unlinkSync, rmSync, mkdirSync, writeFileSync } from 'fs'
-import { join, dirname, resolve, basename } from 'path'
-import { randomUUID } from 'crypto'
+import { readdirSync, readFileSync, existsSync, appendFileSync, unlinkSync, rmSync } from 'fs'
+import { join, dirname, resolve } from 'path'
 import type {
   SessionInfo,
   SessionListResult,
@@ -206,24 +205,15 @@ export function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode | nul
   return root
 }
 
-export function nameSession(sessionPath: string, name: string, cwd?: string): boolean {
+export function nameSession(sessionPath: string, name: string, _cwd?: string, _parentSessionPath?: string): boolean {
   try {
-    const dir = dirname(sessionPath)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-
+    // Only append session_info if the file already exists on disk.
+    // For new sessions, the Pi worker's flush_session command handles
+    // creating the file with the correct header (including parentSession).
+    // Creating the file here would break Pi's lazy-flush mechanism
+    // (Pi uses openSync with 'wx' flag which fails if file exists).
     if (!existsSync(sessionPath)) {
-      const fileName = basename(sessionPath, '.jsonl')
-      const idPart = fileName.includes('_') ? fileName.split('_').slice(1).join('_') : randomUUID()
-      const header = JSON.stringify({
-        type: 'session',
-        version: 3,
-        id: idPart,
-        timestamp: new Date().toISOString(),
-        cwd: cwd ?? process.cwd(),
-      })
-      writeFileSync(sessionPath, header + '\n')
+      return true
     }
 
     const entry = JSON.stringify({

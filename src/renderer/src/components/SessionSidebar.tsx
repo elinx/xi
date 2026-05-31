@@ -5,7 +5,7 @@ interface SessionSidebarProps {
   sessions: SessionListResult | null
   currentSession: SessionInfo | null
   onSwitchSession: (sessionPath: string) => void
-  onNewSession: (name: string) => void
+  onNewSession: (name: string, parentSessionPath: string) => void
   onRenameSession: (name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
@@ -211,6 +211,7 @@ function SessionNode({
   onDelete,
   onSetSessionStatus,
   onForkFromEnd,
+  onNewSession,
   onContextMenu,
   triggerRenamePath,
   onRenameTriggered,
@@ -226,6 +227,7 @@ function SessionNode({
   onDelete: (path: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
+  onNewSession: (name: string, parentSessionPath: string) => void
   onContextMenu: (e: React.MouseEvent, session: SessionInfo) => void
   triggerRenamePath: string | null
   onRenameTriggered: () => void
@@ -238,6 +240,8 @@ function SessionNode({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isForking, setIsForking] = useState(false)
   const [forkName, setForkName] = useState('')
+  const [isCreatingChild, setIsCreatingChild] = useState(false)
+  const [childName, setChildName] = useState('')
   const isCompleted = node.session.status === 'completed'
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
@@ -400,6 +404,20 @@ function SessionNode({
             </button>
           )}
 
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsCreatingChild(true)
+              setChildName('')
+            }}
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
+            title="New child session"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+
           {!node.session.isMain && (
             <button
               onClick={(e) => {
@@ -485,6 +503,59 @@ function SessionNode({
         </div>
       )}
 
+      {isCreatingChild && (
+        <div
+          className="flex items-center gap-1 pl-8 pr-2 py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            value={childName}
+            onChange={(e) => setChildName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const trimmed = childName.trim()
+                if (trimmed) {
+                  onNewSession(trimmed, node.session.filePath)
+                  setIsCreatingChild(false)
+                  setChildName('')
+                }
+              }
+              if (e.key === 'Escape') {
+                setIsCreatingChild(false)
+                setChildName('')
+              }
+            }}
+            placeholder="Child session name"
+            className="flex-1 min-w-0 rounded border border-blue-300 bg-white px-2 py-0.5 text-xs text-gray-900 outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={() => {
+              const trimmed = childName.trim()
+              if (trimmed) {
+                onNewSession(trimmed, node.session.filePath)
+                setIsCreatingChild(false)
+                setChildName('')
+              }
+            }}
+            disabled={!childName.trim()}
+            className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Create
+          </button>
+          <button
+            onClick={() => {
+              setIsCreatingChild(false)
+              setChildName('')
+            }}
+            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors"
+            title="Cancel"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {hasChildren && isExpanded && (
         <div>
           {node.children.map((child, i) => {
@@ -525,6 +596,7 @@ function SessionNode({
                 onDelete={onDelete}
                 onSetSessionStatus={onSetSessionStatus}
                 onForkFromEnd={onForkFromEnd}
+                onNewSession={onNewSession}
                 onContextMenu={onContextMenu}
                 triggerRenamePath={triggerRenamePath}
                 onRenameTriggered={onRenameTriggered}
@@ -551,8 +623,6 @@ function SessionSidebar({
   isCollapsed,
   onToggleCollapse,
 }: SessionSidebarProps): React.ReactElement {
-  const [isCreating, setIsCreating] = useState(false)
-  const [newSessionName, setNewSessionName] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('xi-sidebar-width')
     const parsed = saved ? parseInt(saved, 10) : 260
@@ -575,14 +645,6 @@ function SessionSidebar({
   const projects = sessions?.projects ?? []
   const projectName = projects[0]?.projectPath.split('/').pop() ?? 'Sessions'
   const root = projects[0]?.root ?? null
-
-  const handleCreateSession = useCallback(() => {
-    const trimmed = newSessionName.trim()
-    if (!trimmed) return
-    onNewSession(trimmed)
-    setNewSessionName('')
-    setIsCreating(false)
-  }, [newSessionName, onNewSession])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, session: SessionInfo) => {
     e.preventDefault()
@@ -675,15 +737,6 @@ function SessionSidebar({
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">{projectName}</span>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
-            onClick={() => { setIsCreating(true); setNewSessionName('') }}
-            className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            title="New session"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          <button
             onClick={onToggleCollapse}
             className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="Collapse sidebar"
@@ -694,29 +747,6 @@ function SessionSidebar({
           </button>
         </div>
       </div>
-
-      {isCreating && (
-        <div className="flex items-center gap-1 border-b border-gray-200 px-3 py-2">
-          <input
-            autoFocus
-            value={newSessionName}
-            onChange={(e) => setNewSessionName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleCreateSession()
-              if (e.key === 'Escape') setIsCreating(false)
-            }}
-            placeholder="Session name"
-            className="flex-1 min-w-0 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 outline-none focus:border-blue-500"
-          />
-          <button
-            onClick={handleCreateSession}
-            disabled={!newSessionName.trim()}
-            className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Create
-          </button>
-        </div>
-      )}
 
       <div className="flex-1 overflow-y-auto py-2">
         {projects.length === 0 || !root ? (
@@ -734,6 +764,7 @@ function SessionSidebar({
             onDelete={onDeleteSession}
             onSetSessionStatus={onSetSessionStatus}
             onForkFromEnd={onForkFromEnd}
+            onNewSession={onNewSession}
             onContextMenu={handleContextMenu}
             triggerRenamePath={triggerRenamePath}
             onRenameTriggered={handleRenameTriggered}
