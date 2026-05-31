@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 
 interface SessionSidebarProps {
@@ -12,6 +12,8 @@ interface SessionSidebarProps {
   onForkFromEnd: (sessionPath: string, name: string) => void
   isCollapsed: boolean
   onToggleCollapse: () => void
+  width: number
+  onResizeStart: (e: React.MouseEvent) => void
 }
 
 function formatRelativeTime(isoTimestamp: string): string {
@@ -622,13 +624,9 @@ function SessionSidebar({
   onForkFromEnd,
   isCollapsed,
   onToggleCollapse,
+  width,
+  onResizeStart,
 }: SessionSidebarProps): React.ReactElement {
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('xi-sidebar-width')
-    const parsed = saved ? parseInt(saved, 10) : 260
-    return Number.isNaN(parsed) ? 260 : Math.min(480, Math.max(180, parsed))
-  })
-  const [isResizing, setIsResizing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -637,13 +635,7 @@ function SessionSidebar({
   const [triggerRenamePath, setTriggerRenamePath] = useState<string | null>(null)
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
 
-  const sidebarWidthRef = useRef(sidebarWidth)
-  sidebarWidthRef.current = sidebarWidth
-
-  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
-
   const projects = sessions?.projects ?? []
-  const projectName = projects[0]?.projectPath.split('/').pop() ?? 'Sessions'
   const root = projects[0]?.root ?? null
 
   const handleContextMenu = useCallback((e: React.MouseEvent, session: SessionInfo) => {
@@ -677,77 +669,17 @@ function SessionSidebar({
     }
   }, [contextMenu])
 
-  useEffect(() => {
-    if (!isResizing) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!resizeStartRef.current) return
-      const delta = e.clientX - resizeStartRef.current.startX
-      const newWidth = Math.min(480, Math.max(180, resizeStartRef.current.startWidth + delta))
-      setSidebarWidth(newWidth)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      resizeStartRef.current = null
-      localStorage.setItem('xi-sidebar-width', String(sidebarWidthRef.current))
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isResizing])
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsResizing(true)
-    resizeStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
-  }, [sidebarWidth])
-
   if (isCollapsed) {
     return (
-      <div className="flex flex-col items-center w-12 bg-gray-50 border-r border-gray-200 pt-10 pb-3">
-        <button
-          onClick={onToggleCollapse}
-          className="rounded p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          title="Expand sidebar"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
+      <div className="flex flex-col items-center w-12 bg-gray-50 border-r border-gray-200 pb-3" />
     )
   }
 
   return (
     <div
       className="relative flex flex-col bg-gray-50 border-r border-gray-200 overflow-hidden"
-      style={{ width: `${sidebarWidth}px` }}
+      style={{ width: `${width}px` }}
     >
-      <div className="flex items-center justify-between px-3 pt-10 pb-3 border-b border-gray-200">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">{projectName}</span>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={onToggleCollapse}
-            className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            title="Collapse sidebar"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto py-2">
         {projects.length === 0 || !root ? (
           <div className="px-3 py-6 text-center text-xs text-gray-600">
@@ -776,7 +708,7 @@ function SessionSidebar({
 
       <div
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:w-1.5 hover:bg-blue-500/30 transition-all z-10"
-        onMouseDown={handleResizeStart}
+        onMouseDown={onResizeStart}
       />
 
       {contextMenu && (

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { usePiRpc } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
 import ChatView from './components/ChatView'
@@ -25,6 +25,46 @@ function App(): React.ReactElement {
     const saved = localStorage.getItem('xi-sidebar-collapsed')
     return saved === 'true'
   })
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('xi-sidebar-width')
+    const parsed = saved ? parseInt(saved, 10) : 260
+    return Number.isNaN(parsed) ? 260 : Math.min(480, Math.max(180, parsed))
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const sidebarWidthRef = useRef(sidebarWidth)
+  sidebarWidthRef.current = sidebarWidth
+  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  useEffect(() => {
+    if (!isResizing) return
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeStartRef.current) return
+      const delta = e.clientX - resizeStartRef.current.startX
+      const newWidth = Math.min(480, Math.max(180, resizeStartRef.current.startWidth + delta))
+      setSidebarWidth(newWidth)
+    }
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      resizeStartRef.current = null
+      localStorage.setItem('xi-sidebar-width', String(sidebarWidthRef.current))
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizeStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
+  }, [sidebarWidth])
   const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('xi-view-mode') as ViewMode
@@ -136,39 +176,43 @@ function App(): React.ReactElement {
     return cleanup
   }, [])
 
-  return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white text-gray-900">
-      <SessionSidebar
-        sessions={sessions}
-        currentSession={currentSession}
-        onSwitchSession={handleSwitchSession}
-        onNewSession={handleNewSession}
-        onRenameSession={renameSession}
-        onDeleteSession={deleteSession}
-        onSetSessionStatus={setSessionStatus}
-        onForkFromEnd={handleForkFromEnd}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => {
-          const next = !sidebarCollapsed
-          setSidebarCollapsed(next)
-          localStorage.setItem('xi-sidebar-collapsed', String(next))
-        }}
-      />
+  const projects = sessions?.projects ?? []
+  const projectName = projects[0]?.projectPath.split('/').pop() ?? 'Sessions'
+  const collapsedSidebarWidth = 48
+  const currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 pt-10 pb-2" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+      {/* Unified header row split at sidebar width */}
+      <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        {/* Left: sidebar header zone */}
+        <div
+          className="flex items-center justify-between px-3 pt-10 pb-2 flex-shrink-0"
+          style={{ width: currentSidebarWidth }}
+        >
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">{sidebarCollapsed ? '' : projectName}</span>
+          <button
+            onClick={() => {
+              const next = !sidebarCollapsed
+              setSidebarCollapsed(next)
+              localStorage.setItem('xi-sidebar-collapsed', String(next))
+            }}
+            className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            title={sidebarCollapsed ? 'Show sessions' : 'Hide sessions'}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              {sidebarCollapsed ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+              )}
+            </svg>
+          </button>
+        </div>
+        {/* Right: main header zone */}
+        <div className="flex items-center justify-between flex-1 px-4 pt-10 pb-2 min-w-0">
           <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            {sidebarCollapsed && (
-              <button
-                onClick={() => setSidebarCollapsed(false)}
-                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                title="Show sessions"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            )}
             {activeSessionName && (
               <>
                 <span className="text-xs text-gray-700 font-medium">
@@ -238,24 +282,47 @@ function App(): React.ReactElement {
                 Connect to Pi
               </button>
             )}
-
           </div>
         </div>
+      </div>
 
-        <ChatView
-          messages={messages}
-          isStreaming={isStreaming}
-          streamingMessageId={streamingMessageId}
-          pendingUiRequests={pendingUiRequests}
-          respondToUiRequest={respondToUiRequest}
-          onSendPrompt={sendPrompt}
-          onForkAtEntry={handleForkAtEntry}
-          getForkMessages={getForkMessages}
-          forkPoints={forkPoints}
-          viewMode={viewMode}
+      {/* Body: sidebar + main content */}
+      <div className="flex flex-1 overflow-hidden">
+        <SessionSidebar
+          sessions={sessions}
+          currentSession={currentSession}
+          onSwitchSession={handleSwitchSession}
+          onNewSession={handleNewSession}
+          onRenameSession={renameSession}
+          onDeleteSession={deleteSession}
+          onSetSessionStatus={setSessionStatus}
+          onForkFromEnd={handleForkFromEnd}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => {
+            const next = !sidebarCollapsed
+            setSidebarCollapsed(next)
+            localStorage.setItem('xi-sidebar-collapsed', String(next))
+          }}
+          width={sidebarWidth}
+          onResizeStart={handleResizeStart}
         />
 
-        <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isConnected={isConnected} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <ChatView
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingMessageId={streamingMessageId}
+            pendingUiRequests={pendingUiRequests}
+            respondToUiRequest={respondToUiRequest}
+            onSendPrompt={sendPrompt}
+            onForkAtEntry={handleForkAtEntry}
+            getForkMessages={getForkMessages}
+            forkPoints={forkPoints}
+            viewMode={viewMode}
+          />
+
+          <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isConnected={isConnected} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
+        </div>
       </div>
     </div>
   )
