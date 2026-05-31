@@ -26,6 +26,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "electron": "^35.0.0",
     "electron-vite": "^3.0.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.7"
