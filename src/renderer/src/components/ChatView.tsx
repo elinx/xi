@@ -18,6 +18,12 @@ import type { ViewMode } from '../utils/compact-view'
 import { groupByTurns, getUserSummary, getAgentSummary } from '../utils/compact-view'
 import type { ConversationTurn } from '../utils/compact-view'
 
+// Slot constants — same as sidebar tree-line-fix for precise alignment
+const SLOT_W = 16
+const LINE_LEFT = 8
+const GRAY = '#e5e7eb'
+const BLUE = '#3b82f6'
+
 interface ChatViewProps {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -428,8 +434,85 @@ function ForkNameInput({
   )
 }
 
+function TurnDotSlot({ active, isFirst, isLast, isCollapsed, onClick }: {
+  active: boolean
+  isFirst: boolean
+  isLast: boolean
+  isCollapsed?: boolean
+  onClick?: () => void
+}) {
+  const borderColor = active ? BLUE : GRAY
+  return (
+    <div
+      className={`flex-shrink-0 relative${isCollapsed ? ' cursor-pointer' : ''}`}
+      style={{ width: SLOT_W, alignSelf: 'stretch' }}
+      onClick={isCollapsed ? onClick : undefined}
+    >
+      {/* Line above dot — from top to dot center (only if not first) */}
+      {!isFirst && (
+        <div
+          className="absolute"
+          style={{ left: LINE_LEFT, top: 0, height: 'calc(50% - 5px)', width: 1.5, backgroundColor: GRAY }}
+        />
+      )}
+      {/* Dot */}
+      <div
+        className={isCollapsed ? 'transition-colors' : undefined}
+        style={{
+          left: LINE_LEFT - 5,
+          top: 'calc(50% - 5px)',
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          backgroundColor: active ? BLUE : 'white',
+          border: `2px solid ${borderColor}`,
+          position: 'absolute',
+          ...(isCollapsed ? { cursor: 'pointer' } : {}),
+        }}
+        onMouseEnter={isCollapsed ? (e) => { (e.currentTarget as HTMLElement).style.borderColor = BLUE } : undefined}
+        onMouseLeave={isCollapsed ? (e) => { (e.currentTarget as HTMLElement).style.borderColor = borderColor } : undefined}
+      />
+      {/* Line below dot — from dot center to bottom (only if not last) */}
+      {!isLast && (
+        <div
+          className="absolute"
+          style={{ left: LINE_LEFT, top: 'calc(50% + 5px)', bottom: 0, width: 1.5, backgroundColor: GRAY }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Expanded content with a blue left border aligned to the dot center.
+ * Uses a wrapper with padding-left=SLOT_W so the border at left=LINE_LEFT (8px)
+ * visually aligns with the dot center in the gutter slot.
+ */
+function ExpandedContent({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative flex-1 min-w-0 overflow-visible">
+      {/* Blue left border aligned to dot center at LINE_LEFT */}
+      <div
+        className="absolute"
+        style={{
+          left: LINE_LEFT - SLOT_W,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          backgroundColor: BLUE,
+          borderRadius: '2px 0 0 2px',
+        }}
+      />
+      <div className="bg-blue-50/30 rounded-r-lg">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function TurnCard({
   turn,
+  isFirst,
   isLast,
   isExpanded,
   onToggleExpand,
@@ -447,6 +530,7 @@ function TurnCard({
   streamingMessageId,
 }: {
   turn: ConversationTurn
+  isFirst: boolean
   isLast: boolean
   isExpanded: boolean
   onToggleExpand: () => void
@@ -470,11 +554,8 @@ function TurnCard({
     const allMessages = [turn.userMessage, ...turn.assistantMessages]
     return (
       <div className="flex">
-        <div className="flex flex-col items-center w-6 flex-shrink-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 mt-3 flex-shrink-0" />
-          {!isLast && <div className="w-px flex-1 bg-gray-200" />}
-        </div>
-        <div className="flex-1 border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg ml-1">
+        <TurnDotSlot active={true} isFirst={isFirst} isLast={isLast} />
+        <ExpandedContent>
           <div className="flex items-center justify-end px-3 py-1">
             <button
               onClick={onToggleExpand}
@@ -547,17 +628,14 @@ function TurnCard({
               )
             })}
           </div>
-        </div>
+        </ExpandedContent>
       </div>
     )
   }
 
   return (
     <div className="flex">
-      <div className="flex flex-col items-center w-6 flex-shrink-0">
-        <div className="w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 mt-2.5 flex-shrink-0 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors" onClick={onToggleExpand} />
-        {!isLast && <div className="w-px flex-1 bg-gray-200" />}
-      </div>
+      <TurnDotSlot active={false} isFirst={isFirst} isLast={isLast} isCollapsed onClick={onToggleExpand} />
       <div
         className="flex-1 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2.5 hover:bg-gray-50 transition-colors ml-1"
         onClick={onToggleExpand}
@@ -574,6 +652,7 @@ function TurnCard({
 
 function OutlineRow({
   turn,
+  isFirst,
   isLast,
   isExpanded,
   onToggleExpand,
@@ -591,6 +670,7 @@ function OutlineRow({
   streamingMessageId,
 }: {
   turn: ConversationTurn
+  isFirst: boolean
   isLast: boolean
   isExpanded: boolean
   onToggleExpand: () => void
@@ -613,11 +693,8 @@ function OutlineRow({
     const allMessages = [turn.userMessage, ...turn.assistantMessages]
     return (
       <div className="flex">
-        <div className="flex flex-col items-center w-6 flex-shrink-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 mt-3 flex-shrink-0" />
-          {!isLast && <div className="w-px flex-1 bg-gray-200" />}
-        </div>
-        <div className="flex-1 border-l-[3px] border-blue-500 bg-blue-50/30 rounded-r-lg ml-1">
+        <TurnDotSlot active={true} isFirst={isFirst} isLast={isLast} />
+        <ExpandedContent>
           <div className="flex items-center justify-between px-3 py-1">
             <span className="text-xs text-gray-400">#{turn.index}</span>
             <button
@@ -691,17 +768,14 @@ function OutlineRow({
               )
             })}
           </div>
-        </div>
+        </ExpandedContent>
       </div>
     )
   }
 
   return (
     <div className="flex">
-      <div className="flex flex-col items-center w-6 flex-shrink-0">
-        <div className="w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 mt-1.5 flex-shrink-0 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors" onClick={onToggleExpand} />
-        {!isLast && <div className="w-px flex-1 bg-gray-200" />}
-      </div>
+      <TurnDotSlot active={false} isFirst={isFirst} isLast={isLast} isCollapsed onClick={onToggleExpand} />
       <div
         className="flex-1 cursor-pointer rounded px-3 py-1.5 hover:bg-gray-50 transition-colors ml-1"
         onClick={onToggleExpand}
@@ -871,6 +945,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             <TurnCard
               key={turn.id}
               turn={turn}
+              isFirst={idx === 0}
               isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
@@ -896,6 +971,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             <OutlineRow
               key={turn.id}
               turn={turn}
+              isFirst={idx === 0}
               isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
