@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Session as Branch — 面向未来的 AI 编码工具</strong>
+  <strong>Session as Branch — The next-generation AI coding tool</strong>
 </p>
 
 <p align="center">
