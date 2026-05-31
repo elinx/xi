@@ -136,6 +136,10 @@ node build/icon/generate-icons.mjs
 | [Compact View Spec](docs/compact-view-spec.md) | Message view modes |
 | [Search Spec](docs/search-spec.md) | Search functionality design |
 
+## Dogfooding
+
+Xi is **self-hosting** — most of its own development is done inside Xi itself. We eat our own dog food, and that's how we know the branching model works.
+
 ## Philosophy
 
 > When context is scarce, you compress. When context is infinite, you branch.

@@ -136,6 +136,10 @@ node build/icon/generate-icons.mjs
 | [紧凑视图规范](docs/compact-view-spec.md) | 消息视图模式 |
 | [搜索规范](docs/search-spec.md) | 搜索功能设计 |
 
+## 自举
+
+Xi 已经**自举**——自身的开发大部分都在 Xi 内完成。我们吃自己的狗粮，这也是我们确信分支模型有效的最好证明。
+
 ## 理念
 
 > 上下文稀缺时，你压缩。上下文无限时，你分支。
