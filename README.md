@@ -1,4 +1,4 @@
-# Xi /ξ/ 溪
+# Xi · /ksi/ · ξ · 溪
 
 <p align="center">
   <img src="build/icon/512.png" width="128" height="128" alt="Xi Logo">
@@ -36,7 +36,10 @@ When context is infinite, you don't compact — you **fork**. Each fork is a ses
 
 ## The Name
 
-**Xi** (ξ) — the 14th letter of the Greek alphabet, pronounced /shee/.
+**Xi** (ξ) — the 14th letter of the Greek alphabet.
+
+Pronunciation: **/ksi/** in Greek (like "ksee"), commonly anglicized as **/zaɪ/** or **/ʃiː/** ("shee").
+Take your pick — we won't judge.
 
 The Chinese character **溪** (xī) means **stream** — a body of water that naturally forks into branches as it flows through terrain. This is no coincidence:
 
