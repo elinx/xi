@@ -37,6 +37,33 @@ interface ChatViewProps {
   viewMode: ViewMode
 }
 
+function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    const textParts: string[] = []
+    for (const block of blocks) {
+      if (block.type === 'text' && !block.subtype) {
+        textParts.push(block.content)
+      }
+    }
+    navigator.clipboard.writeText(textParts.join('\n\n')).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [blocks])
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+      title="Copy text"
+    >
+      {copied ? '✓' : 'Copy'}
+    </button>
+  )
+}
+
 function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreaming?: boolean }): React.ReactElement {
   // Thinking content uses its own renderer
   if (block.subtype === 'thinking') {
@@ -1193,7 +1220,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                     <span className="text-xs font-medium text-gray-500">
                       {isUser ? 'You' : 'Pi'}
                     </span>
-                    <div className="relative">
+                    <div className="relative flex items-center gap-1">
+                      <CopyButton blocks={allBlocks} />
                       <button
                         onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
                         className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
