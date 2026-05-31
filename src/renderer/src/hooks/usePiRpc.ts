@@ -11,15 +11,27 @@ import type {
   PiContentBlock,
 } from '../types/pi-events'
 import type { ForkPoint } from '../types/session'
+import { convertPiMessagesToChatMessages, type TokenUsage } from '../utils/convert-messages'
 
-export interface TokenUsage {
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  totalTokens: number
-  totalCost: number
-  contextWindowSize: number
+export interface UsePiRpcOptions {
+  onMessagesUpdate: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void
+  onTokenUsageUpdate: (updater: (prev: TokenUsage) => TokenUsage) => void
+  onStreamingChange: (isStreaming: boolean, streamingMessageId: string | null) => void
+  onForkPointsUpdate: (forkPoints: ForkPoint[]) => void
+  piConnectedSessionPath: string | null
+}
+
+interface UsePiRpcReturn {
+  isConnected: boolean
+  sendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
+  abort: () => Promise<void>
+  pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
+  respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
+  clearMessages: () => void
+  loadHistory: () => Promise<void>
+  loadForkPoints: (sessionPath: string) => Promise<void>
+  onAgentEnd: (() => void) | null
+  setOnAgentEnd: (cb: (() => void) | null) => void
 }
 
 function inferContextWindow(model: string): number {
@@ -30,39 +42,13 @@ function inferContextWindow(model: string): number {
   return 200000
 }
 
-interface UsePiRpcReturn {
-  messages: ChatMessage[]
-  isConnected: boolean
-  isStreaming: boolean
-  streamingMessageId: string | null
-  sendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
-  abort: () => void
-  pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
-  respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
-  clearMessages: () => void
-  loadHistory: () => Promise<void>
-  forkPoints: ForkPoint[]
-  loadForkPoints: (sessionPath: string) => Promise<void>
-  onAgentEnd: (() => void) | null
-  setOnAgentEnd: (cb: (() => void) | null) => void
-  tokenUsage: TokenUsage
-}
+export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
+  const { onMessagesUpdate, onTokenUsageUpdate, onStreamingChange, onForkPointsUpdate, piConnectedSessionPath } = options
 
-export function usePiRpc(): UsePiRpcReturn {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isConnected, setIsConnected] = useState(false)
-  const [isStreaming, setIsStreaming] = useState(false)
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
-  const [tokenUsage, setTokenUsage] = useState<TokenUsage>({
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    totalTokens: 0,
-    totalCost: 0,
-    contextWindowSize: 200000,
-  })
 
+  const isStreamingRef = useRef(false)
   const currentAssistantId = useRef<string | null>(null)
   const currentContentBlocks = useRef<Map<number, ContentBlock>>(new Map())
   const toolCallArgsBuffer = useRef<Map<number, string>>(new Map())
@@ -79,27 +65,24 @@ export function usePiRpc(): UsePiRpcReturn {
     [],
   )
 
-  // RAF-throttled sync to avoid flickering on every text_delta
   const rafIdRef = useRef<number | null>(null)
   const syncContentBlocksToMessage = useCallback(() => {
     if (!currentAssistantId.current) return
-    // Always schedule at most one RAF frame
     if (rafIdRef.current !== null) return
     rafIdRef.current = requestAnimationFrame(() => {
       rafIdRef.current = null
       if (!currentAssistantId.current) return
       const blocks = Array.from(currentContentBlocks.current.values())
       const assistantId = currentAssistantId.current
-      setMessages((prev) =>
+      onMessagesUpdate((prev) =>
         prev.map((msg) => {
           if (msg.id !== assistantId) return msg
           return { ...msg, blocks: [...blocks] }
         }),
       )
     })
-  }, [])
+  }, [onMessagesUpdate])
 
-  // Force-flush any pending RAF sync (used at message/agent end)
   const flushSync = useCallback(() => {
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current)
@@ -108,13 +91,13 @@ export function usePiRpc(): UsePiRpcReturn {
     if (!currentAssistantId.current) return
     const blocks = Array.from(currentContentBlocks.current.values())
     const assistantId = currentAssistantId.current
-    setMessages((prev) =>
+    onMessagesUpdate((prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg
         return { ...msg, blocks: [...blocks] }
       }),
     )
-  }, [])
+  }, [onMessagesUpdate])
 
   const finalizeCurrentAssistant = useCallback(() => {
     if (!currentAssistantId.current) return
@@ -125,11 +108,13 @@ export function usePiRpc(): UsePiRpcReturn {
     (event: AgentSessionEvent) => {
       switch (event.type) {
         case 'agent_start':
-          setIsStreaming(true)
+          isStreamingRef.current = true
+          onStreamingChange(true, currentAssistantId.current)
           break
 
         case 'agent_end':
-          setIsStreaming(false)
+          isStreamingRef.current = false
+          onStreamingChange(false, null)
           flushSync()
           currentAssistantId.current = null
           currentContentBlocks.current.clear()
@@ -155,7 +140,7 @@ export function usePiRpc(): UsePiRpcReturn {
               blocks: [{ type: 'text', content: userContent }],
               timestamp: userMsg.timestamp,
             }
-            setMessages((prev) => [...prev, userChatMsg])
+            onMessagesUpdate((prev) => [...prev, userChatMsg])
           } else if (msg.role === 'assistant') {
             const assistantMsg = msg as PiAssistantMessage
             const assistantId = crypto.randomUUID()
@@ -169,7 +154,10 @@ export function usePiRpc(): UsePiRpcReturn {
               blocks: [],
               timestamp: assistantMsg.timestamp,
             }
-            setMessages((prev) => [...prev, chatMsg])
+            onMessagesUpdate((prev) => [...prev, chatMsg])
+            if (isStreamingRef.current) {
+              onStreamingChange(true, assistantId)
+            }
           }
           break
         }
@@ -257,7 +245,6 @@ export function usePiRpc(): UsePiRpcReturn {
               })
               pendingToolCallArgs.current.set(ame.toolCall.id, parsedArgs)
               toolCallArgsBuffer.current.delete(ame.contentIndex)
-              // toolcall_end is an important structural change, flush immediately
               flushSync()
               break
             }
@@ -266,7 +253,7 @@ export function usePiRpc(): UsePiRpcReturn {
               const msg = ame.message
               if (msg.usage && msg.responseId && !countedResponseIds.current.has(msg.responseId)) {
                 countedResponseIds.current.add(msg.responseId)
-                setTokenUsage((prev) => ({
+                onTokenUsageUpdate((prev) => ({
                   inputTokens: prev.inputTokens + msg.usage.input,
                   outputTokens: prev.outputTokens + msg.usage.output,
                   cacheReadTokens: prev.cacheReadTokens + msg.usage.cacheRead,
@@ -276,7 +263,7 @@ export function usePiRpc(): UsePiRpcReturn {
                   contextWindowSize: inferContextWindow(msg.responseModel),
                 }))
               } else if (msg.usage) {
-                setTokenUsage((prev) => ({
+                onTokenUsageUpdate((prev) => ({
                   ...prev,
                   contextWindowSize: inferContextWindow(msg.responseModel),
                 }))
@@ -295,13 +282,11 @@ export function usePiRpc(): UsePiRpcReturn {
 
         case 'message_end': {
           const msg = event.message
-          // toolResult messages are now handled in tool_execution_end
-          // to avoid duplicate rendering.
           if (msg.role === 'assistant') {
             const assistantMsg = msg as PiAssistantMessage
             if (assistantMsg.usage && assistantMsg.responseId && !countedResponseIds.current.has(assistantMsg.responseId)) {
               countedResponseIds.current.add(assistantMsg.responseId)
-              setTokenUsage((prev) => ({
+              onTokenUsageUpdate((prev) => ({
                 inputTokens: prev.inputTokens + assistantMsg.usage.input,
                 outputTokens: prev.outputTokens + assistantMsg.usage.output,
                 cacheReadTokens: prev.cacheReadTokens + assistantMsg.usage.cacheRead,
@@ -311,7 +296,7 @@ export function usePiRpc(): UsePiRpcReturn {
                 contextWindowSize: inferContextWindow(assistantMsg.responseModel),
               }))
             } else if (assistantMsg.usage) {
-              setTokenUsage((prev) => ({
+              onTokenUsageUpdate((prev) => ({
                 ...prev,
                 contextWindowSize: inferContextWindow(assistantMsg.responseModel),
               }))
@@ -321,7 +306,7 @@ export function usePiRpc(): UsePiRpcReturn {
         }
 
         case 'tool_execution_start':
-          setMessages((prev) =>
+          onMessagesUpdate((prev) =>
             prev.map((msg) => {
               if (msg.id !== currentAssistantId.current) return msg
               return {
@@ -348,7 +333,6 @@ export function usePiRpc(): UsePiRpcReturn {
 
           const resultBlocks: ContentBlock[] = []
 
-          // Collect tool output content
           if (toolEvent.result?.content) {
             for (const c of toolEvent.result.content as Array<Record<string, unknown>>) {
               if (c.type === 'text' && typeof c.text === 'string') {
@@ -378,19 +362,17 @@ export function usePiRpc(): UsePiRpcReturn {
             })
           }
 
-          // Build the tool_result block to append after tool_call
           const toolResultBlock: ContentBlock | null = resultBlocks.length > 0
             ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks }
             : null
 
-          setMessages((prev) =>
+          onMessagesUpdate((prev) =>
             prev.map((msg) => {
               if (msg.id !== currentAssistantId.current) return msg
               const updatedBlocks = [] as ContentBlock[]
               for (const block of msg.blocks) {
                 if (block.type === 'tool_call' && block.status === 'running') {
                   updatedBlocks.push({ ...block, status: 'completed' as const })
-                  // Insert tool_result right after its tool_call
                   if (toolResultBlock && (block as ToolCallBlock).toolName === toolEvent.toolName) {
                     updatedBlocks.push(toolResultBlock)
                   }
@@ -408,7 +390,7 @@ export function usePiRpc(): UsePiRpcReturn {
           break
       }
     },
-    [updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant],
+    [updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, onMessagesUpdate, onTokenUsageUpdate, onStreamingChange],
   )
 
   useEffect(() => {
@@ -468,14 +450,25 @@ export function usePiRpc(): UsePiRpcReturn {
     [],
   )
 
-  const abort = useCallback(() => {
+  const abort = useCallback((): Promise<void> => {
     window.api.sendCommand({ type: 'abort' })
+    return new Promise((resolve) => {
+      const startTime = Date.now()
+      const check = () => {
+        if (!isStreamingRef.current || Date.now() - startTime > 5000) {
+          resolve()
+        } else {
+          setTimeout(check, 50)
+        }
+      }
+      setTimeout(check, 50)
+    })
   }, [])
 
   const clearMessages = useCallback(() => {
-    setMessages([])
-    setForkPoints([])
-    setTokenUsage({
+    onMessagesUpdate(() => [])
+    onForkPointsUpdate([])
+    onTokenUsageUpdate(() => ({
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
@@ -483,15 +476,14 @@ export function usePiRpc(): UsePiRpcReturn {
       totalTokens: 0,
       totalCost: 0,
       contextWindowSize: 200000,
-    })
+    }))
     currentAssistantId.current = null
     currentContentBlocks.current.clear()
     toolCallArgsBuffer.current.clear()
     pendingToolCallArgs.current.clear()
     countedResponseIds.current.clear()
-  }, [])
+  }, [onMessagesUpdate, onForkPointsUpdate, onTokenUsageUpdate])
 
-  const [forkPoints, setForkPoints] = useState<ForkPoint[]>([])
   const onAgentEndRef = useRef<(() => void) | null>(null)
 
   const setOnAgentEnd = useCallback((cb: (() => void) | null) => {
@@ -503,11 +495,11 @@ export function usePiRpc(): UsePiRpcReturn {
     const apiWithFp = window.api as ExtendedApiWithForkPoints
     try {
       const points = await apiWithFp.getForkPoints(sessionPath)
-      setForkPoints(points)
+      onForkPointsUpdate(points)
     } catch {
-      setForkPoints([])
+      onForkPointsUpdate([])
     }
-  }, [])
+  }, [onForkPointsUpdate])
 
   const loadHistory = useCallback(async () => {
     type ExtendedApiWithMessages = typeof window.api & { getMessages: () => Promise<unknown[]> }
@@ -525,137 +517,17 @@ export function usePiRpc(): UsePiRpcReturn {
       return
     }
 
-    const chatMessages: ChatMessage[] = []
-
-    for (const raw of piMessages) {
-      const msg = raw as Record<string, unknown>
-      const piEntryId = typeof msg.id === 'string' ? msg.id : undefined
-      if (msg.role === 'user') {
-        const content = typeof msg.content === 'string'
-          ? msg.content
-          : Array.isArray(msg.content)
-            ? (msg.content as PiContentBlock[])
-                .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-                .map((c) => c.text)
-                .join('')
-            : ''
-        chatMessages.push({
-          id: crypto.randomUUID(),
-          role: 'user',
-          blocks: [{ type: 'text', content }],
-          timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
-          piEntryId,
-        })
-      } else if (msg.role === 'assistant') {
-        const blocks: ContentBlock[] = []
-        const content = msg.content as PiContentBlock[]
-        if (Array.isArray(content)) {
-          for (const c of content) {
-            if (c.type === 'text') {
-              blocks.push({ type: 'text', content: c.text })
-            } else if (c.type === 'thinking') {
-              blocks.push({ type: 'text', content: c.thinking, subtype: 'thinking' })
-            } else if (c.type === 'toolCall') {
-              blocks.push({
-                type: 'tool_call',
-                toolName: c.name,
-                args: c.arguments,
-                status: 'completed',
-              })
-            }
-          }
-        }
-        chatMessages.push({
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          blocks,
-          timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
-          piEntryId,
-        })
-      } else if (msg.role === 'toolResult') {
-        const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
-        if (lastAssistant) {
-          const content = msg.content as PiContentBlock[]
-          const resultBlocks: ContentBlock[] = []
-          if (Array.isArray(content)) {
-            for (const c of content) {
-              if (c.type === 'text') {
-                resultBlocks.push({ type: 'text', content: c.text })
-              } else if (c.type === 'image') {
-                const img = c as PiImageContent
-                resultBlocks.push({
-                  type: 'image',
-                  src: `data:${img.mimeType};base64,${img.data}`,
-                  alt: `Result from ${msg.toolName as string}`,
-                })
-              }
-            }
-          }
-          if (resultBlocks.length > 0) {
-            lastAssistant.blocks.push({
-              type: 'tool_result',
-              toolCallId: msg.toolCallId as string || '',
-              content: resultBlocks,
-            })
-          }
-        }
-      }
-    }
-
-    // Sum usage across all assistant messages (per-message, not cumulative)
-    let restoredUsage: TokenUsage | null = null
-    let lastResponseModel = ''
-    for (const raw of piMessages) {
-      const msg = raw as Record<string, unknown>
-      if (msg.role === 'assistant') {
-        const usage = msg.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number } } | undefined
-        if (typeof msg.responseModel === 'string') {
-          lastResponseModel = msg.responseModel
-        }
-        if (usage) {
-          if (!restoredUsage) {
-            restoredUsage = {
-              inputTokens: usage.input,
-              outputTokens: usage.output,
-              cacheReadTokens: usage.cacheRead,
-              cacheWriteTokens: usage.cacheWrite,
-              totalTokens: usage.totalTokens,
-              totalCost: usage.cost.total,
-              contextWindowSize: inferContextWindow(lastResponseModel),
-            }
-          } else {
-            const newInput = restoredUsage.inputTokens + usage.input
-            const newOutput = restoredUsage.outputTokens + usage.output
-            const newCacheRead = restoredUsage.cacheReadTokens + usage.cacheRead
-            const newCacheWrite = restoredUsage.cacheWriteTokens + usage.cacheWrite
-            restoredUsage = {
-              inputTokens: newInput,
-              outputTokens: newOutput,
-              cacheReadTokens: newCacheRead,
-              cacheWriteTokens: newCacheWrite,
-              totalTokens: usage.totalTokens,
-              totalCost: restoredUsage.totalCost + usage.cost.total,
-              contextWindowSize: inferContextWindow(lastResponseModel),
-            }
-          }
-        }
-      }
-    }
+    const result = convertPiMessagesToChatMessages(piMessages)
 
     clearMessages()
-    setMessages(chatMessages)
-    for (const raw of piMessages) {
-      const msg = raw as Record<string, unknown>
-      if (msg.role === 'assistant' && typeof msg.responseId === 'string') {
-        countedResponseIds.current.add(msg.responseId)
-      }
+    onMessagesUpdate(() => result.messages)
+    for (const rid of result.responseIds) {
+      countedResponseIds.current.add(rid)
     }
-    if (restoredUsage) {
-      setTokenUsage(restoredUsage)
+    if (result.tokenUsage.totalCost > 0 || result.tokenUsage.totalTokens > 0) {
+      onTokenUsageUpdate(() => result.tokenUsage)
     }
-  }, [clearMessages])
+  }, [clearMessages, onMessagesUpdate, onTokenUsageUpdate])
 
-  const streamingMessageId = isStreaming ? currentAssistantId.current : null
-
-  return { messages, isConnected, isStreaming, streamingMessageId, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, tokenUsage }
+  return { isConnected, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd }
 }

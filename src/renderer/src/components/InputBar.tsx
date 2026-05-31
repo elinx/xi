@@ -6,12 +6,18 @@ interface InputBarProps {
   isConnected: boolean
   isStreaming?: boolean
   onStop?: () => void
+  isLazySwitched?: boolean
+  backgroundSessionName?: string | null
+  isBackgroundStreaming?: boolean
+  isAgentEnding?: boolean
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const showStop = isStreaming || isBackgroundStreaming
 
   const handleSubmit = useCallback((): void => {
     const trimmed = text.trim()
@@ -59,20 +65,38 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop }: InputB
     }
   }
 
+  // Merged status line: lazy switch info integrated into Pi Connected status
+  let statusDot: React.ReactNode
+  let statusText: React.ReactNode
+
+  if (isAgentEnding) {
+    statusDot = <svg className="h-1.5 w-1.5 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+    statusText = <span className="text-blue-600">Switching back…</span>
+  } else if (isBackgroundStreaming && backgroundSessionName) {
+    statusDot = (
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+      </span>
+    )
+    statusText = (
+      <span className="text-amber-600">
+        <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium">{backgroundSessionName}</span> is running… press <kbd className="rounded border border-amber-200 bg-amber-100 px-1 py-px font-mono text-[10px] leading-none text-amber-600">Esc</kbd> to interrupt
+      </span>
+    )
+  } else if (isStreaming) {
+    statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+    statusText = <>Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
+  } else {
+    statusDot = <span className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+    statusText = isConnected ? 'Pi Connected' : 'Pi Disconnected'
+  }
+
   return (
     <div className="border-t border-gray-200 bg-white px-4 py-3">
-      <div className="mb-2 flex items-center gap-1.5">
-        {isStreaming ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
-          </span>
-        )}
+      <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
+        {statusDot}
+        {statusText}
       </div>
       {pastedImages.length > 0 && (
         <div className="mb-2 flex gap-2">
@@ -105,10 +129,10 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop }: InputB
           placeholder={disabled ? 'Pi not connected...' : 'Type a message... (paste images with Ctrl+V)'}
           className="flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
         />
-        {isStreaming ? (
+        {showStop ? (
           <button
             onClick={onStop}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 active:scale-95"
           >
             Stop
           </button>

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, existsSync, appendFileSync, unlinkSync, rmSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import type {
   SessionInfo,
@@ -273,6 +273,51 @@ export function setSessionStatus(sessionPath: string, status: 'active' | 'comple
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * Parse a session JSONL file and return all messages in Pi's raw format.
+ * This is the same format returned by the `get_messages` RPC, so the
+ * renderer can reuse its existing loadHistory conversion logic.
+ *
+ * This is a pure file read — no Pi worker involved, no session switching.
+ * Safe for Lazy Switch: when the Pi worker is connected to session A,
+ * calling this for session B reads B's JSONL directly from disk.
+ * Since Pi persists messages synchronously on `message_end`, and B is
+ * not streaming (Pi only has one active session), the JSONL is always
+ * complete and consistent.
+ */
+export function parseSessionMessages(filePath: string): unknown[] {
+  if (!existsSync(filePath)) return []
+
+  try {
+    const content = readFileSync(filePath, 'utf-8')
+    const lines = content.split('\n').filter((line) => line.trim().length > 0)
+    if (lines.length === 0) return []
+
+    const messages: unknown[] = []
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>
+        if (entry.type === 'message' && entry.message) {
+          const msg = { ...(entry.message as Record<string, unknown>) }
+          // Attach the entry id as the message id if not present
+          // (matches pi-worker's get_messages behavior)
+          if (!msg.id && typeof entry.id === 'string') {
+            msg.id = entry.id
+          }
+          messages.push(msg)
+        }
+      } catch {
+        continue
+      }
+    }
+
+    return messages
+  } catch {
+    return []
   }
 }
 

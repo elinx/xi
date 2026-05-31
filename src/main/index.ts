@@ -327,6 +327,10 @@ function registerIpcHandlers(): void {
     return { success: false, error: 'Failed to set session status' }
   })
 
+  ipcMain.handle('session:getMessagesForSession', async (_event, sessionPath: string) => {
+    return sessionService.parseSessionMessages(sessionPath)
+  })
+
   ipcMain.handle('session:clearSession', async () => {
     try {
       const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>

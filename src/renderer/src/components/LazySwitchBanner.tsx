@@ -1,10 +1,10 @@
-interface SoftSwitchBannerProps {
+interface LazySwitchBannerProps {
   backgroundSessionName: string | null
   isAgentEnded: boolean
   onStop: () => void
 }
 
-function SoftSwitchBanner({ backgroundSessionName, isAgentEnded, onStop }: SoftSwitchBannerProps): React.ReactElement {
+function LazySwitchBanner({ backgroundSessionName, isAgentEnded, onStop }: LazySwitchBannerProps): React.ReactElement {
   return (
     <div className="flex items-center justify-between bg-blue-50 border-b border-blue-200 px-4 py-1.5">
       <div className="flex items-center gap-2">
@@ -34,4 +34,4 @@ function SoftSwitchBanner({ backgroundSessionName, isAgentEnded, onStop }: SoftS
   )
 }
 
-export default SoftSwitchBanner
+export default LazySwitchBanner

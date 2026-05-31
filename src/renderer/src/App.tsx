@@ -1,11 +1,16 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { usePiRpc } from './hooks/usePiRpc'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { usePiRpc, type UsePiRpcOptions } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
+import { useSessionCache } from './hooks/useSessionCache'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
+// LazySwitchBanner removed — status integrated into header
 import { TokenUsageRing } from './components/TokenUsageRing'
 import type { ViewMode } from './utils/compact-view'
+import type { ChatMessage } from './types/message'
+import type { ForkPoint } from './types/session'
+import type { TokenUsage } from './utils/convert-messages'
 
 function getDisplayName(session: { name: string | null; createdAt: string }): string {
   if (session.name) return session.name
@@ -18,8 +23,71 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 }
 
 function App(): React.ReactElement {
-  const { messages, isConnected, isStreaming, streamingMessageId, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, forkPoints, loadForkPoints, setOnAgentEnd, tokenUsage } = usePiRpc()
+  const [piConnectedPath, setPiConnectedPathState] = useState<string | null>(null)
+  const piConnectedPathRef = useRef<string | null>(null)
+
+  // Updates both React state AND the ref synchronously so that
+  // async callbacks (loadHistory, Pi event handlers) reading
+  // piConnectedPathRef.current see the new value without waiting for re-render.
+  const setPiConnectedPath = useCallback((path: string | null) => {
+    piConnectedPathRef.current = path
+    setPiConnectedPathState(path)
+  }, [])
+
+  const [isAgentEnding, setIsAgentEnding] = useState(false)
+  const sessionCache = useSessionCache()
+  const {
+    displaySession, getCache, clearCache, getOrCreateCache,
+    updatePiConnectedMessages, updatePiConnectedTokenUsage,
+    setPiConnectedStreaming, updatePiConnectedForkPoints,
+  } = sessionCache
+
+  // Refs for stable access inside callbacks — avoids putting the
+  // sessionCache object (which changes identity every render) into deps.
+  const getCacheRef = useRef(getCache)
+  getCacheRef.current = getCache
+  const getOrCreateCacheRef = useRef(getOrCreateCache)
+  getOrCreateCacheRef.current = getOrCreateCache
+  const displaySessionRef = useRef(displaySession)
+  displaySessionRef.current = displaySession
+
+  // Mirror sessionCache display state into refs so callbacks can read
+  // current values without re-creating on every change.
+  const displayedSessionPathRef = useRef(sessionCache.displayedSessionPath)
+  displayedSessionPathRef.current = sessionCache.displayedSessionPath
+  const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
+  isDisplayedStreamingRef.current = sessionCache.isDisplayedStreaming
+
+  const piRpcOptions: UsePiRpcOptions = useMemo(() => ({
+    onMessagesUpdate: (updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+      const path = piConnectedPathRef.current
+      if (path) updatePiConnectedMessages(path, updater)
+    },
+    onTokenUsageUpdate: (updater: (prev: TokenUsage) => TokenUsage) => {
+      const path = piConnectedPathRef.current
+      if (path) updatePiConnectedTokenUsage(path, updater)
+    },
+    onStreamingChange: (isStreaming: boolean, streamingMessageId: string | null) => {
+      const path = piConnectedPathRef.current
+      if (path) setPiConnectedStreaming(path, isStreaming, streamingMessageId)
+    },
+    onForkPointsUpdate: (forkPoints: ForkPoint[]) => {
+      const path = piConnectedPathRef.current
+      if (path) updatePiConnectedForkPoints(path, forkPoints)
+    },
+    piConnectedSessionPath: piConnectedPath,
+  }), [updatePiConnectedMessages, updatePiConnectedTokenUsage, setPiConnectedStreaming, updatePiConnectedForkPoints, piConnectedPath])
+
+  const { isConnected, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
+
+  const isLazySwitched = sessionCache.displayedSessionPath !== null && sessionCache.displayedSessionPath !== piConnectedPath
+  const displayedMessages = sessionCache.displayedMessages
+  const displayedTokenUsage = sessionCache.displayedTokenUsage
+  const displayedForkPoints = sessionCache.displayedForkPoints
+  const displayedStreaming = sessionCache.isDisplayedStreaming
+  const displayedStreamingId = sessionCache.displayedStreamingMessageId
+
   const [error, setError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('xi-sidebar-collapsed')
@@ -65,17 +133,24 @@ function App(): React.ReactElement {
     setIsResizing(true)
     resizeStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
   }, [sidebarWidth])
-  const [activeSessionPath, setActiveSessionPath] = useState<string | null>(null)
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('xi-view-mode') as ViewMode
     return saved === 'normal' || saved === 'turn' || saved === 'outline' ? saved : 'normal'
   })
 
+  const activeSessionPath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
   const activeSession = activeSessionPath
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
     : currentSession
 
   const activeSessionName = activeSession ? getDisplayName(activeSession) : null
+
+  const backgroundSessionName = (() => {
+    if (!isLazySwitched || !piConnectedPath) return null
+    const bgSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === piConnectedPath)
+    return bgSession ? getDisplayName(bgSession) : null
+  })()
 
   async function handleConnect(): Promise<void> {
     setError(null)
@@ -86,39 +161,74 @@ function App(): React.ReactElement {
     refresh()
   }
 
-  // Auto-start Pi on mount
   useEffect(() => {
     handleConnect()
   }, [])
 
+  const isPiStreaming = useCallback((): boolean => {
+    const path = piConnectedPathRef.current
+    if (!path) return false
+    return getCacheRef.current(path)?.isStreaming ?? false
+  }, [])
+
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
-    const prevPath = activeSessionPath
-    setActiveSessionPath(sessionPath)
+    const piStreaming = isPiStreaming() || isDisplayedStreamingRef.current
+    if (piStreaming && piConnectedPathRef.current !== sessionPath) {
+      await displaySessionRef.current(sessionPath)
+      return
+    }
+
+    if (piConnectedPathRef.current === sessionPath) {
+      if (displayedSessionPathRef.current !== sessionPath) {
+        await displaySessionRef.current(sessionPath)
+      }
+      return
+    }
+
     const result = await switchSession(sessionPath)
     if (result.success) {
+      setPiConnectedPath(sessionPath)
+      await displaySessionRef.current(sessionPath)
       clearMessages()
       await loadHistory()
       await loadForkPoints(sessionPath)
       await refresh()
     } else {
-      setActiveSessionPath(prevPath)
+      // Switch failed — still display the requested session as lazy view
+      await displaySessionRef.current(sessionPath)
     }
-  }, [activeSessionPath, clearMessages, switchSession, loadHistory, loadForkPoints, refresh])
+  }, [switchSession, clearMessages, loadHistory, loadForkPoints, refresh, isPiStreaming, setPiConnectedPath])
+
+  const currentSessionRef = useRef(currentSession)
+  currentSessionRef.current = currentSession
 
   const handleNewSession = useCallback(async (name: string, parentSessionPath: string) => {
+    if (isPiStreaming()) {
+      await abort()
+    }
     clearMessages()
     const result = await newSession(name, parentSessionPath)
-    if (result) await refresh()
-  }, [clearMessages, newSession, refresh])
+    if (result) {
+      await refresh()
+      setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+    }
+  }, [abort, clearMessages, newSession, refresh, isPiStreaming, setPiConnectedPath])
 
   const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
+    if (isPiStreaming()) {
+      await abort()
+    }
     clearMessages()
     await forkAtEntry(entryId, name)
     await loadHistory()
     await refresh()
-  }, [clearMessages, forkAtEntry, loadHistory, refresh])
+    setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+  }, [abort, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
   const handleForkFromEnd = useCallback(async (sessionPath: string, name: string) => {
+    if (isPiStreaming()) {
+      await abort()
+    }
     const msgs = await getForkMessages()
     const lastEntry = msgs[msgs.length - 1]
     if (!lastEntry?.entryId) return
@@ -126,24 +236,81 @@ function App(): React.ReactElement {
     await forkAtEntry(lastEntry.entryId, name)
     await loadHistory()
     await refresh()
-    setActiveSessionPath(null)
-  }, [getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, setActiveSessionPath])
+    setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+  }, [abort, getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
   const handleClearSession = useCallback(async () => {
+    if (isPiStreaming()) {
+      await abort()
+    }
     clearMessages()
     const ok = await clearSession()
     if (ok) {
       clearMessages()
       await loadHistory()
       await refresh()
-      setActiveSessionPath(null)
+      setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
     }
-  }, [clearMessages, clearSession, loadHistory, refresh])
+  }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
+
+  const isLazySwitchedRef = useRef(isLazySwitched)
+  isLazySwitchedRef.current = isLazySwitched
+
+  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[]) => {
+    if (!isLazySwitchedRef.current && isPiStreaming()) return
+
+    if (isLazySwitchedRef.current) {
+      const targetPath = displayedSessionPathRef.current
+      if (!targetPath) return
+      if (isPiStreaming()) await abort()
+      const result = await switchSession(targetPath)
+      if (result.success) {
+        setPiConnectedPath(targetPath)
+        clearMessages()
+        await loadHistory()
+        await loadForkPoints(targetPath)
+        await refresh()
+        sendPrompt(text, images)
+      }
+    } else {
+      sendPrompt(text, images)
+    }
+  }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, sendPrompt, isPiStreaming, setPiConnectedPath])
+
+  const handleStop = useCallback(async () => {
+    if (isLazySwitchedRef.current) {
+      await abort()
+      const targetPath = displayedSessionPathRef.current
+      if (targetPath) {
+        const result = await switchSession(targetPath)
+        if (result.success) {
+          setPiConnectedPath(targetPath)
+          clearMessages()
+          await loadHistory()
+          await loadForkPoints(targetPath)
+          await refresh()
+        }
+      }
+    } else {
+      await abort()
+    }
+  }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, setPiConnectedPath])
 
   useEffect(() => {
     if (isConnected) {
-      loadHistory()
+      const path = currentSessionRef.current?.filePath ?? null
+      setPiConnectedPath(path)
+      if (path) {
+        getOrCreateCacheRef.current(path).then(() => {
+          displaySessionRef.current(path).then(() => {
+            loadHistory()
+          })
+        })
+      } else {
+        loadHistory()
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, loadHistory])
 
   useEffect(() => {
@@ -153,18 +320,38 @@ function App(): React.ReactElement {
   }, [isConnected, currentSession?.filePath, loadForkPoints])
 
   useEffect(() => {
-    setOnAgentEnd(() => refresh)
-  }, [setOnAgentEnd, refresh])
+    setOnAgentEnd(() => () => {
+      refresh()
+      setIsAgentEnding(true)
+      const displayed = displayedSessionPathRef.current
+      const currentPiConnected = piConnectedPathRef.current
+      if (displayed && displayed !== currentPiConnected) {
+        switchSession(displayed).then((result) => {
+          if (result.success) {
+            setPiConnectedPath(displayed)
+            clearMessages()
+            loadHistory().then(() => {
+              loadForkPoints(displayed)
+            })
+          }
+          setIsAgentEnding(false)
+        })
+      } else {
+        setIsAgentEnding(false)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setOnAgentEnd, refresh, switchSession, clearMessages, loadHistory, loadForkPoints, setPiConnectedPath])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape' && isStreaming) {
-        abort()
+      if (e.key === 'Escape') {
+        if (isPiStreaming()) abort()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isStreaming, abort])
+  }, [abort, isPiStreaming])
 
   useEffect(() => {
     const cleanup = window.api.onEvent((rawEvent) => {
@@ -211,13 +398,27 @@ function App(): React.ReactElement {
           </button>
         </div>
         {/* Right: main header zone */}
-        <div className="flex items-center justify-between flex-1 px-4 pt-10 pb-2 min-w-0">
-          <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="flex items-center flex-1 px-4 pt-10 pb-2 min-w-0 gap-3">
+          {/* Left: session name + status indicator */}
+          <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {activeSessionName && (
               <>
-                <span className="text-xs text-gray-700 font-medium">
+                {/* Status dot */}
+                <span
+                  className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
+                    isLazySwitched
+                      ? isAgentEnding
+                        ? 'bg-blue-500 animate-pulse'
+                        : 'bg-amber-500'
+                      : displayedStreaming
+                        ? 'bg-blue-500 animate-pulse'
+                        : 'bg-green-500'
+                  }`}
+                />
+                <span className="text-xs text-gray-700 font-medium truncate">
                   {activeSessionName}
                 </span>
+
                 <button
                   onClick={handleClearSession}
                   className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
@@ -229,51 +430,50 @@ function App(): React.ReactElement {
                 </button>
               </>
             )}
-
             {error && (
               <span className="text-xs text-red-500" title={error}>Error</span>
             )}
           </div>
-          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+
+          {/* Right: controls */}
+          <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <TokenUsageRing
-              usedTokens={tokenUsage.totalTokens}
-              contextWindowSize={tokenUsage.contextWindowSize}
-              inputTokens={tokenUsage.inputTokens}
-              outputTokens={tokenUsage.outputTokens}
-              cacheReadTokens={tokenUsage.cacheReadTokens}
-              totalCost={tokenUsage.totalCost}
+              usedTokens={displayedTokenUsage.totalTokens}
+              contextWindowSize={displayedTokenUsage.contextWindowSize}
+              inputTokens={displayedTokenUsage.inputTokens}
+              outputTokens={displayedTokenUsage.outputTokens}
+              cacheReadTokens={displayedTokenUsage.cacheReadTokens}
+              totalCost={displayedTokenUsage.totalCost}
             />
-          </div>
-          <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <button
-              onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
-              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Full view"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
-              </svg>
-            </button>
-            <button
-              onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
-              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Turn view"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
-              </svg>
-            </button>
-            <button
-              onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
-              className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Outline view"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+              <button
+                onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                title="Full view"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+                </svg>
+              </button>
+              <button
+                onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                title="Turn view"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
+                </svg>
+              </button>
+              <button
+                onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                title="Outline view"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+              </button>
+            </div>
             {!isConnected && (
               <button
                 onClick={handleConnect}
@@ -309,19 +509,29 @@ function App(): React.ReactElement {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <ChatView
-            messages={messages}
-            isStreaming={isStreaming}
-            streamingMessageId={streamingMessageId}
+            messages={displayedMessages}
+            isStreaming={displayedStreaming}
+            streamingMessageId={displayedStreamingId}
             pendingUiRequests={pendingUiRequests}
             respondToUiRequest={respondToUiRequest}
-            onSendPrompt={sendPrompt}
+            onSendPrompt={handleSendPrompt}
             onForkAtEntry={handleForkAtEntry}
             getForkMessages={getForkMessages}
-            forkPoints={forkPoints}
+            forkPoints={displayedForkPoints}
             viewMode={viewMode}
           />
 
-          <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isConnected={isConnected} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
+          <InputBar
+            onSend={handleSendPrompt}
+            disabled={!isConnected}
+            isConnected={isConnected}
+            isStreaming={displayedStreaming}
+            onStop={handleStop}
+            isLazySwitched={isLazySwitched}
+            backgroundSessionName={backgroundSessionName}
+            isBackgroundStreaming={isLazySwitched && isPiStreaming()}
+            isAgentEnding={isAgentEnding}
+          />
         </div>
       </div>
     </div>

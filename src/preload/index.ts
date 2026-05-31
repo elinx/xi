@@ -79,6 +79,9 @@ const api = {
 
   clearSession: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession'),
+
+  getMessagesForSession: (sessionPath: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('session:getMessagesForSession', sessionPath),
 }
 
 contextBridge.exposeInMainWorld('api', api)
