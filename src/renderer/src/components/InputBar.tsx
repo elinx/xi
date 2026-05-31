@@ -3,11 +3,12 @@ import { useState, useRef, useCallback } from 'react'
 interface InputBarProps {
   onSend: (text: string, images?: { data: string; mimeType: string }[]) => void
   disabled: boolean
+  isConnected: boolean
   isStreaming?: boolean
   onStop?: () => void
 }
 
-function InputBar({ onSend, disabled, isStreaming, onStop }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -60,14 +61,19 @@ function InputBar({ onSend, disabled, isStreaming, onStop }: InputBarProps): Rea
 
   return (
     <div className="border-t border-gray-200 bg-white px-4 py-3">
-      {isStreaming && (
-        <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-2 flex items-center gap-1.5">
+        {isStreaming ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
             Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt
           </span>
-        </div>
-      )}
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
+          </span>
+        )}
+      </div>
       {pastedImages.length > 0 && (
         <div className="mb-2 flex gap-2">
           {pastedImages.map((img, i) => (

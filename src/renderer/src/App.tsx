@@ -169,13 +169,9 @@ function App(): React.ReactElement {
                 </svg>
               </button>
             )}
-            <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-xs text-gray-600">
-              {isConnected ? 'Pi Connected' : 'Pi Disconnected'}
-            </span>
             {activeSessionName && (
               <>
-                <span className="text-xs text-gray-700 font-medium border-l border-gray-300 pl-2">
+                <span className="text-xs text-gray-700 font-medium">
                   {activeSessionName}
                 </span>
                 <button
@@ -259,7 +255,7 @@ function App(): React.ReactElement {
           viewMode={viewMode}
         />
 
-        <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
+        <InputBar onSend={sendPrompt} disabled={!isConnected || isStreaming} isConnected={isConnected} isStreaming={isStreaming} onStop={isStreaming ? abort : undefined} />
       </div>
     </div>
   )

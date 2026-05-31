@@ -11,4 +11,16 @@
 怎么visual的显示出来呢？
 
 缺少：删除对话的能力
-bugfix：文本长的时候闪烁的非常厉害
+~~bugfix：文本长的时候闪烁的非常厉害~~
+bugfix: 生成的时候向上滚动，滚动不了，而且闪屏
+
+## session tab
+- 把session显示成不同的tab
+- source code也有单独的tab，但是是不同的tab类型
+
+
+## 产品
+1. 将来上下文一定是很长的，1M 起步的话，根本不需要compact上下文这个功能
+2. 按照 DeepSeek 的愿景，将来似乎可以达到无限上下文
+3. 所以session才是first class component
+
