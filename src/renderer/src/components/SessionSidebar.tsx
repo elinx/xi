@@ -41,6 +41,9 @@ function getDisplayName(session: SessionInfo): string {
 
 const SLOT_W = 16
 const LINE_LEFT = 8
+const R = 3
+const GRAY = '#e5e7eb'
+const BLUE = '#3b82f6'
 
 function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): boolean {
   if (!sessionPath) return false
@@ -48,7 +51,7 @@ function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): bool
   return node.children.some((child) => isDescendantOf(child, sessionPath))
 }
 
-function GuideLine({ color }: { color: string }) {
+function GuideLine({ highlight }: { highlight: boolean }) {
   return (
     <div
       className="flex-shrink-0 relative pointer-events-none"
@@ -56,55 +59,61 @@ function GuideLine({ color }: { color: string }) {
     >
       <div
         className="absolute"
+        style={{ left: LINE_LEFT, top: 0, bottom: 0, width: 1.5, backgroundColor: highlight ? BLUE : GRAY }}
+      />
+    </div>
+  )
+}
+
+function GuideBranch({ active, highlight }: { active: boolean; highlight?: boolean }) {
+  const color = active ? BLUE : GRAY
+  return (
+    <div
+      className="flex-shrink-0 relative pointer-events-none overflow-visible"
+      style={{ width: SLOT_W, alignSelf: 'stretch' }}
+    >
+      <div
+        className="absolute"
+        style={{ left: LINE_LEFT, top: 0, height: `calc(50% - ${R}px)`, width: 1.5, backgroundColor: color }}
+      />
+      <div
+        className="absolute"
         style={{
           left: LINE_LEFT,
-          top: 0,
-          bottom: 0,
-          width: 1.5,
+          top: `calc(50% - ${R}px)`,
+          width: R,
+          height: R,
+          borderLeft: `1.5px solid ${color}`,
+          borderBottom: `1.5px solid ${color}`,
+          borderBottomLeftRadius: R,
+        }}
+      />
+      <div
+        className="absolute"
+        style={{
+          left: LINE_LEFT + R,
+          top: `calc(50% - 1.5px)`,
+          width: SLOT_W - LINE_LEFT - R + 3,
+          height: 1.5,
           backgroundColor: color,
         }}
       />
+      <div
+        className="absolute"
+        style={{ left: LINE_LEFT, top: '50%', bottom: 0, width: 1.5, backgroundColor: GRAY }}
+      />
+      {highlight && (
+        <div
+          className="absolute"
+          style={{ left: LINE_LEFT, top: 0, bottom: 0, width: 1.5, backgroundColor: BLUE }}
+        />
+      )}
     </div>
   )
 }
 
-function GuideBranch({ color, branchColor, bottomColor }: { color: string; branchColor?: string; bottomColor?: string }) {
-  const brColor = branchColor ?? color
-  const btColor = bottomColor ?? color
-  return (
-    <div
-      className="flex-shrink-0 relative pointer-events-none overflow-visible"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    >
-      {/* 上半段竖线 + 圆角 + 水平分支：用 border 绘制，与 GuideElbow 同样的圆角效果 */}
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT,
-          top: 0,
-          height: '50%',
-          width: SLOT_W - LINE_LEFT + 3,
-          borderLeft: `1.5px solid ${color}`,
-          borderBottom: `1.5px solid ${brColor}`,
-          borderBottomLeftRadius: 4,
-        }}
-      />
-      {/* 下半段竖线：从50%到底部，后续兄弟是否在 active path 上 */}
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT,
-          top: '50%',
-          bottom: 0,
-          width: 1.5,
-          backgroundColor: btColor,
-        }}
-      />
-    </div>
-  )
-}
-
-function GuideElbow({ color }: { color: string }) {
+function GuideElbow({ active }: { active: boolean }) {
+  const color = active ? BLUE : GRAY
   return (
     <div
       className="flex-shrink-0 relative pointer-events-none overflow-visible"
@@ -112,14 +121,28 @@ function GuideElbow({ color }: { color: string }) {
     >
       <div
         className="absolute"
+        style={{ left: LINE_LEFT, top: 0, height: `calc(50% - ${R}px)`, width: 1.5, backgroundColor: color }}
+      />
+      <div
+        className="absolute"
         style={{
           left: LINE_LEFT,
-          top: 0,
-          height: '50%',
-          width: SLOT_W - LINE_LEFT + 3,
+          top: `calc(50% - ${R}px)`,
+          width: R,
+          height: R,
           borderLeft: `1.5px solid ${color}`,
           borderBottom: `1.5px solid ${color}`,
-          borderBottomLeftRadius: 4,
+          borderBottomLeftRadius: R,
+        }}
+      />
+      <div
+        className="absolute"
+        style={{
+          left: LINE_LEFT + R,
+          top: `calc(50% - 1.5px)`,
+          width: SLOT_W - LINE_LEFT - R + 3,
+          height: 1.5,
+          backgroundColor: color,
         }}
       />
     </div>
@@ -139,13 +162,13 @@ function DotSlot({
   active,
   hasChildren,
   isExpanded,
-  gutterActive,
+  highlight,
   completed,
 }: {
   active: boolean
   hasChildren: boolean
   isExpanded: boolean
-  gutterActive: boolean
+  highlight: boolean
   completed: boolean
 }) {
   return (
@@ -170,7 +193,7 @@ function DotSlot({
             top: 'calc(50% + 5px)',
             bottom: 0,
             width: 1.5,
-            backgroundColor: gutterActive ? '#3b82f6' : '#e5e7eb',
+            backgroundColor: highlight ? BLUE : GRAY,
           }}
         />
       )}
@@ -195,7 +218,7 @@ function SessionNode({
   onForkTriggered,
 }: {
   node: SessionTreeNode
-  ancestorLines: { hasLine: boolean; color: string; branchColor?: string; bottomColor?: string }[]
+  ancestorLines: { hasLine: boolean; highlight: boolean; branchActive: boolean }[]
   currentSessionPath: string | null
   isOnActivePath: boolean
   onSwitch: (path: string) => void
@@ -254,20 +277,18 @@ function SessionNode({
       isDescendantOf(child, currentSessionPath)
   )
 
-  const gutterActive = hasChildOnActivePath
-
   const renderGuides = () => {
     if (ancestorLines.length === 0) return null
     return ancestorLines.map((entry, i) => {
       const isConnector = i === ancestorLines.length - 1
       if (isConnector) {
         if (entry.hasLine) {
-          return <GuideBranch key={i} color={entry.color} branchColor={entry.branchColor} bottomColor={entry.bottomColor} />
+          return <GuideBranch key={i} active={entry.branchActive} highlight={entry.highlight && !entry.branchActive} />
         }
-        return <GuideElbow key={i} color={entry.color} />
+        return <GuideElbow key={i} active={entry.branchActive} />
       }
       if (entry.hasLine) {
-        return <GuideLine key={i} color={entry.bottomColor ?? entry.color} />
+        return <GuideLine key={i} highlight={entry.highlight && !entry.branchActive} />
       }
       return <GuideSlot key={i} />
     })
@@ -294,7 +315,7 @@ function SessionNode({
           active={isOnActivePath || isActive || node.session.isMain}
           hasChildren={hasChildren}
           isExpanded={isExpanded}
-          gutterActive={gutterActive}
+          highlight={hasChildOnActivePath}
           completed={isCompleted}
         />
         <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
@@ -477,22 +498,19 @@ function SessionNode({
                   currentSessionPath === sibling.session.filePath ||
                   isDescendantOf(sibling, currentSessionPath)
               )
-            const branchColor = childIsActivePath ? '#3b82f6' : '#e5e7eb'            // 水平分支：当前节点是否 active
-            const continuationColor = laterSiblingOnActivePath ? '#3b82f6' : '#e5e7eb' // 下半段竖线：后续兄弟是否 active
             const onPath = childIsActivePath || laterSiblingOnActivePath
-            const verticalTopColor = onPath ? '#3b82f6' : '#e5e7eb'                  // 上半段竖线：整条线是否在 active path 上
             const newAncestorLines = [
               ...ancestorLines.map((entry) => ({
                 hasLine: entry.hasLine,
-                color: entry.color,
-                branchColor: entry.branchColor,
-                bottomColor: entry.bottomColor,
+                highlight: entry.branchActive
+                  ? (entry.highlight && childIsActivePath)
+                  : entry.highlight,
+                branchActive: entry.branchActive && childIsActivePath,
               })),
               {
                 hasLine: i < node.children.length - 1,
-                color: verticalTopColor,
-                branchColor: branchColor,
-                bottomColor: i < node.children.length - 1 ? continuationColor : undefined,
+                highlight: onPath,
+                branchActive: childIsActivePath,
               },
             ]
             return (
