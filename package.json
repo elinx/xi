@@ -4,8 +4,8 @@
   "description": "Xi /ksi/ — The next-generation AI coding tool",
   "main": "./out/main/index.js",
   "author": {
-    "name": "Earendil Works",
-    "email": "elinx@users.noreply.github.com"
+    "name": "Elinx",
+    "email": "xizzuli@163.com"
   },
   "scripts": {
     "dev": "electron-vite dev",
