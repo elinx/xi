@@ -122,6 +122,7 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       }
 
       case 'get_state': {
+        const currentModel = session.model
         send({
           channel: 'response',
           id: cmd.id,
@@ -135,6 +136,9 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
             isCompacting: session.isCompacting,
             thinkingLevel: session.thinkingLevel,
             messageCount: session.messages.length,
+            model: currentModel
+              ? { provider: currentModel.provider, id: currentModel.id, name: currentModel.name }
+              : null,
           },
         })
         break
@@ -221,6 +225,80 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       case 'compact': {
         const result = await session.compact(cmd.customInstructions as string | undefined)
         send({ channel: 'response', id: cmd.id, command: 'compact', success: true, data: result })
+        break
+      }
+
+      case 'get_available_models': {
+        const registry = session.modelRegistry
+        const allModels = registry.getAll()
+        const availableModels = registry.getAvailable()
+        const availableIds = new Set(availableModels.map(m => `${m.provider}/${m.id}`))
+        const models = allModels.map(m => ({
+          provider: m.provider,
+          id: m.id,
+          name: m.name,
+          hasAuth: availableIds.has(`${m.provider}/${m.id}`),
+          reasoning: m.reasoning,
+          contextWindow: m.contextWindow,
+        }))
+        send({ channel: 'response', id: cmd.id, command: 'get_available_models', success: true, data: { models } })
+        break
+      }
+
+      case 'set_model': {
+        const registry = session.modelRegistry
+        const modelId = cmd.model as string
+        const provider = cmd.provider as string | undefined
+        let targetModel: typeof session.model | undefined
+        if (provider) {
+          targetModel = registry.find(provider, modelId)
+        } else {
+          const allModels = registry.getAll()
+          targetModel = allModels.find(m => m.id === modelId) ?? allModels.find(m => m.name === modelId)
+        }
+        if (!targetModel) {
+          send({ channel: 'response', id: cmd.id, command: 'set_model', success: false, error: `Model not found: ${provider ? provider + '/' : ''}${modelId}` })
+          break
+        }
+        await session.setModel(targetModel)
+        const newModel = session.model
+        send({
+          channel: 'response',
+          id: cmd.id,
+          command: 'set_model',
+          success: true,
+          data: newModel ? { provider: newModel.provider, id: newModel.id, name: newModel.name } : null,
+        })
+        break
+      }
+
+      case 'cycle_model': {
+        const direction = (cmd.direction as 'forward' | 'backward' | undefined) ?? 'forward'
+        const result = await session.cycleModel(direction)
+        const newModel = session.model
+        send({
+          channel: 'response',
+          id: cmd.id,
+          command: 'cycle_model',
+          success: true,
+          data: {
+            model: newModel ? { provider: newModel.provider, id: newModel.id, name: newModel.name } : null,
+            thinkingLevel: session.thinkingLevel,
+            isScoped: result?.isScoped ?? false,
+          },
+        })
+        break
+      }
+
+      case 'set_thinking_level': {
+        session.setThinkingLevel(cmd.level as string)
+        send({ channel: 'response', id: cmd.id, command: 'set_thinking_level', success: true, data: { thinkingLevel: session.thinkingLevel } })
+        break
+      }
+
+      case 'cycle_thinking_level': {
+        const newLevel = session.cycleThinkingLevel()
+        send({ channel: 'response', id: cmd.id, command: 'cycle_thinking_level', success: true, data: { thinkingLevel: newLevel } })
         break
       }
 

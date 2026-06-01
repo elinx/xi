@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
+import type { PiModelInfo } from '../types/session'
+import ModelSelector from './ModelSelector'
 
 interface InputBarProps {
   onSend: (text: string, images?: { data: string; mimeType: string }[]) => void
@@ -10,14 +12,19 @@ interface InputBarProps {
   backgroundSessionName?: string | null
   isBackgroundStreaming?: boolean
   isAgentEnding?: boolean
+  currentModel?: PiModelInfo | null
+  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
+  getAvailableModels?: () => Promise<PiModelInfo[]>
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
+  const [showModelSelector, setShowModelSelector] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const showStop = isStreaming || isBackgroundStreaming
+  const noModel = isConnected && !currentModel
 
   const handleSubmit = useCallback((): void => {
     const trimmed = text.trim()
@@ -87,17 +94,44 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   } else if (isStreaming) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
     statusText = <>Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
+  } else if (noModel) {
+    statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+    statusText = (
+      <span className="text-amber-600">
+        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors">No model configured</button>
+      </span>
+    )
+  } else if (isConnected && currentModel) {
+    statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+    statusText = (
+      <span className="text-gray-500">
+        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name}</button>
+      </span>
+    )
   } else {
-    statusDot = <span className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-    statusText = isConnected ? 'Pi Connected' : 'Pi Disconnected'
+    statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+    statusText = 'Pi Disconnected'
   }
 
   return (
-    <div className="border-t border-gray-200 bg-white px-4 py-3">
+    <div className="border-t border-gray-200 bg-white px-4 py-3 relative">
       <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
         {statusDot}
         {statusText}
       </div>
+      {noModel && (
+        <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
+          No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors">select a model</button> to start chatting
+        </div>
+      )}
+      {showModelSelector && onSetModel && getAvailableModels && (
+        <ModelSelector
+          currentModel={currentModel ?? null}
+          onSetModel={onSetModel}
+          getAvailableModels={getAvailableModels}
+          onClose={() => setShowModelSelector(false)}
+        />
+      )}
       {pastedImages.length > 0 && (
         <div className="mb-2 flex gap-2">
           {pastedImages.map((img, i) => (
@@ -124,9 +158,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          disabled={disabled}
+          disabled={disabled || noModel}
           rows={1}
-          placeholder={disabled ? 'Pi not connected...' : 'Type a message... (paste images with Ctrl+V)'}
+          placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (paste images with Ctrl+V)'}
           className="flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
         />
         {showStop ? (
@@ -139,7 +173,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={disabled || (!text.trim() && pastedImages.length === 0)}
+            disabled={disabled || noModel || (!text.trim() && pastedImages.length === 0)}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
           >
             Send

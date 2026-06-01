@@ -10,7 +10,7 @@ import type {
   PiToolResultMessage,
   PiContentBlock,
 } from '../types/pi-events'
-import type { ForkPoint } from '../types/session'
+import type { ForkPoint, PiModelInfo } from '../types/session'
 import { convertPiMessagesToChatMessages, type TokenUsage } from '../utils/convert-messages'
 
 export interface UsePiRpcOptions {
@@ -23,6 +23,8 @@ export interface UsePiRpcOptions {
 
 interface UsePiRpcReturn {
   isConnected: boolean
+  currentModel: PiModelInfo | null
+  thinkingLevel: string | null
   sendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
   abort: () => Promise<void>
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
@@ -32,6 +34,9 @@ interface UsePiRpcReturn {
   loadForkPoints: (sessionPath: string) => Promise<void>
   onAgentEnd: (() => void) | null
   setOnAgentEnd: (cb: (() => void) | null) => void
+  getAvailableModels: () => Promise<PiModelInfo[]>
+  setModel: (modelId: string, provider?: string) => Promise<boolean>
+  cycleModel: (direction?: 'forward' | 'backward') => Promise<boolean>
 }
 
 function inferContextWindow(model: string): number {
@@ -46,6 +51,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const { onMessagesUpdate, onTokenUsageUpdate, onStreamingChange, onForkPointsUpdate, piConnectedSessionPath } = options
 
   const [isConnected, setIsConnected] = useState(false)
+  const [currentModel, setCurrentModel] = useState<PiModelInfo | null>(null)
+  const [thinkingLevel, setThinkingLevel] = useState<string | null>(null)
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
 
   const isStreamingRef = useRef(false)
@@ -386,6 +393,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
         }
 
+        case 'thinking_level_changed':
+          setThinkingLevel(event.level)
+          break
+
         default:
           break
       }
@@ -396,6 +407,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   useEffect(() => {
     const cleanup = window.api.onStateChanged((state) => {
       setIsConnected(state.connected)
+      if (!state.connected) {
+        setCurrentModel(null)
+        setThinkingLevel(null)
+      }
     })
 
     window.api.getState().then((state) => {
@@ -404,6 +419,17 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
 
     return cleanup
   }, [])
+
+  useEffect(() => {
+    if (!isConnected) return
+    type ApiWithModelInfo = typeof window.api & { getModelInfo: () => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string | null }; error?: string }> }
+    ;(window.api as ApiWithModelInfo).getModelInfo().then((result) => {
+      if (result.ok && result.data) {
+        setCurrentModel(result.data.model)
+        setThinkingLevel(result.data.thinkingLevel)
+      }
+    })
+  }, [isConnected])
 
   useEffect(() => {
     const cleanup = window.api.onEvent((rawEvent) => {
@@ -529,5 +555,33 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     }
   }, [clearMessages, onMessagesUpdate, onTokenUsageUpdate])
 
-  return { isConnected, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd }
+  const getAvailableModels = useCallback(async (): Promise<PiModelInfo[]> => {
+    type ApiWithModels = typeof window.api & { getAvailableModels: () => Promise<{ ok: boolean; data?: { models: PiModelInfo[] }; error?: string }> }
+    const result = await (window.api as ApiWithModels).getAvailableModels()
+    if (result.ok && result.data?.models) return result.data.models
+    return []
+  }, [])
+
+  const setModel = useCallback(async (modelId: string, provider?: string): Promise<boolean> => {
+    type ApiWithSetModel = typeof window.api & { setModel: (model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
+    const result = await (window.api as ApiWithSetModel).setModel(modelId, provider)
+    if (result.ok) {
+      setCurrentModel(result.data ?? null)
+      return true
+    }
+    return false
+  }, [])
+
+  const cycleModelFn = useCallback(async (direction?: 'forward' | 'backward'): Promise<boolean> => {
+    type ApiWithCycle = typeof window.api & { cycleModel: (direction?: 'forward' | 'backward') => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string; isScoped: boolean }; error?: string }> }
+    const result = await (window.api as ApiWithCycle).cycleModel(direction)
+    if (result.ok && result.data) {
+      setCurrentModel(result.data.model)
+      setThinkingLevel(result.data.thinkingLevel)
+      return true
+    }
+    return false
+  }, [])
+
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn }
 }

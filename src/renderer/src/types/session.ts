@@ -110,3 +110,45 @@ export interface SessionIpcApi {
   /** Set session status (active/completed). Pure file operation, no Pi RPC. */
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
 }
+
+/** Model info returned by Pi SDK. */
+export interface PiModelInfo {
+  provider: string
+  id: string
+  name: string
+  hasAuth: boolean
+  reasoning: boolean
+  contextWindow: number
+}
+
+/** Result from getAvailableModels IPC call. */
+export interface GetAvailableModelsResult {
+  ok: boolean
+  data?: { models: PiModelInfo[] }
+  error?: string
+}
+
+/** Result from setModel IPC call. */
+export interface SetModelResult {
+  ok: boolean
+  data?: PiModelInfo | null
+  error?: string
+}
+
+/** Result from cycleModel IPC call. */
+export interface CycleModelResult {
+  ok: boolean
+  data?: {
+    model: PiModelInfo | null
+    thinkingLevel: string
+    isScoped: boolean
+  }
+  error?: string
+}
+
+/** Result from getModelInfo IPC call. */
+export interface GetModelInfoResult {
+  ok: boolean
+  data?: { model: PiModelInfo | null; thinkingLevel: string | null }
+  error?: string
+}
