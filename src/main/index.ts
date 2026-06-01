@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
@@ -192,7 +193,12 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('app:openConfigDir', () => {
     const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
-    shell.showItemInFolder(configDir)
+    const authPath = join(configDir, 'auth.json')
+    if (existsSync(authPath)) {
+      shell.showItemInFolder(authPath)
+    } else {
+      shell.openPath(configDir)
+    }
   })
 
   ipcMain.handle('pi:start', async () => {
