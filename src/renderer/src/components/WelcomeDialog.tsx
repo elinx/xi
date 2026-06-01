@@ -17,7 +17,7 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onSkip}>
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
         {!showSetup ? (
           <div className="px-8 py-10 text-center">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
@@ -44,8 +44,8 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
             </div>
           </div>
         ) : (
-          <div className="px-6 py-5">
-            <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex items-center justify-between px-6 py-5 flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
               <button
                 onClick={() => setShowSetup(false)}
@@ -56,13 +56,15 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 </svg>
               </button>
             </div>
-            <ProviderSetup
+            <div className="px-6 pb-5 overflow-y-auto">
+              <ProviderSetup
               getProviderAuthStatus={getProviderAuthStatus}
               setApiKey={setApiKey}
               removeAuth={removeAuth}
               registerCustomProvider={registerCustomProvider}
               onAuthChange={onAuthChange}
             />
+            </div>
           </div>
         )}
       </div>

@@ -605,21 +605,21 @@ function App(): React.ReactElement {
           onClick={() => setShowProviderSetup(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden"
+            className="w-full max-w-md max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-5">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
-                <button
-                  onClick={() => setShowProviderSetup(false)}
-                  className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+            <div className="flex items-center justify-between px-6 py-5 flex-shrink-0">
+              <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
+              <button
+                onClick={() => setShowProviderSetup(false)}
+                className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 pb-5 overflow-y-auto flex-1">
               <ProviderSetup
                 getProviderAuthStatus={getProviderAuthStatus}
                 setApiKey={setApiKey}
@@ -631,8 +631,7 @@ function App(): React.ReactElement {
               />
             </div>
           </div>
-        </div>
-      )}
+        </div>}
     </div>
   )
 }
