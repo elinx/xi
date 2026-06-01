@@ -628,10 +628,11 @@ function App(): React.ReactElement {
                 onAuthChange={() => {
                   getAvailableModels()
                 }}
-              />
+               />
             </div>
           </div>
-        </div>}
+        </div>
+      )}
     </div>
   )
 }
