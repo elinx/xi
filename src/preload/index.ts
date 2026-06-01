@@ -111,7 +111,7 @@ const api = {
     ipcRenderer.invoke('pi:registerCustomProvider', provider, config),
 
   openConfigDir: (): void =>
-    ipcRenderer.invoke('app:openConfigDir'),
+    ipcRenderer.send('app:openConfigDir'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

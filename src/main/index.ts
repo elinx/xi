@@ -191,7 +191,7 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('app:openConfigDir', () => {
+  ipcMain.on('app:openConfigDir', () => {
     const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
     const authPath = join(configDir, 'auth.json')
     if (existsSync(authPath)) {
