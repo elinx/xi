@@ -600,8 +600,14 @@ function App(): React.ReactElement {
       )}
 
       {showProviderSetup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowProviderSetup(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-5">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>

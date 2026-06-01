@@ -16,8 +16,8 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
   const [showSetup, setShowSetup] = useState(false)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onSkip}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {!showSetup ? (
           <div className="px-8 py-10 text-center">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
