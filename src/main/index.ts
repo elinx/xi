@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { join } from 'path'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
@@ -188,6 +188,11 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('app:openConfigDir', () => {
+    const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
+    shell.showItemInFolder(configDir)
   })
 
   ipcMain.handle('pi:start', async () => {

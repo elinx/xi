@@ -109,6 +109,9 @@ const api = {
 
   registerCustomProvider: (provider: string, config: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:registerCustomProvider', provider, config),
+
+  openConfigDir: (): void =>
+    ipcRenderer.invoke('app:openConfigDir'),
 }
 
 contextBridge.exposeInMainWorld('api', api)
