@@ -5,8 +5,9 @@ import { useSessionCache } from './hooks/useSessionCache'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
-// LazySwitchBanner removed — status integrated into header
 import { TokenUsageRing } from './components/TokenUsageRing'
+import WelcomeDialog from './components/WelcomeDialog'
+import ProviderSetup from './components/ProviderSetup'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage } from './types/message'
 import type { ForkPoint } from './types/session'
@@ -78,7 +79,7 @@ function App(): React.ReactElement {
     piConnectedSessionPath: piConnectedPath,
   }), [updatePiConnectedMessages, updatePiConnectedTokenUsage, setPiConnectedStreaming, updatePiConnectedForkPoints, piConnectedPath])
 
-  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const isLazySwitched = sessionCache.displayedSessionPath !== null && sessionCache.displayedSessionPath !== piConnectedPath
@@ -89,6 +90,9 @@ function App(): React.ReactElement {
   const displayedStreamingId = sessionCache.displayedStreamingMessageId
 
   const [error, setError] = useState<string | null>(null)
+  const [showWelcome, setShowWelcome] = useState(false)
+  const [showProviderSetup, setShowProviderSetup] = useState(false)
+  const welcomeCheckDone = useRef(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('xi-sidebar-collapsed')
     return saved === 'true'
@@ -327,6 +331,18 @@ function App(): React.ReactElement {
   }, [isConnected, currentSession?.filePath, loadForkPoints])
 
   useEffect(() => {
+    if (isConnected && !welcomeCheckDone.current) {
+      welcomeCheckDone.current = true
+      getProviderAuthStatus().then((status) => {
+        const hasAnyAuth = Object.values(status).some(s => s.configured)
+        if (!hasAnyAuth) {
+          setShowWelcome(true)
+        }
+      })
+    }
+  }, [isConnected, getProviderAuthStatus])
+
+  useEffect(() => {
     setOnAgentEnd(() => () => {
       refresh()
       setIsAgentEnding(true)
@@ -459,6 +475,16 @@ function App(): React.ReactElement {
 
           {/* Right: controls */}
           <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <button
+              onClick={() => setShowProviderSetup(true)}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              title="Configure providers"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <TokenUsageRing
               usedTokens={displayedTokenUsage.totalTokens}
               contextWindowSize={displayedTokenUsage.contextWindowSize}
@@ -559,6 +585,48 @@ function App(): React.ReactElement {
           />
         </div>
       </div>
+
+      {showWelcome && (
+        <WelcomeDialog
+          getProviderAuthStatus={getProviderAuthStatus}
+          setApiKey={setApiKey}
+          removeAuth={removeAuth}
+          registerCustomProvider={registerCustomProvider}
+          onAuthChange={() => {
+            getAvailableModels()
+          }}
+          onSkip={() => setShowWelcome(false)}
+        />
+      )}
+
+      {showProviderSetup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="px-6 py-5">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
+                <button
+                  onClick={() => setShowProviderSetup(false)}
+                  className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <ProviderSetup
+                getProviderAuthStatus={getProviderAuthStatus}
+                setApiKey={setApiKey}
+                removeAuth={removeAuth}
+                registerCustomProvider={registerCustomProvider}
+                onAuthChange={() => {
+                  getAvailableModels()
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

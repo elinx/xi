@@ -37,6 +37,10 @@ interface UsePiRpcReturn {
   getAvailableModels: () => Promise<PiModelInfo[]>
   setModel: (modelId: string, provider?: string) => Promise<boolean>
   cycleModel: (direction?: 'forward' | 'backward') => Promise<boolean>
+  getProviderAuthStatus: () => Promise<Record<string, { configured: boolean; source?: string }>>
+  setApiKey: (provider: string, apiKey: string) => Promise<boolean>
+  removeAuth: (provider: string) => Promise<boolean>
+  registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
 }
 
 function inferContextWindow(model: string): number {
@@ -583,5 +587,29 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return false
   }, [])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn }
+  const getProviderAuthStatus = useCallback(async (): Promise<Record<string, { configured: boolean; source?: string }>> => {
+    type ApiWithAuthStatus = typeof window.api & { getProviderAuthStatus: () => Promise<{ ok: boolean; data?: Record<string, { configured: boolean; source?: string }>; error?: string }> }
+    const result = await (window.api as ApiWithAuthStatus).getProviderAuthStatus()
+    return result.ok && result.data ? result.data : {}
+  }, [])
+
+  const setApiKeyFn = useCallback(async (provider: string, apiKey: string): Promise<boolean> => {
+    type ApiWithSetApiKey = typeof window.api & { setApiKey: (provider: string, apiKey: string) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithSetApiKey).setApiKey(provider, apiKey)
+    return result.ok
+  }, [])
+
+  const removeAuthFn = useCallback(async (provider: string): Promise<boolean> => {
+    type ApiWithRemoveAuth = typeof window.api & { removeAuth: (provider: string) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithRemoveAuth).removeAuth(provider)
+    return result.ok
+  }, [])
+
+  const registerCustomProviderFn = useCallback(async (provider: string, config: Record<string, unknown>): Promise<boolean> => {
+    type ApiWithRegister = typeof window.api & { registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithRegister).registerCustomProvider(provider, config)
+    return result.ok
+  }, [])
+
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn }
 }

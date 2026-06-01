@@ -97,6 +97,18 @@ const api = {
 
   getMessagesForSession: (sessionPath: string): Promise<unknown[]> =>
     ipcRenderer.invoke('session:getMessagesForSession', sessionPath),
+
+  getProviderAuthStatus: (): Promise<{ ok: boolean; data?: Record<string, { configured: boolean; source?: string }>; error?: string }> =>
+    ipcRenderer.invoke('pi:getProviderAuthStatus'),
+
+  setApiKey: (provider: string, apiKey: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('pi:setApiKey', provider, apiKey),
+
+  removeAuth: (provider: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('pi:removeAuth', provider),
+
+  registerCustomProvider: (provider: string, config: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('pi:registerCustomProvider', provider, config),
 }
 
 contextBridge.exposeInMainWorld('api', api)

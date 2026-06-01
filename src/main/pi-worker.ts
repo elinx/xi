@@ -302,6 +302,50 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
         break
       }
 
+      case 'get_provider_auth_status': {
+        const registry = runtime!.services.modelRegistry
+        const allModels = registry.getAll()
+        const providers = new Map<string, { configured: boolean; source?: string }>()
+        for (const model of allModels) {
+          if (!providers.has(model.provider)) {
+            const status = registry.getProviderAuthStatus(model.provider)
+            providers.set(model.provider, { configured: status.configured, source: status.source })
+          }
+        }
+        const result: Record<string, { configured: boolean; source?: string }> = {}
+        for (const [provider, status] of providers) {
+          result[provider] = status
+        }
+        send({ channel: 'response', id: cmd.id, command: 'get_provider_auth_status', success: true, data: result })
+        break
+      }
+
+      case 'set_api_key': {
+        const authStorage = runtime!.services.authStorage
+        authStorage.set(cmd.provider as string, { type: 'api_key', key: cmd.apiKey as string })
+        runtime!.services.modelRegistry.refresh()
+        send({ channel: 'response', id: cmd.id, command: 'set_api_key', success: true })
+        break
+      }
+
+      case 'remove_auth': {
+        const authStorage = runtime!.services.authStorage
+        authStorage.remove(cmd.provider as string)
+        runtime!.services.modelRegistry.refresh()
+        send({ channel: 'response', id: cmd.id, command: 'remove_auth', success: true })
+        break
+      }
+
+      case 'register_custom_provider': {
+        const config = cmd.config as { name?: string; baseUrl: string; apiKey?: string; models?: Array<{ id: string; name: string; reasoning: boolean; input: string[]; cost: { input: number; output: number; cacheRead: number; cacheWrite: number }; contextWindow: number; maxTokens: number }> }
+        runtime!.services.modelRegistry.registerProvider(cmd.provider as string, config)
+        if (config.apiKey) {
+          runtime!.services.authStorage.set(cmd.provider as string, { type: 'api_key', key: config.apiKey })
+        }
+        send({ channel: 'response', id: cmd.id, command: 'register_custom_provider', success: true })
+        break
+      }
+
       case 'send_extension_ui_response': {
         send({ channel: 'response', id: cmd.id, command: 'send_extension_ui_response', success: true })
         break

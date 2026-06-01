@@ -150,6 +150,46 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('pi:getProviderAuthStatus', async () => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      const data = await piBridge.sendRpcCommand({ type: 'get_provider_auth_status' })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:setApiKey', async (_event, provider: string, apiKey: string) => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      await piBridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:removeAuth', async (_event, provider: string) => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      await piBridge.sendRpcCommand({ type: 'remove_auth', provider })
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:registerCustomProvider', async (_event, provider: string, config: Record<string, unknown>) => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      await piBridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('pi:start', async () => {
     if (!piBridge) {
       let mainSession = sessionService.findMainSession(process.cwd())
