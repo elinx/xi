@@ -50,7 +50,9 @@
     "files": [
       "out/**/*"
     ],
+    "artifactName": "Xi-${version}-${arch}-${os}.${ext}",
     "mac": {
+      "artifactName": "Xi-${version}-${arch}-mac.${ext}",
       "target": [
         {
           "target": "dmg",
@@ -65,6 +67,7 @@
       "icon": "build/icon/icon.icns"
     },
     "win": {
+      "artifactName": "Xi-${version}-${arch}-win.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -78,6 +81,7 @@
       "icon": "build/icon/icon.ico"
     },
     "linux": {
+      "artifactName": "Xi-${version}-${arch}-linux.${ext}",
       "target": [
         {
           "target": "AppImage",
@@ -92,6 +96,7 @@
       "icon": "build/icon"
     },
     "nsis": {
+      "artifactName": "Xi-${version}-${arch}-win-setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": true
