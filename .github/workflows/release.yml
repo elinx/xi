@@ -43,7 +43,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: xi-${{ matrix.os }}
-          path: dist/**/*
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
           if-no-files-found: error
 
   publish:
@@ -55,6 +60,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Delete existing release assets
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/$TAG --jq '.id' 2>/dev/null || echo "")
+          if [ -n "$RELEASE_ID" ]; then
+            gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --jq '.[].id' | \
+              xargs -I{} gh api -X DELETE repos/${{ github.repository }}/releases/assets/{}
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -73,6 +89,5 @@ jobs:
             artifacts/**/*.dmg
             artifacts/**/*.zip
             artifacts/**/*.exe
-            artifacts/**/*.nsis.zip
             artifacts/**/*.AppImage
             artifacts/**/*.deb
