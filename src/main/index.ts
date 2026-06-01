@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog } from 'electron'
 import { join } from 'path'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
@@ -107,6 +107,49 @@ function registerIpcHandlers(): void {
     return { connected: piBridge?.isConnected ?? false }
   })
 
+  ipcMain.handle('pi:getAvailableModels', async () => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      const data = await piBridge.sendRpcCommand({ type: 'get_available_models' })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:setModel', async (_event, model: string, provider?: string) => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      const command: Record<string, unknown> = { type: 'set_model', model }
+      if (provider) command.provider = provider
+      const data = await piBridge.sendRpcCommand(command)
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:cycleModel', async (_event, direction?: 'forward' | 'backward') => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      const data = await piBridge.sendRpcCommand({ type: 'cycle_model', direction: direction ?? 'forward' })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:getModelInfo', async () => {
+    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+    try {
+      const data = await piBridge.sendRpcCommand({ type: 'get_state' })
+      const state = data as Record<string, unknown>
+      return { ok: true, data: { model: state.model ?? null, thinkingLevel: state.thinkingLevel ?? null } }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('pi:start', async () => {
     if (!piBridge) {
       let mainSession = sessionService.findMainSession(process.cwd())
@@ -128,6 +171,37 @@ function registerIpcHandlers(): void {
         } catch {}
       }
       return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('project:openDirectory', async () => {
+    try {
+      const win = BrowserWindow.getFocusedWindow()
+      const result = await dialog.showOpenDialog(win!, {
+        properties: ['openDirectory']
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: false }
+      }
+      const newCwd = result.filePaths[0]
+      try {
+        await piBridge?.stop()
+      } catch {}
+      piBridge = null
+      let mainSession = sessionService.findMainSession(newCwd)
+      if (mainSession && !mainSession.name) {
+        sessionService.nameSession(mainSession.filePath, 'main')
+        mainSession = { ...mainSession, name: 'main' }
+      }
+      initPiBridge(mainSession?.filePath)
+      try {
+        await piBridge!.start(newCwd, initialSessionPath)
+        return { ok: true }
+      } catch (err: unknown) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

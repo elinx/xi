@@ -35,6 +35,18 @@ const api = {
   getState: (): Promise<{ connected: boolean }> =>
     ipcRenderer.invoke('pi:getState'),
 
+  getAvailableModels: (): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:getAvailableModels'),
+
+  setModel: (model: string, provider?: string): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:setModel', model, provider),
+
+  cycleModel: (direction?: 'forward' | 'backward'): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:cycleModel', direction),
+
+  getModelInfo: (): Promise<{ ok: boolean; data?: { model: unknown; thinkingLevel: unknown }; error?: string }> =>
+    ipcRenderer.invoke('pi:getModelInfo'),
+
   start: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:start'),
 
@@ -79,6 +91,9 @@ const api = {
 
   clearSession: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession'),
+
+  openDirectory: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:openDirectory'),
 
   getMessagesForSession: (sessionPath: string): Promise<unknown[]> =>
     ipcRenderer.invoke('session:getMessagesForSession', sessionPath),

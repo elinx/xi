@@ -78,7 +78,7 @@ function App(): React.ReactElement {
     piConnectedSessionPath: piConnectedPath,
   }), [updatePiConnectedMessages, updatePiConnectedTokenUsage, setPiConnectedStreaming, updatePiConnectedForkPoints, piConnectedPath])
 
-  const { isConnected, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const isLazySwitched = sessionCache.displayedSessionPath !== null && sessionCache.displayedSessionPath !== piConnectedPath
@@ -159,6 +159,13 @@ function App(): React.ReactElement {
       setError(result.error)
     }
     refresh()
+  }
+
+  async function handleOpenDirectory(): Promise<void> {
+    const result = await window.api.openDirectory()
+    if (!result.ok) return
+    clearMessages()
+    await refresh()
   }
 
   useEffect(() => {
@@ -363,8 +370,9 @@ function App(): React.ReactElement {
     return cleanup
   }, [])
 
+  const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   const projects = sessions?.projects ?? []
-  const projectName = projects[0]?.projectPath.split('/').pop() ?? 'Sessions'
+  const projectName = projects[0]?.projectPath.split(/[/\\]/).pop() ?? 'Sessions'
   const collapsedSidebarWidth = 48
   const currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth
 
@@ -374,31 +382,45 @@ function App(): React.ReactElement {
       <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         {/* Left: sidebar header zone */}
         <div
-          className="flex items-center justify-between px-3 pt-10 pb-2 flex-shrink-0"
-          style={{ width: currentSidebarWidth }}
+          className="flex items-center justify-between px-3 pb-2 flex-shrink-0"
+          style={{ width: currentSidebarWidth, paddingTop: isMac ? '28px' : '4px' }}
         >
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">{sidebarCollapsed ? '' : projectName}</span>
-          <button
-            onClick={() => {
-              const next = !sidebarCollapsed
-              setSidebarCollapsed(next)
-              localStorage.setItem('xi-sidebar-collapsed', String(next))
-            }}
-            className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            title={sidebarCollapsed ? 'Show sessions' : 'Hide sessions'}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              {sidebarCollapsed ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-              )}
-            </svg>
-          </button>
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{sidebarCollapsed ? '' : projectName}</span>
+          <div className="flex items-center gap-0.5">
+            {!sidebarCollapsed && (
+              <button
+                onClick={handleOpenDirectory}
+                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Open project directory"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const next = !sidebarCollapsed
+                setSidebarCollapsed(next)
+                localStorage.setItem('xi-sidebar-collapsed', String(next))
+              }}
+              className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title={sidebarCollapsed ? 'Show sessions' : 'Hide sessions'}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                {sidebarCollapsed ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
         {/* Right: main header zone */}
-        <div className="flex items-center flex-1 px-4 pt-10 pb-2 min-w-0 gap-3">
+        <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
           {/* Left: session name + status indicator */}
           <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {activeSessionName && (
@@ -531,6 +553,9 @@ function App(): React.ReactElement {
             backgroundSessionName={backgroundSessionName}
             isBackgroundStreaming={isLazySwitched && isPiStreaming()}
             isAgentEnding={isAgentEnding}
+            currentModel={currentModel}
+            onSetModel={setModel}
+            getAvailableModels={getAvailableModels}
           />
         </div>
       </div>
