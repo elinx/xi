@@ -593,7 +593,7 @@ function App(): React.ReactElement {
             className="relative flex flex-col bg-gray-50 border-r border-gray-200 overflow-hidden"
             style={{ width: leftPanelWidth }}
           >
-            <div className="h-8 flex items-center px-1.5 border-b border-gray-200 gap-0.5">
+            <div className="flex items-center px-1.5 py-1.5 gap-0.5">
               <button
                 onClick={() => setLeftPanelView('sessions')}
                 className={leftPanelView === 'sessions' ? 'bg-gray-200 text-gray-900 rounded p-1.5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1.5'}

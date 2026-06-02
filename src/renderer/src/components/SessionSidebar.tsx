@@ -696,7 +696,7 @@ function SessionSidebar({
 
   return (
     <div
-      className="relative flex flex-col bg-gray-50 border-r border-gray-200 overflow-hidden"
+      className="relative flex flex-col bg-gray-50 overflow-hidden"
       style={{ width: `${width}px` }}
     >
       <div className="flex-1 overflow-y-auto py-2">
