@@ -128,6 +128,13 @@ const api = {
 
   gitDiff: (filePath: string, staged?: boolean): Promise<{ ok: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke('git:diff', filePath, staged),
+
+  listSkills: (): Promise<{
+    ok: boolean
+    data?: Array<{ name: string; description: string; source: string }>
+    error?: string
+  }> =>
+    ipcRenderer.invoke('skills:list'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
-import { join, basename, extname } from 'path'
+import { join, basename, extname, dirname } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
 import { simpleGit } from 'simple-git'
 import { PiSDKBridge } from './pi-sdk-bridge'
@@ -588,6 +588,54 @@ function registerIpcHandlers(): void {
       const git = simpleGit(projectPath)
       const diff = staged ? await git.diff(['--cached', filePath]) : await git.diff(['--', filePath])
       return { ok: true, data: diff }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('skills:list', async () => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const skillsDirs = [
+        join(homeDir, '.pi', 'agent', 'skills'),
+        join(homeDir, '.agents', 'skills'),
+        join(process.cwd(), '.pi', 'skills'),
+        join(process.cwd(), '.agents', 'skills'),
+      ]
+      const skills: Array<{ name: string; description: string; source: string }> = []
+      for (const dir of skillsDirs) {
+        if (!existsSync(dir)) continue
+        const entries = readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.name.startsWith('.')) continue
+          const fullPath = join(dir, entry.name)
+          let skillFile = ''
+          if (entry.isDirectory()) {
+            const candidate = join(fullPath, 'SKILL.md')
+            if (existsSync(candidate)) skillFile = candidate
+          } else if (entry.name === 'SKILL.md') {
+            skillFile = fullPath
+          }
+          if (!skillFile) continue
+          try {
+            const content = readFileSync(skillFile, 'utf-8')
+            const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
+            const name = entry.isDirectory() ? entry.name : 'skill'
+            let description = ''
+            if (fmMatch) {
+              const frontmatter = fmMatch[1]
+              const nameMatch = frontmatter.match(/^name:\s*(.+)$/m)
+              const descMatch = frontmatter.match(/^description:\s*(.+)$/m)
+              if (nameMatch) skills.push({ name: nameMatch[1].trim(), description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath) })
+              else skills.push({ name, description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath) })
+            } else {
+              skills.push({ name, description: '', source: dirname(fullPath) })
+            }
+          } catch {}
+        }
+      }
+      const seen = new Set<string>()
+      return { ok: true, data: skills.filter(s => { if (seen.has(s.name)) return false; seen.add(s.name); return true }) }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
