@@ -233,10 +233,53 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
       {/* Expandable details */}
       {expanded && (
         <div className="ml-4 border-l-2 border-gray-200 pl-3 py-1">
-          {/* Args */}
-          <pre className="overflow-x-auto text-xs text-gray-500">
-            {JSON.stringify(block.args, null, 2)}
-          </pre>
+          {block.toolName === 'edit' ? (
+            <div>
+              {block.args.path && (
+                <div className="text-xs text-gray-400 mb-1">{String(block.args.path)}</div>
+              )}
+              {Array.isArray(block.args.edits) ? (
+                (block.args.edits as Array<{ oldText?: string; newText?: string }>).map((edit, i) => (
+                  <div key={i} className={Array.isArray(block.args.edits) && (block.args.edits as unknown[]).length > 1 ? 'mb-2 pb-2 border-b border-gray-200 last:border-b-0' : ''}>
+                    <div className="text-xs text-red-400 mb-0.5">- old</div>
+                    <pre className="overflow-x-auto text-xs text-red-700 bg-red-50 rounded px-2 py-1 mb-1 whitespace-pre-wrap">{String(edit.oldText ?? '')}</pre>
+                    <div className="text-xs text-green-600 mb-0.5">+ new</div>
+                    <pre className="overflow-x-auto text-xs text-green-700 bg-green-50 rounded px-2 py-1 whitespace-pre-wrap">{String(edit.newText ?? '')}</pre>
+                  </div>
+                ))
+              ) : (
+                <>
+                  {block.args.oldText != null && (
+                    <>
+                      <div className="text-xs text-red-400 mb-0.5">- old</div>
+                      <pre className="overflow-x-auto text-xs text-red-700 bg-red-50 rounded px-2 py-1 mb-1 whitespace-pre-wrap">{String(block.args.oldText)}</pre>
+                    </>
+                  )}
+                  {block.args.newText != null && (
+                    <>
+                      <div className="text-xs text-green-600 mb-0.5">+ new</div>
+                      <pre className="overflow-x-auto text-xs text-green-700 bg-green-50 rounded px-2 py-1 whitespace-pre-wrap">{String(block.args.newText)}</pre>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          ) : block.toolName === 'bash' && block.args.command ? (
+            <pre className="overflow-x-auto text-xs text-gray-700 bg-gray-100 rounded px-2 py-1">{String(block.args.command)}</pre>
+          ) : block.toolName === 'read' && block.args.path ? (
+            <span className="text-xs text-gray-500">{String(block.args.path)}</span>
+          ) : block.toolName === 'write' && block.args.path ? (
+            <div>
+              <span className="text-xs text-gray-400">{String(block.args.path)}</span>
+              {block.args.content && (
+                <pre className="overflow-x-auto text-xs text-gray-500 mt-1 whitespace-pre-wrap max-h-40">{String(block.args.content).length > 500 ? String(block.args.content).substring(0, 500) + '...' : String(block.args.content)}</pre>
+              )}
+            </div>
+          ) : (
+            <pre className="overflow-x-auto text-xs text-gray-500">
+              {JSON.stringify(block.args, null, 2)}
+            </pre>
+          )}
           {/* Output */}
           {resultText.trim().length > 0 && (
             <div className="mt-1">
