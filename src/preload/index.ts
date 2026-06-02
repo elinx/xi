@@ -135,6 +135,13 @@ const api = {
     error?: string
   }> =>
     ipcRenderer.invoke('skills:list'),
+
+  listMcpServers: (): Promise<{
+    ok: boolean
+    data?: Array<{ name: string; command: string; args?: string[]; env?: Record<string, string> }>
+    error?: string
+  }> =>
+    ipcRenderer.invoke('mcp:list'),
 }
 
 contextBridge.exposeInMainWorld('api', api)

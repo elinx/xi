@@ -640,6 +640,41 @@ function registerIpcHandlers(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
+
+  ipcMain.handle('mcp:list', async () => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const configPaths = [
+        join(homeDir, '.pi', 'agent', 'settings.json'),
+        join(process.cwd(), '.pi', 'settings.json'),
+      ]
+      const servers: Array<{ name: string; command: string; args?: string[]; env?: Record<string, string> }> = []
+      const seenMcp = new Set<string>()
+      for (const configPath of configPaths) {
+        if (!existsSync(configPath)) continue
+        try {
+          const content = readFileSync(configPath, 'utf-8')
+          const config = JSON.parse(content)
+          const mcpServers = config.mcpServers ?? config.mcp_servers ?? {}
+          if (typeof mcpServers !== 'object') continue
+          for (const [name, serverConfig] of Object.entries(mcpServers)) {
+            const sc = serverConfig as Record<string, unknown>
+            if (seenMcp.has(name)) continue
+            seenMcp.add(name)
+            servers.push({
+              name,
+              command: typeof sc.command === 'string' ? sc.command : '',
+              args: Array.isArray(sc.args) ? sc.args.map(String) : undefined,
+              env: typeof sc.env === 'object' && sc.env !== null ? Object.fromEntries(Object.entries(sc.env as Record<string, unknown>).map(([k, v]) => [k, String(v)])) : undefined,
+            })
+          }
+        } catch {}
+      }
+      return { ok: true, data: servers }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 }
 
 app.whenReady().then(() => {
