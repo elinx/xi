@@ -96,6 +96,7 @@ function App(): React.ReactElement {
   const leftPanelCollapsed = useLayoutStore(s => s.leftPanelCollapsed)
   const leftPanelWidth = useLayoutStore(s => s.leftPanelWidth)
   const setLeftPanelView = useLayoutStore(s => s.setLeftPanelView)
+  const toggleLeftPanel = useLayoutStore(s => s.toggleLeftPanel)
   const setLeftPanelCollapsed = useLayoutStore(s => s.setLeftPanelCollapsed)
   const setLeftPanelWidth = useLayoutStore(s => s.setLeftPanelWidth)
 

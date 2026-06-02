@@ -137,16 +137,12 @@ describe('Layout integration test', () => {
     expect(collapseBtns.length).toBeGreaterThanOrEqual(1)
     await collapseBtns[0].click()
     await page.waitForTimeout(500)
+    const expandBtn = await page.$('[title="Show sessions"]')
+    expect(expandBtn).not.toBeNull()
+    await expandBtn!.click()
+    await page.waitForTimeout(500)
     const text = await page.textContent('#root')
-    if (text?.includes('No sessions found')) {
-      const expandBtn = await page.$('[title="Show sessions"]')
-      if (expandBtn) {
-        await expandBtn.click()
-        await page.waitForTimeout(500)
-      }
-    }
-    const sessionButtons = await page.$$('[title="Sessions"]')
-    expect(sessionButtons.length).toBeGreaterThanOrEqual(1)
+    expect(text).toContain('No sessions found')
   })
 
   it('can toggle RightPanel open via header button', async () => {
