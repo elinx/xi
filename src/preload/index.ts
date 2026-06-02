@@ -129,6 +129,18 @@ const api = {
   gitDiff: (filePath: string, staged?: boolean): Promise<{ ok: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke('git:diff', filePath, staged),
 
+  gitStage: (filePaths: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:stage', filePaths),
+
+  gitUnstage: (filePaths: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:unstage', filePaths),
+
+  gitCommit: (message: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:commit', message),
+
+  gitDiscard: (filePaths: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:discard', filePaths),
+
   listSkills: (): Promise<{
     ok: boolean
     data?: Array<{ name: string; description: string; source: string }>

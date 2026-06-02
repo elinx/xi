@@ -79,9 +79,11 @@ export default function RightPanel({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {view === 'files' ? (
-          <FileTree onFileSelect={onFileSelect} />
+          <div className="h-full overflow-y-auto">
+            <FileTree onFileSelect={onFileSelect} />
+          </div>
         ) : (
           <GitPanel onFileSelect={onDiffSelect} />
         )}

@@ -593,6 +593,50 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('git:stage', async (_event, filePaths: string[]) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      await git.add(filePaths)
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:unstage', async (_event, filePaths: string[]) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      await git.reset(['HEAD', '--', ...filePaths])
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:commit', async (_event, message: string) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      await git.commit(message)
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:discard', async (_event, filePaths: string[]) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      await git.checkout(['--', ...filePaths])
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('skills:list', async () => {
     try {
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
