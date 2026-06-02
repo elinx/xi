@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { join, basename, extname } from 'path'
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
@@ -482,6 +482,59 @@ function registerIpcHandlers(): void {
       return { success: true }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  const HIDDEN_DIRS = new Set(['node_modules', '.git', 'out', 'dist', '.pi', '.sisyphus', '.claude', '.playwright-cli'])
+  const HIDDEN_PREFIXES = new Set(['.'])
+
+  ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
+    try {
+      if (!existsSync(dirPath)) {
+        return { ok: false, error: 'Directory not found' }
+      }
+      const entries = readdirSync(dirPath)
+        .filter((name) => !HIDDEN_DIRS.has(name) && !HIDDEN_PREFIXES.has(name[0]))
+        .map((name) => {
+          const fullPath = join(dirPath, name)
+          try {
+            const isDir = statSync(fullPath).isDirectory()
+            return { name, path: fullPath, isDirectory: isDir }
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean) as Array<{ name: string; path: string; isDirectory: boolean }>
+
+      entries.sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+
+      return { ok: true, entries }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+    try {
+      if (!existsSync(filePath)) {
+        return { ok: false, error: 'File not found' }
+      }
+      const stat = statSync(filePath)
+      if (stat.isDirectory()) {
+        return { ok: false, error: 'Path is a directory' }
+      }
+      if (stat.size > 2 * 1024 * 1024) {
+        return { ok: false, error: 'File too large (max 2MB)' }
+      }
+      const content = readFileSync(filePath, 'utf-8')
+      const name = basename(filePath)
+      const ext = extname(filePath).slice(1)
+      return { ok: true, data: { content, name, ext, path: filePath } }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 }

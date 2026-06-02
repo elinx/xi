@@ -112,6 +112,12 @@ const api = {
 
   openConfigDir: (): void =>
     ipcRenderer.send('app:openConfigDir'),
+
+  readDirectory: (dirPath: string): Promise<{ ok: boolean; entries?: Array<{ name: string; path: string; isDirectory: boolean }>; error?: string }> =>
+    ipcRenderer.invoke('fs:readDirectory', dirPath),
+
+  readFile: (filePath: string): Promise<{ ok: boolean; data?: { content: string; name: string; ext: string; path: string }; error?: string }> =>
+    ipcRenderer.invoke('fs:readFile', filePath),
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -152,3 +152,12 @@ export interface GetModelInfoResult {
   data?: { model: PiModelInfo | null; thinkingLevel: string | null }
   error?: string
 }
+
+/** IPC channels for file system operations between renderer and main process. */
+export interface FileSystemIpcApi {
+  readDirectory: (dirPath: string) => Promise<{
+    ok: boolean
+    entries?: Array<{ name: string; path: string; isDirectory: boolean }>
+    error?: string
+  }>
+}
