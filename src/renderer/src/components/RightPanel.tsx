@@ -1,4 +1,5 @@
 import FileTree from './FileTree'
+import GitPanel from './GitPanel'
 
 interface RightPanelProps {
   view: 'files' | 'git'
@@ -8,6 +9,7 @@ interface RightPanelProps {
   width: number
   onResizeStart: (e: React.MouseEvent) => void
   onFileSelect: (filePath: string) => void
+  onDiffSelect: (filePath: string) => void
 }
 
 function FolderIcon({ className }: { className?: string }) {
@@ -46,6 +48,7 @@ export default function RightPanel({
   width,
   onResizeStart,
   onFileSelect,
+  onDiffSelect,
 }: RightPanelProps) {
   if (collapsed) return null
 
@@ -80,9 +83,7 @@ export default function RightPanel({
         {view === 'files' ? (
           <FileTree onFileSelect={onFileSelect} />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-400 text-xs">
-            Git status — coming soon
-          </div>
+          <GitPanel onFileSelect={onDiffSelect} />
         )}
       </div>
     </div>

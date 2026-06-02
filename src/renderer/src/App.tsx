@@ -10,6 +10,7 @@ import LeftPanel from './components/LeftPanel'
 import TabBar from './components/TabBar'
 import RightPanel from './components/RightPanel'
 import FileViewer from './components/FileViewer'
+import DiffViewer from './components/DiffViewer'
 import { TokenUsageRing } from './components/TokenUsageRing'
 import WelcomeDialog from './components/WelcomeDialog'
 import ProviderSetup from './components/ProviderSetup'
@@ -446,6 +447,11 @@ function App(): React.ReactElement {
     addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })
   }, [addTab])
 
+  const handleDiffSelect = useCallback((filePath: string) => {
+    const name = filePath.split(/[/\\]/).pop() ?? filePath
+    addTab({ type: 'diff', title: `diff: ${name}`, closable: true, meta: { filePath } })
+  }, [addTab])
+
   const handleAddTab = useCallback(() => {
   }, [])
 
@@ -666,9 +672,7 @@ function App(): React.ReactElement {
               <FileViewer filePath={activeTab.meta.filePath as string} />
             )}
             {activeTab?.type === 'diff' && (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                Diff view — coming soon
-              </div>
+              <DiffViewer filePath={activeTab.meta.filePath as string} />
             )}
             {activeTab?.type === 'terminal' && (
               <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -703,6 +707,7 @@ function App(): React.ReactElement {
           width={rightPanelWidth}
           onResizeStart={handleRightResizeStart}
           onFileSelect={handleFileSelect}
+          onDiffSelect={handleDiffSelect}
         />
       </div>
 
