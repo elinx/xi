@@ -216,6 +216,8 @@ function registerIpcHandlers(): void {
     clipboard.writeText(text)
   })
 
+  ipcMain.handle('app:getProjectPath', () => process.cwd())
+
   ipcMain.handle('pi:start', async () => {
     if (!piBridge) {
       let mainSession = sessionService.findMainSession(process.cwd())

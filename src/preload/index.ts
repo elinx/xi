@@ -199,6 +199,9 @@ const api = {
 
   copyToClipboard: (text: string): void =>
     ipcRenderer.send('app:copyToClipboard', text),
+
+  getProjectPath: (): Promise<string> =>
+    ipcRenderer.invoke('app:getProjectPath'),
 }
 
 contextBridge.exposeInMainWorld('api', api)
