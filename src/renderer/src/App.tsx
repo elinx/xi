@@ -454,9 +454,21 @@ function App(): React.ReactElement {
         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
           {!leftPanelCollapsed && (
             <div
-              className="flex-shrink-0"
+              className="flex items-center justify-between px-3 flex-shrink-0"
               style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
-            />
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
+              <button
+                onClick={handleOpenDirectory}
+                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Open project directory"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            </div>
           )}
           <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
             <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>

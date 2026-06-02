@@ -109,7 +109,6 @@ export default function LeftPanel({
       />
 
       <div className="h-8 flex items-center px-2 border-b border-gray-200 gap-1">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate mr-1" title={projectPath}>{projectName}</span>
         {toggleViews.map((v) => (
           <button
             key={v.id}
