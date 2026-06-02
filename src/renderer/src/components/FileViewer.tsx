@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { codeToHtml } from 'shiki'
+import { useState, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 interface FileViewerProps {
   filePath: string
@@ -24,6 +26,8 @@ const LANG_MAP: Record<string, string> = {
   dockerfile: 'docker', makefile: 'makefile',
 }
 
+const MARKDOWN_EXTS = new Set(['md', 'markdown', 'mdx'])
+
 function getShikiLang(ext: string): string | undefined {
   return LANG_MAP[ext.toLowerCase()]
 }
@@ -45,26 +49,11 @@ function isBinaryExt(ext: string): boolean {
   return binary.has(ext)
 }
 
-let highlighterPromise: Promise<void> | null = null
-let highlighterReady = false
-
-async function ensureHighlighter() {
-  if (highlighterReady) return
-  if (!highlighterPromise) {
-    highlighterPromise = (async () => {
-      await import('shiki')
-      highlighterReady = true
-    })()
-  }
-  await highlighterPromise
-}
-
 export default function FileViewer({ filePath }: FileViewerProps) {
   const [fileData, setFileData] = useState<FileData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
-  const codeRef = useRef<HTMLDivElement>(null)
 
   const loadFile = useCallback(async (path: string) => {
     setLoading(true)
@@ -90,25 +79,35 @@ export default function FileViewer({ filePath }: FileViewerProps) {
   }, [filePath, loadFile])
 
   useEffect(() => {
-    if (!fileData || isBinaryExt(fileData.ext)) return
+    if (!fileData) return
+    if (isBinaryExt(fileData.ext ?? '') || MARKDOWN_EXTS.has(fileData.ext ?? '')) return
 
-    const lang = getShikiLang(fileData.ext)
-    let cancelled = false
+    const lang = getShikiLang(fileData.ext ?? '')
+    let cancelled = false;
 
     (async () => {
       try {
-        await ensureHighlighter()
+        const { codeToHtml } = await import('shiki')
         if (cancelled) return
-
         const html = await codeToHtml(fileData.content, {
           lang: lang ?? 'plaintext',
           theme: 'github-light',
+          transformers: [
+            {
+              name: 'line-numbers',
+              line(node, line) {
+                node.properties = node.properties || {}
+                node.properties.style = `counter-increment: line;`
+                node.properties['data-line'] = line
+              },
+            },
+          ],
         })
-
         if (!cancelled) {
           setHighlightedHtml(html)
         }
-      } catch {
+      } catch (err) {
+        console.warn('shiki highlight failed:', err)
         if (!cancelled) {
           setHighlightedHtml(null)
         }
@@ -117,12 +116,6 @@ export default function FileViewer({ filePath }: FileViewerProps) {
 
     return () => { cancelled = true }
   }, [fileData])
-
-  useEffect(() => {
-    if (highlightedHtml && codeRef.current) {
-      codeRef.current.innerHTML = highlightedHtml
-    }
-  }, [highlightedHtml])
 
   if (loading) {
     return (
@@ -153,26 +146,32 @@ export default function FileViewer({ filePath }: FileViewerProps) {
     )
   }
 
-  const lineCount = fileData.content.split('\n').length
+  const isMarkdown = MARKDOWN_EXTS.has(fileData.ext)
+  const lines = fileData.content.split('\n')
+  const lineCount = lines.length
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
         <span className="font-medium text-gray-700">{fileData.name}</span>
         <span className="text-gray-400">{getLanguageLabel(fileData.ext)}</span>
-        <span className="text-gray-400">{lineCount} lines</span>
+        {!isMarkdown && <span className="text-gray-400">{lineCount} lines</span>}
         <span className="text-gray-300 truncate ml-2" title={fileData.path}>{fileData.path}</span>
       </div>
       <div className="flex-1 overflow-auto">
-        {highlightedHtml ? (
+        {isMarkdown ? (
+          <div className="prose prose-sm max-w-none p-4 [&_img]:max-w-full [&_img]:rounded">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{fileData.content}</ReactMarkdown>
+          </div>
+        ) : highlightedHtml ? (
           <div
-            ref={codeRef}
-            className="text-xs leading-5 font-mono [&_pre]:!bg-white [&_pre]:!p-0 [&_pre]:!m-0 [&_pre]:!border-0 [&_.line]:flex [&_.line]:hover:bg-gray-50 [&_.line]:px-0"
+            className="shiki-highlight"
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
           />
         ) : (
           <pre className="text-xs leading-5 font-mono">
             <code>
-              {fileData.content.split('\n').map((line, i) => (
+              {lines.map((line, i) => (
                 <div key={i} className="flex hover:bg-gray-50">
                   <span
                     className="flex-shrink-0 text-right text-gray-300 select-none pr-4 pl-4 sticky left-0 bg-white"
