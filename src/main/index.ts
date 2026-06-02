@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { join, basename, extname } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
+import { simpleGit } from 'simple-git'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
@@ -533,6 +534,60 @@ function registerIpcHandlers(): void {
       const name = basename(filePath)
       const ext = extname(filePath).slice(1)
       return { ok: true, data: { content, name, ext, path: filePath } }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:status', async () => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      const isRepo = await git.checkIsRepo()
+      if (!isRepo) return { ok: false, error: 'Not a git repository' }
+      const status = await git.status()
+      const files: Array<{ path: string; status: string; staged: boolean }> = []
+      for (const f of status.staged) {
+        files.push({ path: f, status: status.files.find(s => s.path === f)?.index ?? 'M', staged: true })
+      }
+      for (const f of status.modified) {
+        if (!status.staged.includes(f)) {
+          files.push({ path: f, status: 'M', staged: false })
+        }
+      }
+      for (const f of status.not_added) {
+        files.push({ path: f, status: '?', staged: false })
+      }
+      for (const f of status.deleted) {
+        if (!status.staged.includes(f)) {
+          files.push({ path: f, status: 'D', staged: false })
+        }
+      }
+      for (const f of status.created) {
+        if (!status.staged.includes(f)) {
+          files.push({ path: f, status: 'A', staged: false })
+        }
+      }
+      return {
+        ok: true,
+        data: {
+          branch: status.current ?? '',
+          ahead: status.ahead,
+          behind: status.behind,
+          files,
+        },
+      }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:diff', async (_event, filePath: string, staged?: boolean) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      const diff = staged ? await git.diff(['--cached', filePath]) : await git.diff(['--', filePath])
+      return { ok: true, data: diff }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

@@ -118,6 +118,16 @@ const api = {
 
   readFile: (filePath: string): Promise<{ ok: boolean; data?: { content: string; name: string; ext: string; path: string }; error?: string }> =>
     ipcRenderer.invoke('fs:readFile', filePath),
+
+  gitStatus: (): Promise<{
+    ok: boolean
+    data?: { branch: string; ahead: number; behind: number; files: Array<{ path: string; status: string; staged: boolean }> }
+    error?: string
+  }> =>
+    ipcRenderer.invoke('git:status'),
+
+  gitDiff: (filePath: string, staged?: boolean): Promise<{ ok: boolean; data?: string; error?: string }> =>
+    ipcRenderer.invoke('git:diff', filePath, staged),
 }
 
 contextBridge.exposeInMainWorld('api', api)
