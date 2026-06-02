@@ -119,6 +119,18 @@ const api = {
   readFile: (filePath: string): Promise<{ ok: boolean; data?: { content: string; name: string; ext: string; path: string }; error?: string }> =>
     ipcRenderer.invoke('fs:readFile', filePath),
 
+  watchStart: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('fs:watchStart'),
+
+  watchStop: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('fs:watchStop'),
+
+  onFsChanged: (callback: () => void): (() => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('fs:changed', handler)
+    return () => ipcRenderer.removeListener('fs:changed', handler)
+  },
+
   gitStatus: (): Promise<{
     ok: boolean
     data?: { branch: string; ahead: number; behind: number; files: Array<{ path: string; status: string; staged: boolean }> }

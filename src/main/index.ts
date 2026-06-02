@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electro
 import { join, basename, extname, dirname } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
 import { simpleGit } from 'simple-git'
+import { watch } from 'chokidar'
 import { PiSDKBridge } from './pi-sdk-bridge'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
@@ -494,7 +495,7 @@ function registerIpcHandlers(): void {
       if (!existsSync(dirPath)) {
         return { ok: false, error: 'Directory not found' }
       }
-      const entries = readdirSync(dirPath)
+      let entries = readdirSync(dirPath)
         .filter((name) => !HIDDEN_DIRS.has(name) && !HIDDEN_PREFIXES.has(name[0]))
         .map((name) => {
           const fullPath = join(dirPath, name)
@@ -506,6 +507,18 @@ function registerIpcHandlers(): void {
           }
         })
         .filter(Boolean) as Array<{ name: string; path: string; isDirectory: boolean }>
+
+      try {
+        const projectPath = process.cwd()
+        const git = simpleGit(projectPath)
+        const isRepo = await git.checkIsRepo()
+        if (isRepo) {
+          const paths = entries.map(e => e.path)
+          const ignored = await git.checkIgnore(paths)
+          const ignoredSet = new Set(ignored)
+          entries = entries.filter(e => !ignoredSet.has(e.path))
+        }
+      } catch {}
 
       entries.sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
@@ -635,6 +648,59 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  let watcherCleanup: (() => void) | null = null
+
+  function parseGitignore(rootDir: string): string[] {
+    const patterns: string[] = ['node_modules', '.git']
+    const gitignorePath = join(rootDir, '.gitignore')
+    if (!existsSync(gitignorePath)) return patterns
+    try {
+      const content = readFileSync(gitignorePath, 'utf-8')
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) continue
+        patterns.push(trimmed)
+      }
+    } catch {}
+    return patterns
+  }
+
+  ipcMain.handle('fs:watchStart', async (event) => {
+    if (watcherCleanup) return { ok: true }
+    const projectPath = process.cwd()
+    const ignoredPatterns = parseGitignore(projectPath)
+    const watcher = watch(projectPath, {
+      ignored: ignoredPatterns,
+      ignoreInitial: true,
+      depth: 5,
+      ignorePermissionErrors: true,
+    })
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    const sendChange = () => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        mainWindow.webContents.send('fs:changed')
+      } catch {}
+    }
+    watcher.on('all', () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(sendChange, 300)
+    })
+    watcherCleanup = () => {
+      watcher.close()
+      watcherCleanup = null
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('fs:watchStop', async () => {
+    if (watcherCleanup) {
+      watcherCleanup()
+    }
+    return { ok: true }
   })
 
   ipcMain.handle('skills:list', async () => {

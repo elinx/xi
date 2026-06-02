@@ -65,6 +65,20 @@ export default function GitPanel({ onFileSelect }: { onFileSelect?: (filePath: s
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    const api = window.api as typeof window.api & { onFsChanged?: (cb: () => void) => () => void }
+    if (!api.onFsChanged) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsub = api.onFsChanged(() => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(refresh, 500)
+    })
+    return () => {
+      unsub()
+      if (timer) clearTimeout(timer)
+    }
+  }, [refresh])
+
   const handleStage = useCallback(async (filePath: string) => {
     setStaging(filePath)
     try {

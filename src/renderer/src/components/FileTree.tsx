@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { FileSystemIpcApi } from '../types/session'
 
 interface FileTreeProps {
@@ -120,6 +120,7 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const refreshVersion = useRef(0)
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
     const api = window.api as ReadDirectoryApi
@@ -180,30 +181,48 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
     [onFileSelect]
   )
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadRoot() {
-      const api = window.api as ReadDirectoryApi
-      if (!api.readDirectory) {
-        setLoading(false)
-        return
-      }
-      const result = await api.readDirectory('.')
-      if (cancelled) return
-      if (result.ok && result.entries) {
-        const filtered = result.entries.filter((e) => !isHidden(e.name))
-        setTree(sortEntries(filtered.map((e) => ({
-          name: e.name,
-          path: e.path,
-          isDirectory: e.isDirectory,
-          children: e.isDirectory ? [] : undefined,
-        }))))
-      }
+  const loadRoot = useCallback(async () => {
+    const api = window.api as ReadDirectoryApi
+    if (!api.readDirectory) {
       setLoading(false)
+      return
     }
-    loadRoot()
-    return () => { cancelled = true }
+    const result = await api.readDirectory('.')
+    if (result.ok && result.entries) {
+      const filtered = result.entries.filter((e) => !isHidden(e.name))
+      setTree(sortEntries(filtered.map((e) => ({
+        name: e.name,
+        path: e.path,
+        isDirectory: e.isDirectory,
+        children: e.isDirectory ? [] : undefined,
+      }))))
+    }
+    setLoading(false)
   }, [])
+
+  useEffect(() => {
+    loadRoot()
+  }, [loadRoot])
+
+  useEffect(() => {
+    const api = window.api as typeof window.api & { onFsChanged?: (cb: () => void) => () => void }
+    if (!api.onFsChanged) return
+
+    const unsub = api.onFsChanged(() => {
+      refreshVersion.current++
+      const currentVersion = refreshVersion.current
+
+      setTimeout(() => {
+        if (refreshVersion.current !== currentVersion) return
+        const expanded = Array.from(expandedDirs)
+        loadRoot().then(() => {
+          expanded.forEach(dir => loadChildren(dir))
+        })
+      }, 100)
+    })
+
+    return unsub
+  }, [loadRoot, loadChildren])
 
   if (loading) {
     return (
