@@ -2,9 +2,15 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { usePiRpc, type UsePiRpcOptions } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
 import { useSessionCache } from './hooks/useSessionCache'
+import { useLayoutStore } from './hooks/useLayoutStore'
+import { useTabStore, SESSION_TAB_ID } from './hooks/useTabStore'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import SessionSidebar from './components/SessionSidebar'
+import ActivityBar from './components/ActivityBar'
+import TabBar from './components/TabBar'
+import RightPanel from './components/RightPanel'
+import FileViewer from './components/FileViewer'
 import { TokenUsageRing } from './components/TokenUsageRing'
 import WelcomeDialog from './components/WelcomeDialog'
 import ProviderSetup from './components/ProviderSetup'
@@ -27,9 +33,6 @@ function App(): React.ReactElement {
   const [piConnectedPath, setPiConnectedPathState] = useState<string | null>(null)
   const piConnectedPathRef = useRef<string | null>(null)
 
-  // Updates both React state AND the ref synchronously so that
-  // async callbacks (loadHistory, Pi event handlers) reading
-  // piConnectedPathRef.current see the new value without waiting for re-render.
   const setPiConnectedPath = useCallback((path: string | null) => {
     piConnectedPathRef.current = path
     setPiConnectedPathState(path)
@@ -43,8 +46,6 @@ function App(): React.ReactElement {
     setPiConnectedStreaming, updatePiConnectedForkPoints,
   } = sessionCache
 
-  // Refs for stable access inside callbacks — avoids putting the
-  // sessionCache object (which changes identity every render) into deps.
   const getCacheRef = useRef(getCache)
   getCacheRef.current = getCache
   const getOrCreateCacheRef = useRef(getOrCreateCache)
@@ -52,8 +53,6 @@ function App(): React.ReactElement {
   const displaySessionRef = useRef(displaySession)
   displaySessionRef.current = displaySession
 
-  // Mirror sessionCache display state into refs so callbacks can read
-  // current values without re-creating on every change.
   const displayedSessionPathRef = useRef(sessionCache.displayedSessionPath)
   displayedSessionPathRef.current = sessionCache.displayedSessionPath
   const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
@@ -93,32 +92,45 @@ function App(): React.ReactElement {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showProviderSetup, setShowProviderSetup] = useState(false)
   const welcomeCheckDone = useRef(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('xi-sidebar-collapsed')
-    return saved === 'true'
-  })
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('xi-sidebar-width')
-    const parsed = saved ? parseInt(saved, 10) : 260
-    return Number.isNaN(parsed) ? 260 : Math.min(480, Math.max(180, parsed))
-  })
-  const [isResizing, setIsResizing] = useState(false)
-  const sidebarWidthRef = useRef(sidebarWidth)
-  sidebarWidthRef.current = sidebarWidth
-  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const leftPanelView = useLayoutStore(s => s.leftPanelView)
+  const leftPanelCollapsed = useLayoutStore(s => s.leftPanelCollapsed)
+  const leftPanelWidth = useLayoutStore(s => s.leftPanelWidth)
+  const setLeftPanelView = useLayoutStore(s => s.setLeftPanelView)
+  const setLeftPanelCollapsed = useLayoutStore(s => s.setLeftPanelCollapsed)
+  const setLeftPanelWidth = useLayoutStore(s => s.setLeftPanelWidth)
+
+  const rightPanelView = useLayoutStore(s => s.rightPanelView)
+  const rightPanelCollapsed = useLayoutStore(s => s.rightPanelCollapsed)
+  const rightPanelWidth = useLayoutStore(s => s.rightPanelWidth)
+  const setRightPanelView = useLayoutStore(s => s.setRightPanelView)
+  const toggleRightPanel = useLayoutStore(s => s.toggleRightPanel)
+  const setRightPanelWidth = useLayoutStore(s => s.setRightPanelWidth)
+
+  const tabs = useTabStore(s => s.tabs)
+  const activeTabId = useTabStore(s => s.activeTabId)
+  const setActiveTab = useTabStore(s => s.setActiveTab)
+  const closeTab = useTabStore(s => s.closeTab)
+  const updateTab = useTabStore(s => s.updateTab)
+  const addTab = useTabStore(s => s.addTab)
+  const activeTab = tabs.find(t => t.id === activeTabId)
+  const isSessionTabActive = activeTab?.type === 'session'
+
+  const [isLeftResizing, setIsLeftResizing] = useState(false)
+  const leftResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const leftWidthRef = useRef(leftPanelWidth)
+  leftWidthRef.current = leftPanelWidth
 
   useEffect(() => {
-    if (!isResizing) return
+    if (!isLeftResizing) return
     const handleMouseMove = (e: MouseEvent) => {
-      if (!resizeStartRef.current) return
-      const delta = e.clientX - resizeStartRef.current.startX
-      const newWidth = Math.min(480, Math.max(180, resizeStartRef.current.startWidth + delta))
-      setSidebarWidth(newWidth)
+      if (!leftResizeStartRef.current) return
+      const delta = e.clientX - leftResizeStartRef.current.startX
+      setLeftPanelWidth(leftResizeStartRef.current.startWidth + delta)
     }
     const handleMouseUp = () => {
-      setIsResizing(false)
-      resizeStartRef.current = null
-      localStorage.setItem('xi-sidebar-width', String(sidebarWidthRef.current))
+      setIsLeftResizing(false)
+      leftResizeStartRef.current = null
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -130,13 +142,47 @@ function App(): React.ReactElement {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing])
+  }, [isLeftResizing, setLeftPanelWidth])
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleLeftResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    setIsResizing(true)
-    resizeStartRef.current = { startX: e.clientX, startWidth: sidebarWidth }
-  }, [sidebarWidth])
+    setIsLeftResizing(true)
+    leftResizeStartRef.current = { startX: e.clientX, startWidth: leftPanelWidth }
+  }, [leftPanelWidth])
+
+  const [isRightResizing, setIsRightResizing] = useState(false)
+  const rightResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const rightWidthRef = useRef(rightPanelWidth)
+  rightWidthRef.current = rightPanelWidth
+
+  useEffect(() => {
+    if (!isRightResizing) return
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!rightResizeStartRef.current) return
+      const delta = rightResizeStartRef.current.startX - e.clientX
+      setRightPanelWidth(rightResizeStartRef.current.startWidth + delta)
+    }
+    const handleMouseUp = () => {
+      setIsRightResizing(false)
+      rightResizeStartRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isRightResizing, setRightPanelWidth])
+
+  const handleRightResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsRightResizing(true)
+    rightResizeStartRef.current = { startX: e.clientX, startWidth: rightPanelWidth }
+  }, [rightPanelWidth])
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('xi-view-mode') as ViewMode
@@ -155,6 +201,13 @@ function App(): React.ReactElement {
     const bgSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === piConnectedPath)
     return bgSession ? getDisplayName(bgSession) : null
   })()
+
+  useEffect(() => {
+    const sessionTab = tabs.find(t => t.id === SESSION_TAB_ID)
+    if (sessionTab && activeSessionName && sessionTab.title !== activeSessionName) {
+      updateTab(SESSION_TAB_ID, { title: activeSessionName, meta: { sessionPath: activeSessionPath } })
+    }
+  }, [activeSessionName, activeSessionPath, tabs, updateTab])
 
   async function handleConnect(): Promise<void> {
     setError(null)
@@ -205,7 +258,6 @@ function App(): React.ReactElement {
       await loadForkPoints(sessionPath)
       await refresh()
     } else {
-      // Switch failed — still display the requested session as lazy view
       await displaySessionRef.current(sessionPath)
     }
   }, [switchSession, clearMessages, loadHistory, loadForkPoints, refresh, isPiStreaming, setPiConnectedPath])
@@ -389,21 +441,25 @@ function App(): React.ReactElement {
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   const projects = sessions?.projects ?? []
   const projectName = projects[0]?.projectPath.split(/[/\\]/).pop() ?? 'Sessions'
-  const collapsedSidebarWidth = 48
-  const currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth
+
+  const handleFileSelect = useCallback((filePath: string) => {
+    addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })
+  }, [addTab])
+
+  const handleAddTab = useCallback(() => {
+  }, [])
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-      {/* Unified header row split at sidebar width */}
-      <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        {/* Left: sidebar header zone */}
-        <div
-          className="flex items-center justify-between px-3 pb-2 flex-shrink-0"
-          style={{ width: currentSidebarWidth, paddingTop: isMac ? '28px' : '4px' }}
-        >
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{sidebarCollapsed ? '' : projectName}</span>
-          <div className="flex items-center gap-0.5">
-            {!sidebarCollapsed && (
+      <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+        <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        <div className="w-12 flex-shrink-0" style={{ paddingTop: isMac ? '28px' : '4px' }} />
+        {!leftPanelCollapsed && (
+          <div
+            className="flex items-center justify-between px-3 pb-2 flex-shrink-0"
+            style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={handleOpenDirectory}
                 className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
@@ -414,34 +470,13 @@ function App(): React.ReactElement {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                 </svg>
               </button>
-            )}
-            <button
-              onClick={() => {
-                const next = !sidebarCollapsed
-                setSidebarCollapsed(next)
-                localStorage.setItem('xi-sidebar-collapsed', String(next))
-              }}
-              className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              title={sidebarCollapsed ? 'Show sessions' : 'Hide sessions'}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {sidebarCollapsed ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-                )}
-              </svg>
-            </button>
+            </div>
           </div>
-        </div>
-        {/* Right: main header zone */}
+        )}
         <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
-          {/* Left: session name + status indicator */}
           <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            {activeSessionName && (
+            {activeSessionName && isSessionTabActive && (
               <>
-                {/* Status dot */}
                 <span
                   className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
                     isLazySwitched
@@ -456,7 +491,6 @@ function App(): React.ReactElement {
                 <span className="text-xs text-gray-700 font-medium truncate">
                   {activeSessionName}
                 </span>
-
                 <button
                   onClick={handleClearSession}
                   className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
@@ -472,8 +506,6 @@ function App(): React.ReactElement {
               <span className="text-xs text-red-500" title={error}>Error</span>
             )}
           </div>
-
-          {/* Right: controls */}
           <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button
               onClick={() => setShowProviderSetup(true)}
@@ -485,43 +517,47 @@ function App(): React.ReactElement {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <TokenUsageRing
-              usedTokens={displayedTokenUsage.totalTokens}
-              contextWindowSize={displayedTokenUsage.contextWindowSize}
-              inputTokens={displayedTokenUsage.inputTokens}
-              outputTokens={displayedTokenUsage.outputTokens}
-              cacheReadTokens={displayedTokenUsage.cacheReadTokens}
-              totalCost={displayedTokenUsage.totalCost}
-            />
-            <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-              <button
-                onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
-                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Full view"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
-                </svg>
-              </button>
-              <button
-                onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
-                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Turn view"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
-                </svg>
-              </button>
-              <button
-                onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
-                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Outline view"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-                </svg>
-              </button>
-            </div>
+            {isSessionTabActive && (
+              <TokenUsageRing
+                usedTokens={displayedTokenUsage.totalTokens}
+                contextWindowSize={displayedTokenUsage.contextWindowSize}
+                inputTokens={displayedTokenUsage.inputTokens}
+                outputTokens={displayedTokenUsage.outputTokens}
+                cacheReadTokens={displayedTokenUsage.cacheReadTokens}
+                totalCost={displayedTokenUsage.totalCost}
+              />
+            )}
+            {isSessionTabActive && (
+              <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                <button
+                  onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Full view"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Turn view"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Outline view"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                </button>
+              </div>
+            )}
             {!isConnected && (
               <button
                 onClick={handleConnect}
@@ -531,59 +567,156 @@ function App(): React.ReactElement {
               </button>
             )}
           </div>
+          {rightPanelCollapsed && (
+            <button
+              onClick={() => toggleRightPanel()}
+              className="flex items-center px-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Show file explorer"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Body: sidebar + main content */}
       <div className="flex flex-1 overflow-hidden">
-        <SessionSidebar
-          sessions={sessions}
-          currentSession={currentSession}
-          onSwitchSession={handleSwitchSession}
-          onNewSession={handleNewSession}
-          onRenameSession={renameSession}
-          onDeleteSession={deleteSession}
-          onSetSessionStatus={setSessionStatus}
-          onForkFromEnd={handleForkFromEnd}
-          isCollapsed={sidebarCollapsed}
-          onToggleCollapse={() => {
-            const next = !sidebarCollapsed
-            setSidebarCollapsed(next)
-            localStorage.setItem('xi-sidebar-collapsed', String(next))
-          }}
-          width={sidebarWidth}
-          onResizeStart={handleResizeStart}
+        <ActivityBar
+          activeView={leftPanelView}
+          onViewChange={setLeftPanelView}
         />
 
+        {!leftPanelCollapsed && (
+          <div
+            className="relative flex flex-col bg-gray-50 border-r border-gray-200 overflow-hidden"
+            style={{ width: leftPanelWidth }}
+          >
+            {leftPanelView === 'sessions' && (
+              <SessionSidebar
+                sessions={sessions}
+                currentSession={currentSession}
+                onSwitchSession={handleSwitchSession}
+                onNewSession={handleNewSession}
+                onRenameSession={renameSession}
+                onDeleteSession={deleteSession}
+                onSetSessionStatus={setSessionStatus}
+                onForkFromEnd={handleForkFromEnd}
+                isCollapsed={false}
+                onToggleCollapse={() => setLeftPanelCollapsed(true)}
+                width={leftPanelWidth}
+                onResizeStart={handleLeftResizeStart}
+              />
+            )}
+            {leftPanelView === 'skills' && (
+              <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+                Skills — coming soon
+              </div>
+            )}
+            {leftPanelView === 'mcp' && (
+              <div className="flex-1 flex items-center justify-center text-xs text-gray-400">
+                MCP Servers — coming soon
+              </div>
+            )}
+            {leftPanelView === 'settings' && (
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-gray-900">Settings</h2>
+                    <button
+                      onClick={() => window.api.openConfigDir()}
+                      className="rounded p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                      title="Open config directory (~/.pi/agent/)"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <ProviderSetup
+                    getProviderAuthStatus={getProviderAuthStatus}
+                    setApiKey={setApiKey}
+                    removeAuth={removeAuth}
+                    registerCustomProvider={registerCustomProvider}
+                    onAuthChange={() => { getAvailableModels() }}
+                  />
+                </div>
+              </div>
+            )}
+            <div
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:w-1.5 hover:bg-blue-500/30 transition-all z-10"
+              onMouseDown={handleLeftResizeStart}
+            />
+          </div>
+        )}
+
         <div className="flex flex-1 flex-col overflow-hidden">
-          <ChatView
-            messages={displayedMessages}
-            isStreaming={displayedStreaming}
-            streamingMessageId={displayedStreamingId}
-            pendingUiRequests={pendingUiRequests}
-            respondToUiRequest={respondToUiRequest}
-            onSendPrompt={handleSendPrompt}
-            onForkAtEntry={handleForkAtEntry}
-            getForkMessages={getForkMessages}
-            forkPoints={displayedForkPoints}
-            viewMode={viewMode}
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onTabClick={setActiveTab}
+            onTabClose={closeTab}
+            onAddTab={handleAddTab}
           />
 
-          <InputBar
-            onSend={handleSendPrompt}
-            disabled={!isConnected}
-            isConnected={isConnected}
-            isStreaming={displayedStreaming}
-            onStop={handleStop}
-            isLazySwitched={isLazySwitched}
-            backgroundSessionName={backgroundSessionName}
-            isBackgroundStreaming={isLazySwitched && isPiStreaming()}
-            isAgentEnding={isAgentEnding}
-            currentModel={currentModel}
-            onSetModel={setModel}
-            getAvailableModels={getAvailableModels}
-          />
+          <div className="flex-1 overflow-hidden">
+            {activeTab?.type === 'session' && (
+              <ChatView
+                messages={displayedMessages}
+                isStreaming={displayedStreaming}
+                streamingMessageId={displayedStreamingId}
+                pendingUiRequests={pendingUiRequests}
+                respondToUiRequest={respondToUiRequest}
+                onSendPrompt={handleSendPrompt}
+                onForkAtEntry={handleForkAtEntry}
+                getForkMessages={getForkMessages}
+                forkPoints={displayedForkPoints}
+                viewMode={viewMode}
+              />
+            )}
+            {activeTab?.type === 'file' && (
+              <FileViewer filePath={activeTab.meta.filePath as string} />
+            )}
+            {activeTab?.type === 'diff' && (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Diff view — coming soon
+              </div>
+            )}
+            {activeTab?.type === 'terminal' && (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Terminal — coming soon
+              </div>
+            )}
+          </div>
+
+          {isSessionTabActive && (
+            <InputBar
+              onSend={handleSendPrompt}
+              disabled={!isConnected}
+              isConnected={isConnected}
+              isStreaming={displayedStreaming}
+              onStop={handleStop}
+              isLazySwitched={isLazySwitched}
+              backgroundSessionName={backgroundSessionName}
+              isBackgroundStreaming={isLazySwitched && isPiStreaming()}
+              isAgentEnding={isAgentEnding}
+              currentModel={currentModel}
+              onSetModel={setModel}
+              getAvailableModels={getAvailableModels}
+            />
+          )}
         </div>
+
+        <RightPanel
+          view={rightPanelView}
+          onViewChange={setRightPanelView}
+          collapsed={rightPanelCollapsed}
+          onToggleCollapse={() => toggleRightPanel()}
+          width={rightPanelWidth}
+          onResizeStart={handleRightResizeStart}
+          onFileSelect={handleFileSelect}
+        />
       </div>
 
       {showWelcome && (
