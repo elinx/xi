@@ -166,6 +166,30 @@ const api = {
     error?: string
   }> =>
     ipcRenderer.invoke('mcp:list'),
+
+  terminalCreate: (ptyId: string, cwd?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('terminal:create', ptyId, cwd),
+
+  terminalWrite: (ptyId: string, data: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('terminal:write', ptyId, data),
+
+  terminalResize: (ptyId: string, cols: number, rows: number): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('terminal:resize', ptyId, cols, rows),
+
+  terminalKill: (ptyId: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('terminal:kill', ptyId),
+
+  onTerminalData: (callback: (ptyId: string, data: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, ptyId: string, data: string) => callback(ptyId, data)
+    ipcRenderer.on('terminal:data', handler)
+    return () => ipcRenderer.removeListener('terminal:data', handler)
+  },
+
+  onTerminalExit: (callback: (ptyId: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, ptyId: string) => callback(ptyId)
+    ipcRenderer.on('terminal:exit', handler)
+    return () => ipcRenderer.removeListener('terminal:exit', handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

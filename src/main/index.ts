@@ -710,6 +710,57 @@ function registerIpcHandlers(): void {
     return { ok: true }
   })
 
+  const ptyProcesses = new Map<string, import('node-pty').IPty>()
+
+  ipcMain.handle('terminal:create', async (_event, ptyId: string, cwd?: string) => {
+    try {
+      const pty = (await import('node-pty')).spawn(process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh', [], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        cwd: cwd || process.cwd(),
+        env: { ...process.env } as Record<string, string>,
+      })
+      ptyProcesses.set(ptyId, pty)
+      pty.onData((data: string) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('terminal:data', ptyId, data)
+        }
+      })
+      pty.onExit(() => {
+        ptyProcesses.delete(ptyId)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('terminal:exit', ptyId)
+        }
+      })
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('terminal:write', async (_event, ptyId: string, data: string) => {
+    const pty = ptyProcesses.get(ptyId)
+    if (!pty) return { ok: false, error: 'Terminal not found' }
+    pty.write(data)
+    return { ok: true }
+  })
+
+  ipcMain.handle('terminal:resize', async (_event, ptyId: string, cols: number, rows: number) => {
+    const pty = ptyProcesses.get(ptyId)
+    if (!pty) return { ok: false, error: 'Terminal not found' }
+    pty.resize(cols, rows)
+    return { ok: true }
+  })
+
+  ipcMain.handle('terminal:kill', async (_event, ptyId: string) => {
+    const pty = ptyProcesses.get(ptyId)
+    if (!pty) return { ok: true }
+    pty.kill()
+    ptyProcesses.delete(ptyId)
+    return { ok: true }
+  })
+
   ipcMain.handle('skills:list', async () => {
     try {
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
