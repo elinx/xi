@@ -566,6 +566,12 @@ function App(): React.ReactElement {
               </button>
             )}
           </div>
+          {!rightPanelCollapsed && (
+            <div
+              className="flex-shrink-0"
+              style={{ width: rightPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+            />
+          )}
           {rightPanelCollapsed && (
             <button
               onClick={() => toggleRightPanel()}
