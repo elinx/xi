@@ -629,7 +629,7 @@ function App(): React.ReactElement {
             onAddTab={handleAddTab}
           />
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
             {activeTab?.type === 'session' && (
               <ChatView
                 messages={displayedMessages}
