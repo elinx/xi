@@ -534,101 +534,80 @@ function App(): React.ReactElement {
               {error && (
                 <span className="text-xs text-red-500" title={error}>Error</span>
               )}
-             <div className="flex items-center gap-2 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-              <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-                <button
-                  onClick={() => setShowProviderSetup(true)}
-                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors text-gray-500 hover:text-gray-700`}
-                  title="Configure providers"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-                {!isConnected && (
-                  <button
-                    onClick={handleConnect}
-                    className="rounded px-2 py-0.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-colors"
-                    title="Connect to Pi"
-                  >
-                    Connect
-                  </button>
+              <div className="flex items-center gap-2 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+               <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                 <button
+                   onClick={() => setShowProviderSetup(true)}
+                   className={`rounded px-2 py-0.5 text-xs font-medium transition-colors text-gray-500 hover:text-gray-700`}
+                   title="Configure providers"
+                 >
+                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                   </svg>
+                 </button>
+                 {!isConnected && (
+                   <button
+                     onClick={handleConnect}
+                     className="rounded px-2 py-0.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-colors"
+                     title="Connect to Pi"
+                   >
+                     Connect
+                   </button>
+                 )}
+                </div>
+                {isSessionTabActive && (
+                  <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                    <button
+                      onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title="Full view"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title="Turn view"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title="Outline view"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
-               </div>
-               {isSessionTabActive && (
-                 <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-                   <button
-                     onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                     title="Full view"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
-                     </svg>
-                   </button>
-                   <button
-                     onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                     title="Turn view"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
-                     </svg>
-                   </button>
-                   <button
-                     onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                     title="Outline view"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-                     </svg>
-                   </button>
-                   <div className="w-px h-4 bg-gray-300 mx-0.5" />
-                   <button
-                     onClick={() => toggleLeftPanel()}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                     title="Toggle left panel"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
-                     </svg>
-                   </button>
-                   <button
-                     onClick={() => toggleRightPanel()}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                     title="Toggle right panel"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
-                     </svg>
-                   </button>
-                 </div>
-               )}
-               {!isSessionTabActive && (
-                 <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-                   <button
-                     onClick={() => toggleLeftPanel()}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                     title="Toggle left panel"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
-                     </svg>
-                   </button>
-                   <button
-                     onClick={() => toggleRightPanel()}
-                     className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                     title="Toggle right panel"
-                   >
-                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
-                     </svg>
-                   </button>
-                 </div>
-                )}
-               </div>
+                <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                    <button
+                      onClick={() => toggleLeftPanel()}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                      title="Toggle left panel"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => toggleRightPanel()}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                      title="Toggle right panel"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                {isSessionTabActive && (
                  <div className="flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                    <TokenUsageRing
