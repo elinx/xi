@@ -379,6 +379,18 @@ function App(): React.ReactElement {
   }, [isConnected, loadHistory])
 
   useEffect(() => {
+    if (!isConnected || !currentSession?.filePath) return
+    if (piConnectedPathRef.current === currentSession.filePath) return
+    setPiConnectedPath(currentSession.filePath)
+    getOrCreateCacheRef.current(currentSession.filePath).then(() => {
+      displaySessionRef.current(currentSession.filePath).then(() => {
+        loadHistory()
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, currentSession?.filePath])
+
+  useEffect(() => {
     if (isConnected && currentSession?.filePath) {
       loadForkPoints(currentSession.filePath)
     }
