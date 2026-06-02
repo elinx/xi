@@ -454,7 +454,7 @@ function App(): React.ReactElement {
         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         {!leftPanelCollapsed && (
           <div
-            className="flex items-center justify-between px-3 pb-2 flex-shrink-0"
+            className="flex items-center justify-between px-3 pb-3 flex-shrink-0"
             style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
           >
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
