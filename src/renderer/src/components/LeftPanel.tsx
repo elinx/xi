@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { LeftPanelView } from '../hooks/useLayoutStore'
 import SessionSidebar from './SessionSidebar'
 import ProviderSetup from './ProviderSetup'
+import SkillsPanel from './SkillsPanel'
 
 interface LeftPanelProps {
   view: LeftPanelView
@@ -140,9 +141,7 @@ export default function LeftPanel({
           />
         )}
         {view === 'skills' && (
-          <div className="flex items-center justify-center h-full text-xs text-gray-400">
-            Skills — coming soon
-          </div>
+          <SkillsPanel />
         )}
         {view === 'mcp' && (
           <div className="flex items-center justify-center h-full text-xs text-gray-400">
