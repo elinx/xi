@@ -11,6 +11,7 @@ import TabBar from './components/TabBar'
 import RightPanel from './components/RightPanel'
 import FileViewer from './components/FileViewer'
 import DiffViewer from './components/DiffViewer'
+import TerminalPane from './components/TerminalPane'
 import { TokenUsageRing } from './components/TokenUsageRing'
 import WelcomeDialog from './components/WelcomeDialog'
 import ProviderSetup from './components/ProviderSetup'
@@ -701,9 +702,7 @@ function App(): React.ReactElement {
               <DiffViewer filePath={activeTab.meta.filePath as string} />
             )}
             {activeTab?.type === 'terminal' && (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                Terminal — coming soon
-              </div>
+              <TerminalPane ptyId={activeTab.id} />
             )}
           </div>
 
