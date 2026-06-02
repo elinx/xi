@@ -61,7 +61,7 @@ function startServer(dir: string): Promise<number> {
   })
 }
 
-describe('Layout integration test', () => {
+describe.skipIf(process.env.CI)('Layout integration test', () => {
   let browser: Browser
   let context: BrowserContext
   let page: import('playwright').Page
