@@ -97,7 +97,6 @@ export default function FileViewer({ filePath }: FileViewerProps) {
               name: 'line-numbers',
               line(node, line) {
                 node.properties = node.properties || {}
-                node.properties.style = `counter-increment: line;`
                 node.properties['data-line'] = line
               },
             },
@@ -152,12 +151,6 @@ export default function FileViewer({ filePath }: FileViewerProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-gray-50 text-xs text-gray-500">
-        <span className="font-medium text-gray-700">{fileData.name}</span>
-        <span className="text-gray-400">{getLanguageLabel(fileData.ext)}</span>
-        {!isMarkdown && <span className="text-gray-400">{lineCount} lines</span>}
-        <span className="text-gray-300 truncate ml-2" title={fileData.path}>{fileData.path}</span>
-      </div>
       <div className="flex-1 overflow-auto">
         {isMarkdown ? (
           <div className="prose prose-sm max-w-none p-4 [&_img]:max-w-full [&_img]:rounded">
