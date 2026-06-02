@@ -3,6 +3,7 @@ import type { LeftPanelView } from '../hooks/useLayoutStore'
 import SessionSidebar from './SessionSidebar'
 import ProviderSetup from './ProviderSetup'
 import SkillsPanel from './SkillsPanel'
+import McpPanel from './McpPanel'
 
 interface LeftPanelProps {
   view: LeftPanelView
@@ -144,9 +145,7 @@ export default function LeftPanel({
           <SkillsPanel />
         )}
         {view === 'mcp' && (
-          <div className="flex items-center justify-center h-full text-xs text-gray-400">
-            MCP Servers — coming soon
-          </div>
+          <McpPanel />
         )}
         {view === 'settings' && (
           <div className="px-4 py-3">
