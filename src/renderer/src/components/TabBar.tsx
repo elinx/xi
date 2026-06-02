@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, useRef, useEffect, type CSSProperties } from 'react'
 import type { TabInfo, TabType } from '../hooks/useTabStore'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -8,7 +8,7 @@ interface TabBarProps {
   activeTabId: string
   onTabClick: (tabId: string) => void
   onTabClose: (tabId: string) => void
-  onAddTab: () => void
+  onAddTab: (type: TabType) => void
 }
 
 function TabIcon({ type }: { type: TabType }) {
@@ -47,49 +47,88 @@ function TabIcon({ type }: { type: TabType }) {
   }
 }
 
+const ADD_MENU_ITEMS: Array<{ type: TabType; label: string }> = [
+  { type: 'terminal', label: 'Terminal' },
+]
+
 export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAddTab }: TabBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuOpen])
+
   return (
-    <div className="h-9 bg-gray-100 border-b border-gray-200 flex items-stretch overflow-x-auto scrollbar-none">
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeTabId
-        return (
-          <button
-            key={tab.id}
-            onClick={() => onTabClick(tab.id)}
-            className={`
-              group relative flex items-center gap-1.5 px-3 text-xs font-medium border-r border-gray-200
-              shrink-0 h-9 transition-colors
-              ${isActive
-                ? 'bg-white text-gray-900 border-b-2 border-b-blue-500 -mb-px'
-                : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-              }
-            `}
-            style={noDrag}
-          >
-            <TabIcon type={tab.type} />
-            <span className="truncate max-w-[120px]">{tab.title}</span>
-            {tab.closable && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onTabClose(tab.id)
+    <div className="h-9 bg-gray-100 border-b border-gray-200 flex items-stretch relative">
+      <div className="flex items-stretch overflow-x-auto scrollbar-none flex-1 min-w-0">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabClick(tab.id)}
+              className={`
+                group relative flex items-center gap-1.5 px-3 text-xs font-medium border-r border-gray-200
+                shrink-0 h-9 transition-colors
+                ${isActive
+                  ? 'bg-white text-gray-900 border-b-2 border-b-blue-500 -mb-px'
+                  : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                }
+              `}
+              style={noDrag}
+            >
+              <TabIcon type={tab.type} />
+              <span className="truncate max-w-[120px]">{tab.title}</span>
+              {tab.closable && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onTabClose(tab.id)
+                  }}
+                  className="opacity-0 group-hover:opacity-100 ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-gray-200 transition-opacity"
+                  style={noDrag}
+                >
+                  ×
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div className="relative flex-shrink-0" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen(prev => !prev)}
+          className={`h-9 px-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-200 flex items-center justify-center transition-colors ${menuOpen ? 'bg-gray-200 text-gray-700' : ''}`}
+          style={noDrag}
+        >
+          +
+        </button>
+        {menuOpen && (
+          <div className="absolute top-full right-0 mt-px bg-white border border-gray-200 rounded-md shadow-lg z-50 py-0.5 min-w-[140px]">
+            {ADD_MENU_ITEMS.map(item => (
+              <button
+                key={item.type}
+                onClick={() => {
+                  onAddTab(item.type)
+                  setMenuOpen(false)
                 }}
-                className="opacity-0 group-hover:opacity-100 ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-gray-200 transition-opacity"
-                style={noDrag}
+                className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
               >
-                ×
-              </span>
-            )}
-          </button>
-        )
-      })}
-      <button
-        onClick={onAddTab}
-        className="shrink-0 px-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded flex items-center justify-center transition-colors"
-        style={noDrag}
-      >
-        +
-      </button>
+                <TabIcon type={item.type} />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

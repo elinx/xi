@@ -3,7 +3,7 @@ import { usePiRpc, type UsePiRpcOptions } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
 import { useSessionCache } from './hooks/useSessionCache'
 import { useLayoutStore } from './hooks/useLayoutStore'
-import { useTabStore, SESSION_TAB_ID } from './hooks/useTabStore'
+import { useTabStore, SESSION_TAB_ID, type TabType } from './hooks/useTabStore'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import LeftPanel from './components/LeftPanel'
@@ -424,10 +424,33 @@ function App(): React.ReactElement {
       if (e.key === 'Escape') {
         if (isPiStreaming()) abort()
       }
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === '\\') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          toggleRightPanel()
+        } else {
+          toggleLeftPanel()
+        }
+      }
+      if (mod && e.key === '`') {
+        e.preventDefault()
+        addTab({ type: 'terminal', title: 'Terminal', closable: true, meta: {} })
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [abort, isPiStreaming])
+  }, [abort, isPiStreaming, toggleLeftPanel, toggleRightPanel, addTab])
+
+  useEffect(() => {
+    const api = window.api as typeof window.api & { watchStart?: () => Promise<{ ok: boolean }>; watchStop?: () => Promise<{ ok: boolean }> }
+    if (api.watchStart) {
+      api.watchStart()
+    }
+    return () => {
+      if (api.watchStop) api.watchStop()
+    }
+  }, [])
 
   useEffect(() => {
     const cleanup = window.api.onEvent((rawEvent) => {
@@ -452,8 +475,11 @@ function App(): React.ReactElement {
     addTab({ type: 'diff', title: `diff: ${name}`, closable: true, meta: { filePath } })
   }, [addTab])
 
-  const handleAddTab = useCallback(() => {
-  }, [])
+  const handleAddTab = useCallback((type: TabType) => {
+    if (type === 'terminal') {
+      addTab({ type: 'terminal', title: 'Terminal', closable: true, meta: {} })
+    }
+  }, [addTab])
 
    return (
        <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
