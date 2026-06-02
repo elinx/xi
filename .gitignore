@@ -1,41 +1,35 @@
-# Dependencies
-node_modules/
 
-# Build output
-out/
-dist/
-
-# Agent GUI local data
-.xi/
-
-# Agent tool configs (local / sensitive)
-.claude/
-.pi/
-.sisyphus/
-.playwright-cli/
-
-# Pi reference source (not part of this project)
-ref/
-
-# Stray test outputs
-*.html
 !src/**/*.html
-
-# OS files
+.claude/
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Environment
 .env
-.env.local
 .env.*.local
-
-# Logs
+.env.local
+.idea/
+.pi/
+.playwright-cli/
+.playwright-mcp/
+.sisyphus/
+.vscode/
+.xi/
+*.html
 *.log
+*.swo
+*.swp
+# Agent GUI local data
+# Agent tool configs (local / sensitive)
+# Build output
+# Dependencies
+# Environment
+# IDE
+# Logs
+# OS files
+# Pi reference source (not part of this project)
+# Stray test outputs
+dist/
+layout-test-initial.png
+node_modules/
 npm-debug.log*
+out/
+ref/
+Thumbs.db
