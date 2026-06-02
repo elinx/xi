@@ -484,12 +484,12 @@ function App(): React.ReactElement {
 
    return (
        <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-           {!leftPanelCollapsed && (
-            <div
-              className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200"
-              style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
-            >
+          <div className="flex border-b border-gray-200 bg-gray-50 h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+            {!leftPanelCollapsed && (
+             <div
+               className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
+               style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '0' }}
+             >
               <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
               <button
                 onClick={handleOpenDirectory}
@@ -503,7 +503,7 @@ function App(): React.ReactElement {
               </button>
             </div>
           )}
-            <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px', paddingLeft: isMac && leftPanelCollapsed ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
+             <div className="flex items-center flex-1 px-4 min-w-0 gap-3 h-full" style={{ paddingTop: isMac ? '28px' : '0', paddingLeft: isMac && leftPanelCollapsed ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
              {activeSessionName && isSessionTabActive && (
                <>
                  <span
