@@ -43,6 +43,10 @@ function createWindow(): void {
     mainWindow = null
   })
 
+  mainWindow.webContents.on('context-menu', (event) => {
+    event.preventDefault()
+  })
+
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
@@ -201,6 +205,15 @@ function registerIpcHandlers(): void {
     } else {
       shell.openPath(configDir)
     }
+  })
+
+  ipcMain.on('app:showItemInFolder', (_event, fullPath: string) => {
+    shell.showItemInFolder(fullPath)
+  })
+
+  ipcMain.on('app:copyToClipboard', (_event, text: string) => {
+    const { clipboard } = require('electron')
+    clipboard.writeText(text)
   })
 
   ipcMain.handle('pi:start', async () => {
@@ -765,13 +778,13 @@ function registerIpcHandlers(): void {
     try {
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
       const skillsDirs = [
-        join(homeDir, '.pi', 'agent', 'skills'),
-        join(homeDir, '.agents', 'skills'),
-        join(process.cwd(), '.pi', 'skills'),
-        join(process.cwd(), '.agents', 'skills'),
+        { dir: join(homeDir, '.pi', 'agent', 'skills'), scope: 'global' },
+        { dir: join(homeDir, '.agents', 'skills'), scope: 'global' },
+        { dir: join(process.cwd(), '.pi', 'skills'), scope: 'project' },
+        { dir: join(process.cwd(), '.agents', 'skills'), scope: 'project' },
       ]
-      const skills: Array<{ name: string; description: string; source: string }> = []
-      for (const dir of skillsDirs) {
+      const skills: Array<{ name: string; description: string; source: string; scope: string }> = []
+      for (const { dir, scope } of skillsDirs) {
         if (!existsSync(dir)) continue
         const entries = readdirSync(dir, { withFileTypes: true })
         for (const entry of entries) {
@@ -794,10 +807,10 @@ function registerIpcHandlers(): void {
               const frontmatter = fmMatch[1]
               const nameMatch = frontmatter.match(/^name:\s*(.+)$/m)
               const descMatch = frontmatter.match(/^description:\s*(.+)$/m)
-              if (nameMatch) skills.push({ name: nameMatch[1].trim(), description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath) })
-              else skills.push({ name, description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath) })
+              if (nameMatch) skills.push({ name: nameMatch[1].trim(), description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath), scope })
+              else skills.push({ name, description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath), scope })
             } else {
-              skills.push({ name, description: '', source: dirname(fullPath) })
+              skills.push({ name, description: '', source: dirname(fullPath), scope })
             }
           } catch {}
         }
@@ -842,6 +855,54 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('mcp:ping', async (_event, serverConfig: { command: string; args?: string[]; env?: Record<string, string> }) => {
+    return new Promise<{ ok: boolean; connected: boolean }>((resolve) => {
+      const timeout = setTimeout(() => {
+        child.kill()
+        resolve({ ok: true, connected: false })
+      }, 3000)
+      try {
+        const { spawn } = require('child_process') as typeof import('child_process')
+        const child = spawn(serverConfig.command, serverConfig.args ?? [], {
+          env: { ...process.env, ...serverConfig.env } as Record<string, string>,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        const initMsg = JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'xi', version: '0.1.0' },
+          },
+        }) + '\n'
+        child.stdin.write(initMsg)
+        let buffer = ''
+        child.stdout.on('data', (data: Buffer) => {
+          buffer += data.toString()
+          try {
+            JSON.parse(buffer.trim())
+            clearTimeout(timeout)
+            child.kill()
+            resolve({ ok: true, connected: true })
+          } catch {}
+        })
+        child.on('error', () => {
+          clearTimeout(timeout)
+          resolve({ ok: true, connected: false })
+        })
+        child.on('exit', () => {
+          clearTimeout(timeout)
+          resolve({ ok: true, connected: false })
+        })
+      } catch {
+        clearTimeout(timeout)
+        resolve({ ok: true, connected: false })
+      }
+    })
   })
 }
 

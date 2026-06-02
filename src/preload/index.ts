@@ -155,7 +155,7 @@ const api = {
 
   listSkills: (): Promise<{
     ok: boolean
-    data?: Array<{ name: string; description: string; source: string }>
+    data?: Array<{ name: string; description: string; source: string; scope: string }>
     error?: string
   }> =>
     ipcRenderer.invoke('skills:list'),
@@ -166,6 +166,9 @@ const api = {
     error?: string
   }> =>
     ipcRenderer.invoke('mcp:list'),
+
+  mcpPing: (serverConfig: { command: string; args?: string[]; env?: Record<string, string> }): Promise<{ ok: boolean; connected: boolean }> =>
+    ipcRenderer.invoke('mcp:ping', serverConfig),
 
   terminalCreate: (ptyId: string, cwd?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('terminal:create', ptyId, cwd),
@@ -190,6 +193,12 @@ const api = {
     ipcRenderer.on('terminal:exit', handler)
     return () => ipcRenderer.removeListener('terminal:exit', handler)
   },
+
+  showItemInFolder: (fullPath: string): void =>
+    ipcRenderer.send('app:showItemInFolder', fullPath),
+
+  copyToClipboard: (text: string): void =>
+    ipcRenderer.send('app:copyToClipboard', text),
 }
 
 contextBridge.exposeInMainWorld('api', api)
