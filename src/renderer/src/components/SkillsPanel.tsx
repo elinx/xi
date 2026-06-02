@@ -4,6 +4,7 @@ interface SkillInfo {
   name: string
   description: string
   source: string
+  scope: string
 }
 
 export default function SkillsPanel() {
@@ -78,6 +79,11 @@ export default function SkillsPanel() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             <span className="font-medium text-gray-800">{skill.name}</span>
+            <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              skill.scope === 'project' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {skill.scope === 'project' ? 'Project' : 'Global'}
+            </span>
           </div>
           {skill.description && (
             <div className="mt-0.5 text-gray-500 leading-relaxed">{skill.description}</div>

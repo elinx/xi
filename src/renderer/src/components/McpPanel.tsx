@@ -7,8 +7,11 @@ interface McpServer {
   env?: Record<string, string>
 }
 
+type ConnStatus = 'unknown' | 'connected' | 'disconnected'
+
 export default function McpPanel() {
   const [servers, setServers] = useState<McpServer[]>([])
+  const [connStatus, setConnStatus] = useState<Map<string, ConnStatus>>(new Map())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -20,6 +23,16 @@ export default function McpPanel() {
       const result = await window.api.listMcpServers()
       if (result.ok && result.data) {
         setServers(result.data)
+        setConnStatus(new Map())
+        for (const server of result.data) {
+          window.api.mcpPing({ command: server.command, args: server.args, env: server.env }).then(res => {
+            setConnStatus(prev => {
+              const next = new Map(prev)
+              next.set(server.name, res.connected ? 'connected' : 'disconnected')
+              return next
+            })
+          })
+        }
       } else {
         setError(result.error ?? 'Failed to load MCP servers')
       }
@@ -93,6 +106,7 @@ export default function McpPanel() {
       </div>
       {servers.map(server => {
         const isOpen = expanded.has(server.name)
+        const status = connStatus.get(server.name) ?? 'unknown'
         return (
           <div key={server.name} className="border-b border-gray-100">
             <button
@@ -103,6 +117,12 @@ export default function McpPanel() {
                 <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
               </svg>
               <span className="font-medium text-gray-800">{server.name}</span>
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ml-auto ${
+                  status === 'connected' ? 'bg-green-500' : status === 'disconnected' ? 'bg-red-400' : 'bg-gray-300'
+                }`}
+                title={status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : 'Checking...'}
+              />
             </button>
             {isOpen && (
               <div className="px-3 pb-2 ml-5">

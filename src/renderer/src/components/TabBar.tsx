@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import type { TabInfo, TabType } from '../hooks/useTabStore'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -9,6 +10,7 @@ interface TabBarProps {
   onTabClick: (tabId: string) => void
   onTabClose: (tabId: string) => void
   onAddTab: (type: TabType) => void
+  onTabContextMenu?: (tabId: string, x: number, y: number) => void
 }
 
 function TabIcon({ type }: { type: TabType }) {
@@ -51,8 +53,9 @@ const ADD_MENU_ITEMS: Array<{ type: TabType; label: string }> = [
   { type: 'terminal', label: 'Terminal' },
 ]
 
-export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAddTab }: TabBarProps) {
+export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAddTab, onTabContextMenu }: TabBarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,6 +69,9 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
 
+  const closeableTabs = tabs.filter(t => t.closable)
+  const ctxTab = ctxMenu ? tabs.find(t => t.id === ctxMenu.tabId) : null
+
   return (
     <div className="h-9 bg-gray-100 border-b border-gray-200 flex items-stretch relative">
       <div className="flex items-stretch overflow-x-auto scrollbar-none flex-1 min-w-0">
@@ -75,6 +81,11 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
             <button
               key={tab.id}
               onClick={() => onTabClick(tab.id)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setCtxMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
+              }}
               className={`
                 group relative flex items-center gap-1.5 px-3 text-xs font-medium border-r border-gray-200
                 shrink-0 h-9 transition-colors
@@ -129,6 +140,46 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
           </div>
         )}
       </div>
+      {ctxMenu && ctxTab && createPortal(
+        <>
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 9998 }}
+            onClick={() => setCtxMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
+          />
+          <div
+            className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[160px]"
+            style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999 }}
+          >
+            {ctxTab.closable && (
+              <button
+                onClick={() => { onTabClose(ctxTab.id); setCtxMenu(null) }}
+                className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+              >
+                Close
+              </button>
+            )}
+            {closeableTabs.length > 0 && (
+              <button
+                onClick={() => { closeableTabs.forEach(t => onTabClose(t.id)); setCtxMenu(null) }}
+                className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+              >
+                Close Others
+              </button>
+            )}
+            {closeableTabs.length > 1 && (
+              <button
+                onClick={() => { closeableTabs.forEach(t => onTabClose(t.id)); setCtxMenu(null) }}
+                className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+              >
+                Close All
+              </button>
+            )}
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   )
 }

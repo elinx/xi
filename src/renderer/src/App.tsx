@@ -495,7 +495,7 @@ function App(): React.ReactElement {
   }, [addTab])
 
    return (
-       <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+        <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
           <div className="flex border-b border-gray-200 bg-gray-50 h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
             {!leftPanelCollapsed && (
              <div

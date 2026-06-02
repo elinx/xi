@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { FileSystemIpcApi } from '../types/session'
 
 interface FileTreeProps {
@@ -55,18 +56,26 @@ function ChevronIcon({ expanded, className }: { expanded: boolean; className?: s
   )
 }
 
+interface CtxMenuState {
+  node: TreeNode
+  x: number
+  y: number
+}
+
 function TreeNodeRow({
   node,
   depth,
   expandedDirs,
   onToggleDir,
   onFileClick,
+  onContextMenu,
 }: {
   node: TreeNode
   depth: number
   expandedDirs: Set<string>
   onToggleDir: (path: string) => void
   onFileClick: (path: string) => void
+  onContextMenu: (node: TreeNode, x: number, y: number) => void
 }) {
   const isExpanded = expandedDirs.has(node.path)
 
@@ -78,12 +87,19 @@ function TreeNodeRow({
     }
   }, [node, onToggleDir, onFileClick])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onContextMenu(node, e.clientX, e.clientY)
+  }, [node, onContextMenu])
+
   return (
     <div>
       <div
         className="hover:bg-gray-100 cursor-pointer flex items-center gap-1 text-xs text-gray-700 py-0.5 pr-2"
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         {node.isDirectory ? (
           <>
@@ -108,6 +124,7 @@ function TreeNodeRow({
               expandedDirs={expandedDirs}
               onToggleDir={onToggleDir}
               onFileClick={onFileClick}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -120,6 +137,7 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null)
   const refreshVersion = useRef(0)
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
@@ -180,6 +198,29 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
     },
     [onFileSelect]
   )
+
+  const handleContextMenu = useCallback((node: TreeNode, x: number, y: number) => {
+    setCtxMenu({ node, x, y })
+  }, [])
+
+  const handleCopyPath = useCallback(() => {
+    if (!ctxMenu) return
+    window.api.copyToClipboard(ctxMenu.node.path)
+    setCtxMenu(null)
+  }, [ctxMenu])
+
+  const handleCopyRelativePath = useCallback(() => {
+    if (!ctxMenu) return
+    const relative = ctxMenu.node.path.replace(process.cwd() + '/', '').replace(process.cwd() + '\\', '')
+    window.api.copyToClipboard(relative)
+    setCtxMenu(null)
+  }, [ctxMenu])
+
+  const handleRevealInFinder = useCallback(() => {
+    if (!ctxMenu) return
+    window.api.showItemInFolder(ctxMenu.node.path)
+    setCtxMenu(null)
+  }, [ctxMenu])
 
   const loadRoot = useCallback(async () => {
     const api = window.api as ReadDirectoryApi
@@ -250,8 +291,43 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
           expandedDirs={expandedDirs}
           onToggleDir={handleToggleDir}
           onFileClick={handleFileClick}
+          onContextMenu={handleContextMenu}
         />
       ))}
-    </div>
-  )
+      {ctxMenu && createPortal(
+        <>
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 9998 }}
+            onClick={() => setCtxMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
+          />
+          <div
+            className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[180px]"
+            style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999 }}
+          >
+            <button
+              onClick={() => { handleCopyPath() }}
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+            >
+              Copy Path
+            </button>
+            <button
+              onClick={() => { handleCopyRelativePath() }}
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+            >
+              Copy Relative Path
+            </button>
+            <button
+              onClick={() => { handleRevealInFinder() }}
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
+            >
+              Reveal in Finder
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+     </div>
+   )
 }
