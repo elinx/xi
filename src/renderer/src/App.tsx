@@ -680,8 +680,8 @@ function App(): React.ReactElement {
             onAddTab={handleAddTab}
           />
 
-          <div className="flex-1 overflow-y-auto">
-            {activeTab?.type === 'session' && (
+          <div className="flex-1 overflow-y-auto relative">
+            <div className={activeTab?.type === 'session' ? 'h-full' : 'hidden'}>
               <ChatView
                 messages={displayedMessages}
                 isStreaming={displayedStreaming}
@@ -694,16 +694,18 @@ function App(): React.ReactElement {
                 forkPoints={displayedForkPoints}
                 viewMode={viewMode}
               />
-            )}
+            </div>
             {activeTab?.type === 'file' && (
               <FileViewer filePath={activeTab.meta.filePath as string} />
             )}
             {activeTab?.type === 'diff' && (
               <DiffViewer filePath={activeTab.meta.filePath as string} />
             )}
-            {activeTab?.type === 'terminal' && (
-              <TerminalPane ptyId={activeTab.id} />
-            )}
+            {tabs.filter(t => t.type === 'terminal').map(t => (
+              <div key={t.id} className={activeTab?.id === t.id ? 'h-full' : 'hidden'}>
+                <TerminalPane ptyId={t.id} />
+              </div>
+            ))}
           </div>
 
           {isSessionTabActive && (

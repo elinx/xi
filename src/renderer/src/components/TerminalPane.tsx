@@ -3,6 +3,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+const ptyInstances = new Set<string>()
+
 interface TerminalPaneProps {
   ptyId: string
 }
@@ -66,7 +68,10 @@ export default function TerminalPane({ ptyId }: TerminalPaneProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    window.api.terminalCreate(ptyId)
+    if (!ptyInstances.has(ptyId)) {
+      ptyInstances.add(ptyId)
+      window.api.terminalCreate(ptyId)
+    }
 
     const dims = fitAddon.proposeDimensions()
     if (dims) {
@@ -99,7 +104,6 @@ export default function TerminalPane({ ptyId }: TerminalPaneProps) {
       unsubData()
       unsubExit()
       resizeObserver.disconnect()
-      window.api.terminalKill(ptyId)
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null

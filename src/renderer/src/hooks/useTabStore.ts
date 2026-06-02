@@ -59,6 +59,10 @@ export const useTabStore = create<TabState>()(
         const tab = state.tabs.find((t) => t.id === tabId)
         if (!tab || !tab.closable) return
 
+        if (tab.type === 'terminal') {
+          window.api.terminalKill(tabId)
+        }
+
         const idx = state.tabs.findIndex((t) => t.id === tabId)
         const remaining = state.tabs.filter((t) => t.id !== tabId)
 
