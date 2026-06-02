@@ -109,6 +109,7 @@ export default function LeftPanel({
       />
 
       <div className="h-8 flex items-center px-2 border-b border-gray-200 gap-1">
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate mr-1" title={projectPath}>{projectName}</span>
         {toggleViews.map((v) => (
           <button
             key={v.id}
@@ -120,16 +121,6 @@ export default function LeftPanel({
             {v.icon}
           </button>
         ))}
-        <button
-          onClick={onToggleCollapse}
-          className="ml-auto text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1"
-          title="Collapse panel"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">

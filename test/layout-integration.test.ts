@@ -82,11 +82,6 @@ describe('Layout integration test', () => {
     expect(buttons.length).toBe(4)
   })
 
-  it('renders the LeftPanel collapse button', async () => {
-    const collapseBtn = await page.$('[title="Collapse panel"]')
-    expect(collapseBtn).not.toBeNull()
-  })
-
   it('renders the LeftPanel with session content', async () => {
     const text = await page.textContent('#root')
     expect(text).toContain('No sessions found')
@@ -100,6 +95,13 @@ describe('Layout integration test', () => {
   it('renders the InputBar', async () => {
     const textarea = await page.$('textarea')
     expect(textarea).not.toBeNull()
+  })
+
+  it('renders header toggle buttons for left and right panels', async () => {
+    const leftBtn = await page.$('[title="Toggle left panel"]')
+    expect(leftBtn).not.toBeNull()
+    const rightBtn = await page.$('[title="Toggle right panel"]')
+    expect(rightBtn).not.toBeNull()
   })
 
   it('switches left panel view to settings', async () => {
@@ -129,33 +131,25 @@ describe('Layout integration test', () => {
     expect(text).toContain('No sessions found')
   })
 
-  it('can collapse and expand left panel', async () => {
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForTimeout(2000)
-    const collapseBtns = await page.$$('[title="Collapse panel"]')
-    expect(collapseBtns.length).toBeGreaterThanOrEqual(1)
-    await collapseBtns[0].click()
+  it('toggles left panel via header button', async () => {
+    const leftBtn = await page.$('[title="Toggle left panel"]')
+    expect(leftBtn).not.toBeNull()
+    await leftBtn!.click()
     await page.waitForTimeout(500)
-    const expandBtn = await page.$('[title="Show sessions"]')
-    expect(expandBtn).not.toBeNull()
-    await expandBtn!.click()
+    let text = await page.textContent('#root')
+    expect(text).not.toContain('No sessions found')
+    await leftBtn!.click()
     await page.waitForTimeout(500)
-    const text = await page.textContent('#root')
+    text = await page.textContent('#root')
     expect(text).toContain('No sessions found')
   })
 
-  it('can toggle RightPanel open via header button', async () => {
-    const expandButton = await page.$('[title="Show file explorer"]')
-    expect(expandButton).not.toBeNull()
-    await expandButton!.click()
+  it('toggles right panel via header button', async () => {
+    const rightBtn = await page.$('[title="Toggle right panel"]')
+    expect(rightBtn).not.toBeNull()
+    await rightBtn!.click()
     await page.waitForTimeout(500)
     const text = await page.textContent('#root')
     expect(text).toContain('No files found')
-  })
-
-  it('RightPanel has collapse button when open', async () => {
-    const collapseBtns = await page.$$('[title="Collapse panel"]')
-    expect(collapseBtns.length).toBeGreaterThanOrEqual(1)
   })
 })

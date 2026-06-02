@@ -452,26 +452,6 @@ function App(): React.ReactElement {
   return (
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        {!leftPanelCollapsed && (
-          <div
-            className="flex items-center justify-between px-3 pb-3 flex-shrink-0"
-            style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
-          >
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
-            <div className="flex items-center gap-0.5">
-              <button
-                onClick={handleOpenDirectory}
-                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                title="Open project directory"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
         <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
           <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {activeSessionName && isSessionTabActive && (
@@ -565,26 +545,27 @@ function App(): React.ReactElement {
                 Connect to Pi
               </button>
             )}
+            <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+              <button
+                onClick={() => toggleLeftPanel()}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                title="Toggle left panel"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => toggleRightPanel()}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                title="Toggle right panel"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
+                </svg>
+              </button>
+            </div>
           </div>
-          {!rightPanelCollapsed && (
-            <div
-              className="flex-shrink-0"
-              style={{ width: rightPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
-            />
-          )}
-          {rightPanelCollapsed && (
-            <button
-              onClick={() => toggleRightPanel()}
-              className="flex items-center px-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title="Show file explorer"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            </button>
-          )}
-        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -613,20 +594,6 @@ function App(): React.ReactElement {
           registerCustomProvider={registerCustomProvider}
           onAuthChange={() => { getAvailableModels() }}
         />
-
-        {leftPanelCollapsed && (
-          <button
-            onClick={() => setLeftPanelCollapsed(false)}
-            className="flex items-center px-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-            title="Show sessions"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18v14H7l-4 4V4z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h7" />
-            </svg>
-          </button>
-        )}
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <TabBar
@@ -754,6 +721,7 @@ function App(): React.ReactElement {
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }

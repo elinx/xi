@@ -74,13 +74,6 @@ export default function RightPanel({
         >
           <GitIcon className="w-4 h-4" />
         </button>
-        <button
-          onClick={onToggleCollapse}
-          className="ml-auto text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1"
-          title="Collapse panel"
-        >
-          <CollapseIcon className="w-4 h-4" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
