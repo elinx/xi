@@ -509,14 +509,16 @@ function registerIpcHandlers(): void {
         .filter(Boolean) as Array<{ name: string; path: string; isDirectory: boolean }>
 
       try {
-        const projectPath = process.cwd()
-        const git = simpleGit(projectPath)
-        const isRepo = await git.checkIsRepo()
-        if (isRepo) {
-          const paths = entries.map(e => e.path)
-          const ignored = await git.checkIgnore(paths)
-          const ignoredSet = new Set(ignored)
-          entries = entries.filter(e => !ignoredSet.has(e.path))
+        if (entries.length > 0) {
+          const projectPath = process.cwd()
+          const git = simpleGit(projectPath)
+          const isRepo = await git.checkIsRepo()
+          if (isRepo) {
+            const paths = entries.map(e => e.path)
+            const ignored = await git.checkIgnore(paths)
+            const ignoredSet = new Set(ignored)
+            entries = entries.filter(e => !ignoredSet.has(e.path))
+          }
         }
       } catch {}
 
@@ -674,8 +676,13 @@ function registerIpcHandlers(): void {
     const watcher = watch(projectPath, {
       ignored: ignoredPatterns,
       ignoreInitial: true,
-      depth: 5,
+      depth: 3,
       ignorePermissionErrors: true,
+      useFsEvents: process.platform === 'darwin',
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 100,
+      },
     })
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const sendChange = () => {
