@@ -29,6 +29,10 @@ bugfix: 生成的时候向上滚动，滚动不了，而且闪屏
 - pi 支持subagents吗？不是说是单session的吗，怎么异步的
 
 
+## chat everwhere
+- 像是git commit的地方，不应该还是跟原来一样让用户输入message，应该是一个chat box或者有一个按钮让agent自动生成commit message
+
+
 
 ## 产品
 1. 将来上下文一定是很长的，1M 起步的话，根本不需要compact上下文这个功能
