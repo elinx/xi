@@ -449,126 +449,139 @@ function App(): React.ReactElement {
   const handleAddTab = useCallback(() => {
   }, [])
 
-  return (
+   return (
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
-          <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            {activeSessionName && isSessionTabActive && (
-              <>
-                <span
-                  className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
-                    isLazySwitched
-                      ? isAgentEnding
-                        ? 'bg-blue-500 animate-pulse'
-                        : 'bg-amber-500'
-                      : displayedStreaming
-                        ? 'bg-blue-500 animate-pulse'
-                        : 'bg-green-500'
-                  }`}
+          {!leftPanelCollapsed && (
+            <div
+              className="flex-shrink-0"
+              style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+            />
+          )}
+          <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
+            <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              {activeSessionName && isSessionTabActive && (
+                <>
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
+                      isLazySwitched
+                        ? isAgentEnding
+                          ? 'bg-blue-500 animate-pulse'
+                          : 'bg-amber-500'
+                        : displayedStreaming
+                          ? 'bg-blue-500 animate-pulse'
+                          : 'bg-green-500'
+                    }`}
+                  />
+                  <span className="text-xs text-gray-700 font-medium truncate">
+                    {activeSessionName}
+                  </span>
+                  <button
+                    onClick={handleClearSession}
+                    className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
+                    title="Clear conversation"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              {error && (
+                <span className="text-xs text-red-500" title={error}>Error</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              <button
+                onClick={() => setShowProviderSetup(true)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                title="Configure providers"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              {isSessionTabActive && (
+                <TokenUsageRing
+                  usedTokens={displayedTokenUsage.totalTokens}
+                  contextWindowSize={displayedTokenUsage.contextWindowSize}
+                  inputTokens={displayedTokenUsage.inputTokens}
+                  outputTokens={displayedTokenUsage.outputTokens}
+                  cacheReadTokens={displayedTokenUsage.cacheReadTokens}
+                  totalCost={displayedTokenUsage.totalCost}
                 />
-                <span className="text-xs text-gray-700 font-medium truncate">
-                  {activeSessionName}
-                </span>
+              )}
+              {isSessionTabActive && (
+                <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                  <button
+                    onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
+                    className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    title="Full view"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
+                    className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    title="Turn view"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
+                    className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    title="Outline view"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {!isConnected && (
                 <button
-                  onClick={handleClearSession}
-                  className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
-                  title="Clear conversation"
+                  onClick={handleConnect}
+                  className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  Connect to Pi
                 </button>
-              </>
-            )}
-            {error && (
-              <span className="text-xs text-red-500" title={error}>Error</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            <button
-              onClick={() => setShowProviderSetup(true)}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-              title="Configure providers"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            {isSessionTabActive && (
-              <TokenUsageRing
-                usedTokens={displayedTokenUsage.totalTokens}
-                contextWindowSize={displayedTokenUsage.contextWindowSize}
-                inputTokens={displayedTokenUsage.inputTokens}
-                outputTokens={displayedTokenUsage.outputTokens}
-                cacheReadTokens={displayedTokenUsage.cacheReadTokens}
-                totalCost={displayedTokenUsage.totalCost}
-              />
-            )}
-            {isSessionTabActive && (
+              )}
               <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
                 <button
-                  onClick={() => { localStorage.setItem('xi-view-mode', 'normal'); setViewMode('normal') }}
-                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'normal' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  title="Full view"
+                  onClick={() => toggleLeftPanel()}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                  title="Toggle left panel"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
                   </svg>
                 </button>
                 <button
-                  onClick={() => { localStorage.setItem('xi-view-mode', 'turn'); setViewMode('turn') }}
-                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'turn' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  title="Turn view"
+                  onClick={() => toggleRightPanel()}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
+                  title="Toggle right panel"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18M6 9h12M3 13h18M6 17h12" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => { localStorage.setItem('xi-view-mode', 'outline'); setViewMode('outline') }}
-                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${viewMode === 'outline' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  title="Outline view"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
                   </svg>
                 </button>
               </div>
-            )}
-            {!isConnected && (
-              <button
-                onClick={handleConnect}
-                className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
-              >
-                Connect to Pi
-              </button>
-            )}
-            <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-              <button
-                onClick={() => toggleLeftPanel()}
-                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${leftPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                title="Toggle left panel"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
-                </svg>
-              </button>
-              <button
-                onClick={() => toggleRightPanel()}
-                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${rightPanelCollapsed ? 'text-gray-500 hover:text-gray-700' : 'bg-gray-200 text-gray-900 shadow-sm'}`}
-                title="Toggle right panel"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 12h8m-16 6h16" />
-                </svg>
-              </button>
             </div>
           </div>
-      </div>
+          {!rightPanelCollapsed && (
+            <div
+              className="flex-shrink-0"
+              style={{ width: rightPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+            />
+          )}
+        </div>
 
-      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
         <LeftPanel
           view={leftPanelView}
           onViewChange={setLeftPanelView}
@@ -721,7 +734,6 @@ function App(): React.ReactElement {
           </div>
         </div>
       )}
-    </div>
     </div>
   )
 }
