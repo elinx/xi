@@ -135,8 +135,7 @@ export function TokenUsageRing({
         style={{
           position: 'absolute',
           top: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
+          right: 0,
           marginTop: 6,
           background: '#1a1a2e',
           borderRadius: 6,
