@@ -147,7 +147,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
 
   // Tool-specific header info
   const toolIcon: Record<string, string> = {
-    bash: '▶',
+    bash: '💻',
     read: '📄',
     edit: '✏️',
     write: '📝',
