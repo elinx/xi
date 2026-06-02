@@ -452,6 +452,26 @@ function App(): React.ReactElement {
   return (
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+        {!leftPanelCollapsed && (
+          <div
+            className="flex items-center justify-between px-3 pb-2 flex-shrink-0"
+            style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={handleOpenDirectory}
+                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Open project directory"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px' }}>
           <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {activeSessionName && isSessionTabActive && (
@@ -574,60 +594,47 @@ function App(): React.ReactElement {
             style={{ width: leftPanelWidth }}
           >
             <div className="h-8 flex items-center px-2 border-b border-gray-200 gap-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate mr-1" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={() => setLeftPanelView('sessions')}
-                  className={leftPanelView === 'sessions' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
-                  title="Sessions"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18v14H7l-4 4V4z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setLeftPanelView('skills')}
-                  className={leftPanelView === 'skills' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
-                  title="Skills"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setLeftPanelView('mcp')}
-                  className={leftPanelView === 'mcp' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
-                  title="MCP"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                    <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setLeftPanelView('settings')}
-                  className={leftPanelView === 'settings' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
-                  title="Settings"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              </div>
               <button
-                onClick={handleOpenDirectory}
-                className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1"
-                title="Open project directory"
+                onClick={() => setLeftPanelView('sessions')}
+                className={leftPanelView === 'sessions' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+                title="Sessions"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18v14H7l-4 4V4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h7" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setLeftPanelView('skills')}
+                className={leftPanelView === 'skills' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+                title="Skills"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setLeftPanelView('mcp')}
+                className={leftPanelView === 'mcp' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+                title="MCP"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setLeftPanelView('settings')}
+                className={leftPanelView === 'settings' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+                title="Settings"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
               <button
