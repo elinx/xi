@@ -50,10 +50,10 @@ export const useLayoutStore = create<LayoutState>()(
 
       setLeftPanelView: (view) =>
         set((state) => {
-          if (state.leftPanelView === view) {
-            return { leftPanelCollapsed: !state.leftPanelCollapsed }
+          if (state.leftPanelCollapsed) {
+            return { leftPanelView: view, leftPanelCollapsed: false }
           }
-          return { leftPanelView: view, leftPanelCollapsed: false }
+          return { leftPanelView: view }
         }),
 
       toggleLeftPanel: () =>
@@ -67,10 +67,10 @@ export const useLayoutStore = create<LayoutState>()(
 
       setRightPanelView: (view) =>
         set((state) => {
-          if (state.rightPanelView === view) {
-            return { rightPanelCollapsed: !state.rightPanelCollapsed }
+          if (state.rightPanelCollapsed) {
+            return { rightPanelView: view, rightPanelCollapsed: false }
           }
-          return { rightPanelView: view, rightPanelCollapsed: false }
+          return { rightPanelView: view }
         }),
 
       toggleRightPanel: () =>

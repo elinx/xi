@@ -591,7 +591,7 @@ function App(): React.ReactElement {
           view={leftPanelView}
           onViewChange={setLeftPanelView}
           collapsed={leftPanelCollapsed}
-          onToggleCollapse={() => setLeftPanelCollapsed(true)}
+          onToggleCollapse={() => toggleLeftPanel()}
           width={leftPanelWidth}
           onResizeStart={handleLeftResizeStart}
           projectName={projectName}

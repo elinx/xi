@@ -21,10 +21,8 @@ describe('useLayoutStore', () => {
       expect(state.leftPanelCollapsed).toBe(false)
     })
 
-    it('toggles collapse when clicking the same view', () => {
+    it('clicking same view does not toggle collapse', () => {
       expect(useLayoutStore.getState().leftPanelCollapsed).toBe(false)
-      useLayoutStore.getState().setLeftPanelView('sessions')
-      expect(useLayoutStore.getState().leftPanelCollapsed).toBe(true)
       useLayoutStore.getState().setLeftPanelView('sessions')
       expect(useLayoutStore.getState().leftPanelCollapsed).toBe(false)
     })
@@ -69,10 +67,10 @@ describe('useLayoutStore', () => {
       expect(state.rightPanelCollapsed).toBe(false)
     })
 
-    it('toggles collapse when clicking same view', () => {
+    it('clicking same view does not toggle collapse', () => {
       useLayoutStore.getState().setRightPanelCollapsed(false)
       useLayoutStore.getState().setRightPanelView('files')
-      expect(useLayoutStore.getState().rightPanelCollapsed).toBe(true)
+      expect(useLayoutStore.getState().rightPanelCollapsed).toBe(false)
     })
   })
 
