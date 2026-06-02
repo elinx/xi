@@ -45,7 +45,7 @@ export const useLayoutStore = create<LayoutState>()(
       leftPanelWidth: LEFT_PANEL_DEFAULT,
 
       rightPanelView: 'files',
-      rightPanelCollapsed: true,
+      rightPanelCollapsed: false,
       rightPanelWidth: RIGHT_PANEL_DEFAULT,
 
       setLeftPanelView: (view) =>
