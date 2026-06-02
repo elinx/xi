@@ -26,6 +26,7 @@
 # OS files
 # Pi reference source (not part of this project)
 # Stray test outputs
+test-results/
 dist/
 layout-test-initial.png
 node_modules/
