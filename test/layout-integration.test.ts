@@ -27,6 +27,10 @@ window.api = new Proxy({}, {
       if (prop === 'getProviderAuthStatus') return { ok: true, data: {} };
       if (prop === 'readDirectory') return { ok: true, entries: [] };
       if (prop === 'readFile') return { ok: false, error: 'Not available' };
+      if (prop === 'listSkills') return { ok: true, data: [] };
+      if (prop === 'listMcpServers') return { ok: true, data: [] };
+      if (prop === 'mcpPing') return { ok: true, connected: false };
+      if (prop === 'getProjectPath') return process.cwd?.() ?? '.';
       return { ok: true, success: true, data: {} };
     };
   }
@@ -119,7 +123,7 @@ describe('Layout integration test', () => {
     await skillsButton!.click()
     await page.waitForTimeout(500)
     const text = await page.textContent('#root')
-    expect(text).toContain('coming soon')
+    expect(text).toContain('No skills found')
   })
 
   it('switches back to sessions view', async () => {
@@ -147,9 +151,11 @@ describe('Layout integration test', () => {
   it('toggles right panel via header button', async () => {
     const rightBtn = await page.$('[title="Toggle right panel"]')
     expect(rightBtn).not.toBeNull()
+    const textBefore = await page.textContent('#root')
+    expect(textBefore).toContain('No files found')
     await rightBtn!.click()
     await page.waitForTimeout(500)
-    const text = await page.textContent('#root')
-    expect(text).toContain('No files found')
+    const textAfterCollapse = await page.textContent('#root')
+    expect(textAfterCollapse).not.toContain('No files found')
   })
 })
