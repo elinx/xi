@@ -77,9 +77,14 @@ describe('Layout integration test', () => {
     await browser.close()
   })
 
-  it('renders the ActivityBar with 4 icon buttons', async () => {
+  it('renders the LeftPanel toggle row with 4 view buttons', async () => {
     const buttons = await page.$$('[title="Sessions"], [title="Skills"], [title="MCP"], [title="Settings"]')
     expect(buttons.length).toBe(4)
+  })
+
+  it('renders the LeftPanel collapse button', async () => {
+    const collapseBtn = await page.$('[title="Collapse panel"]')
+    expect(collapseBtn).not.toBeNull()
   })
 
   it('renders the LeftPanel with session content', async () => {
@@ -95,33 +100,6 @@ describe('Layout integration test', () => {
   it('renders the InputBar', async () => {
     const textarea = await page.$('textarea')
     expect(textarea).not.toBeNull()
-  })
-
-  it('RightPanel is collapsed by default', async () => {
-    const collapseBtn = await page.$('[title="Collapse panel"]')
-    expect(collapseBtn).toBeNull()
-  })
-
-  it('can toggle RightPanel open via header button', async () => {
-    const expandButton = await page.$('[title="Show file explorer"]')
-    expect(expandButton).not.toBeNull()
-    await expandButton!.click()
-    await page.waitForTimeout(500)
-    const collapseBtn = await page.$('[title="Collapse panel"]')
-    expect(collapseBtn).not.toBeNull()
-  })
-
-  it('ActivityBar clicking toggles left panel', async () => {
-    const sessionsButton = await page.$('[title="Sessions"]')
-    expect(sessionsButton).not.toBeNull()
-    await sessionsButton!.click()
-    await page.waitForTimeout(500)
-    let text = await page.textContent('#root')
-    expect(text).not.toContain('No sessions found')
-    await sessionsButton!.click()
-    await page.waitForTimeout(500)
-    text = await page.textContent('#root')
-    expect(text).toContain('No sessions found')
   })
 
   it('switches left panel view to settings', async () => {
@@ -149,5 +127,39 @@ describe('Layout integration test', () => {
     await page.waitForTimeout(500)
     const text = await page.textContent('#root')
     expect(text).toContain('No sessions found')
+  })
+
+  it('clicking active Sessions button collapses left panel', async () => {
+    const sessionsButton = await page.$('[title="Sessions"]')
+    expect(sessionsButton).not.toBeNull()
+    await sessionsButton!.click()
+    await page.waitForTimeout(500)
+    const expandBtn = await page.$('[title="Show sessions"]')
+    expect(expandBtn).not.toBeNull()
+  })
+
+  it('can expand LeftPanel via expand button', async () => {
+    const expandBtn = await page.$('[title="Show sessions"]')
+    expect(expandBtn).not.toBeNull()
+    await expandBtn!.click()
+    await page.waitForTimeout(500)
+    const toggleButtons = await page.$$('[title="Sessions"], [title="Skills"], [title="MCP"], [title="Settings"]')
+    expect(toggleButtons.length).toBe(4)
+    const text = await page.textContent('#root')
+    expect(text).toContain('No sessions found')
+  })
+
+  it('can toggle RightPanel open via header button', async () => {
+    const expandButton = await page.$('[title="Show file explorer"]')
+    expect(expandButton).not.toBeNull()
+    await expandButton!.click()
+    await page.waitForTimeout(500)
+    const text = await page.textContent('#root')
+    expect(text).toContain('No files found')
+  })
+
+  it('RightPanel has collapse button when open', async () => {
+    const collapseBtns = await page.$$('[title="Collapse panel"]')
+    expect(collapseBtns.length).toBeGreaterThanOrEqual(1)
   })
 })
