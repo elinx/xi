@@ -450,21 +450,27 @@ function App(): React.ReactElement {
   }, [])
 
    return (
-      <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-          <div className="flex items-center border-b border-gray-200 bg-gray-50 px-4 pb-2 gap-3" style={{ paddingTop: isMac ? '28px' : '4px', paddingLeft: isMac ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
-            <div className="flex items-center gap-1.5 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
-             <button
-               onClick={handleOpenDirectory}
-               className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-               title="Open project directory"
-             >
-               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-               </svg>
-             </button>
-           </div>
-           <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+       <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+         <div className="flex border-b border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+           {!leftPanelCollapsed && (
+            <div
+              className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200"
+              style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '4px' }}
+            >
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
+              <button
+                onClick={handleOpenDirectory}
+                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Open project directory"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            </div>
+          )}
+          <div className="flex items-center flex-1 px-4 pb-2 min-w-0 gap-3" style={{ paddingTop: isMac ? '28px' : '4px', paddingLeft: isMac ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
              {activeSessionName && isSessionTabActive && (
                <>
                  <span
@@ -492,11 +498,10 @@ function App(): React.ReactElement {
                  </button>
                </>
              )}
-             {error && (
-               <span className="text-xs text-red-500" title={error}>Error</span>
-             )}
-           </div>
-           <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              {error && (
+                <span className="text-xs text-red-500" title={error}>Error</span>
+              )}
+            <div className="flex items-center gap-2 flex-shrink-0 ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
              <button
                onClick={() => setShowProviderSetup(true)}
                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
@@ -576,10 +581,11 @@ function App(): React.ReactElement {
                  </svg>
                </button>
              </div>
-           </div>
+            </div>
+          </div>
          </div>
 
-        <div className="flex flex-1 overflow-hidden">
+         <div className="flex flex-1 overflow-hidden">
         <LeftPanel
           view={leftPanelView}
           onViewChange={setLeftPanelView}
