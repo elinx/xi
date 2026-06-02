@@ -71,6 +71,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
 
   const closeableTabs = tabs.filter(t => t.closable)
   const ctxTab = ctxMenu ? tabs.find(t => t.id === ctxMenu.tabId) : null
+  const otherCloseableTabs = ctxMenu ? closeableTabs.filter(t => t.id !== ctxMenu.tabId) : []
 
   return (
     <div className="h-9 bg-gray-100 border-b border-gray-200 flex items-stretch relative">
@@ -160,9 +161,9 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
                 Close
               </button>
             )}
-            {closeableTabs.length > 0 && (
+            {otherCloseableTabs.length > 0 && (
               <button
-                onClick={() => { closeableTabs.forEach(t => onTabClose(t.id)); setCtxMenu(null) }}
+                onClick={() => { otherCloseableTabs.forEach(t => onTabClose(t.id)); setCtxMenu(null) }}
                 className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors"
               >
                 Close Others

@@ -203,16 +203,18 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
     setCtxMenu({ node, x, y })
   }, [])
 
-  const handleCopyPath = useCallback(() => {
+  const handleCopyPath = useCallback(async () => {
     if (!ctxMenu) return
-    window.api.copyToClipboard(ctxMenu.node.path)
+    const nodePath = ctxMenu.node.path
+    const projectPath = await window.api.getProjectPath()
+    const fullPath = nodePath.startsWith('/') ? nodePath : `${projectPath}/${nodePath}`
+    window.api.copyToClipboard(fullPath)
     setCtxMenu(null)
   }, [ctxMenu])
 
   const handleCopyRelativePath = useCallback(() => {
     if (!ctxMenu) return
-    const relative = ctxMenu.node.path.replace(process.cwd() + '/', '').replace(process.cwd() + '\\', '')
-    window.api.copyToClipboard(relative)
+    window.api.copyToClipboard(ctxMenu.node.path)
     setCtxMenu(null)
   }, [ctxMenu])
 
