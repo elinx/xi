@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type LeftPanelView = 'sessions' | 'skills' | 'mcp'
-export type RightPanelView = 'files' | 'git'
+export type RightPanelView = 'files' | 'git' | 'search'
 
 interface LayoutState {
   leftPanelView: LeftPanelView

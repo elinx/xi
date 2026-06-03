@@ -1,9 +1,11 @@
 import FileTree from './FileTree'
 import GitPanel from './GitPanel'
+import SearchPanel from './SearchPanel'
+import type { RightPanelView } from '../hooks/useLayoutStore'
 
 interface RightPanelProps {
-  view: 'files' | 'git'
-  onViewChange: (view: 'files' | 'git') => void
+  view: RightPanelView
+  onViewChange: (view: RightPanelView) => void
   collapsed: boolean
   onToggleCollapse: () => void
   width: number
@@ -32,10 +34,10 @@ function GitIcon({ className }: { className?: string }) {
   )
 }
 
-function CollapseIcon({ className }: { className?: string }) {
+function SearchIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
     </svg>
   )
 }
@@ -71,6 +73,13 @@ export default function RightPanel({
           <FolderIcon className="w-4 h-4" />
         </button>
         <button
+          onClick={() => onViewChange('search')}
+          className={view === 'search' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+          title="Search"
+        >
+          <SearchIcon className="w-4 h-4" />
+        </button>
+        <button
           onClick={() => onViewChange('git')}
           className={view === 'git' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
           title="Git"
@@ -80,12 +89,16 @@ export default function RightPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {view === 'files' ? (
+        {view === 'files' && (
           <div className="h-full overflow-y-auto">
             <FileTree onFileSelect={onFileSelect} />
           </div>
-        ) : (
+        )}
+        {view === 'git' && (
           <GitPanel onFileSelect={onDiffSelect} />
+        )}
+        {view === 'search' && (
+          <SearchPanel onFileSelect={onFileSelect} />
         )}
       </div>
     </div>

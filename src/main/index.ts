@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { join, basename, extname, dirname } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { execFile } from 'child_process'
 import { simpleGit } from 'simple-git'
 import { watch } from 'chokidar'
 import { PiSDKBridge } from './pi-sdk-bridge'
@@ -718,6 +719,104 @@ function registerIpcHandlers(): void {
       }
       writeFileSync(filePath, content, 'utf-8')
       return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('fs:search', async (_event, query: string, options?: { includePattern?: string; excludePattern?: string; maxResults?: number }) => {
+    try {
+      const cwd = process.cwd()
+      const maxResults = options?.maxResults ?? 200
+
+      try {
+        const args = ['--json', '--max-count', '50', '--ignore-case', '--max-filesize', '2M']
+        if (options?.includePattern) args.push('--glob', options.includePattern)
+        if (options?.excludePattern) args.push('--glob', `!${options.excludePattern}`)
+        args.push(query, cwd)
+
+        const stdout = await new Promise<string>((resolve, reject) => {
+          execFile('rg', args, { timeout: 10000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+            if (err && !stdout) reject(err)
+            else resolve(stdout || '')
+          })
+        })
+
+        const results: Array<{ filePath: string; relativePath: string; matches: Array<{ lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }> }> = []
+        const fileMap = new Map<string, Array<{ lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }>>()
+
+        for (const line of stdout.split('\n')) {
+          if (!line.trim()) continue
+          try {
+            const obj = JSON.parse(line)
+            if (obj.type !== 'match') continue
+            const data = obj.data || {}
+            const filePath: string = data.path?.text ?? ''
+            const lineNumber: number = data.line_number ?? 0
+            const lineContent: string = data.lines?.text ?? ''
+            const submatches: Array<{ start: number; end: number }> = data.submatches ?? []
+            const matchStart = submatches[0]?.start ?? 0
+            const matchEnd = submatches[0]?.end ?? matchStart
+
+            if (!fileMap.has(filePath)) fileMap.set(filePath, [])
+            const matches = fileMap.get(filePath)!
+            if (matches.length < 50) {
+              matches.push({ lineNumber, lineContent: lineContent.replace(/\n$/, ''), matchStart, matchEnd })
+            }
+          } catch { continue }
+
+          if (results.length >= maxResults) break
+        }
+
+        for (const [filePath, matches] of fileMap) {
+          results.push({ filePath, relativePath: filePath.startsWith(cwd + '/') ? filePath.slice(cwd.length + 1) : filePath, matches })
+          if (results.length >= maxResults) break
+        }
+
+        return { ok: true, results }
+      } catch {
+        const results: Array<{ filePath: string; relativePath: string; matches: Array<{ lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }> }> = []
+        const q = query.toLowerCase()
+        const maxFileSize = 2 * 1024 * 1024
+        const BINARY_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'svg', 'webp', 'mp3', 'mp4', 'wav', 'zip', 'tar', 'gz', 'rar', '7z', 'pdf', 'woff', 'woff2', 'ttf', 'eot', 'otf', 'lock'])
+
+        function walkAndSearch(dirPath: string, depth: number): void {
+          if (depth > 5 || results.length >= maxResults) return
+          try {
+            const entries = readdirSync(dirPath, { withFileTypes: true })
+            for (const entry of entries) {
+              if (results.length >= maxResults) break
+              if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '.git') continue
+              const fullPath = join(dirPath, entry.name)
+              if (entry.isDirectory()) {
+                walkAndSearch(fullPath, depth + 1)
+              } else if (entry.isFile()) {
+                const ext = extname(entry.name).slice(1).toLowerCase()
+                if (BINARY_EXTS.has(ext)) continue
+                try {
+                  const stat = statSync(fullPath)
+                  if (stat.size > maxFileSize) continue
+                  const content = readFileSync(fullPath, 'utf-8')
+                  const lines = content.split('\n')
+                  const matches: Array<{ lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }> = []
+                  for (let i = 0; i < lines.length && matches.length < 50; i++) {
+                    const idx = lines[i].toLowerCase().indexOf(q)
+                    if (idx !== -1) {
+                      matches.push({ lineNumber: i + 1, lineContent: lines[i], matchStart: idx, matchEnd: idx + query.length })
+                    }
+                  }
+                  if (matches.length > 0) {
+                    results.push({ filePath: fullPath, relativePath: fullPath.startsWith(cwd + '/') ? fullPath.slice(cwd.length + 1) : fullPath, matches })
+                  }
+                } catch { continue }
+              }
+            }
+          } catch { return }
+        }
+
+        walkAndSearch(cwd, 0)
+        return { ok: true, results }
+      }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

@@ -128,6 +128,17 @@ const api = {
   writeFile: (filePath: string, content: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('fs:writeFile', filePath, content),
 
+  searchFiles: (query: string, options?: { includePattern?: string; excludePattern?: string; maxResults?: number }): Promise<{
+    ok: boolean
+    results?: Array<{
+      filePath: string
+      relativePath: string
+      matches: Array<{ lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }>
+    }>
+    error?: string
+  }> =>
+    ipcRenderer.invoke('fs:search', query, options),
+
   watchStart: (): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('fs:watchStart'),
 

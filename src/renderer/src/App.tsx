@@ -480,6 +480,10 @@ function App(): React.ReactElement {
         refreshFileIndex()
         setPaletteOpen(true)
       }
+      if (mod && e.shiftKey && e.key === 'F') {
+        e.preventDefault()
+        setRightPanelView('search')
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
