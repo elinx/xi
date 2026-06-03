@@ -328,25 +328,11 @@ function App(): React.ReactElement {
   isLazySwitchedRef.current = isLazySwitched
 
   const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
-    let finalText = text
-    if (mentions && mentions.length > 0) {
-      const fileContexts: string[] = []
-      for (const m of mentions) {
-        if (m.type === 'file') {
-          try {
-            const result = await window.api.readFile(m.path)
-            if (result.ok && result.data) {
-              fileContexts.push(`--- File: ${result.data.path} ---\n${result.data.content}\n--- End File ---`)
-            }
-          } catch {}
-        }
-      }
-      if (fileContexts.length > 0) {
-        finalText = text + '\n\n' + fileContexts.join('\n\n')
-      }
-    }
-
     if (!isLazySwitchedRef.current && isPiStreaming()) return
+
+    const doSend = () => {
+      sendPrompt(text, images, mentions)
+    }
 
     if (isLazySwitchedRef.current) {
       const targetPath = displayedSessionPathRef.current
@@ -359,10 +345,10 @@ function App(): React.ReactElement {
         await loadHistory()
         await loadForkPoints(targetPath)
         await refresh()
-        sendPrompt(finalText, images)
+        doSend()
       }
     } else {
-      sendPrompt(finalText, images)
+      doSend()
     }
   }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, sendPrompt, isPiStreaming, setPiConnectedPath])
 
@@ -519,8 +505,8 @@ function App(): React.ReactElement {
   const projects = sessions?.projects ?? []
   const projectName = projects[0]?.projectPath.split(/[/\\]/).pop() ?? 'Sessions'
 
-  const handleFileSelect = useCallback((filePath: string) => {
-    addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })
+  const handleFileSelect = useCallback((filePath: string, scrollToLine?: number) => {
+    addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath, scrollToLine } })
   }, [addTab])
 
   const handleDiffSelect = useCallback((filePath: string) => {
@@ -736,7 +722,7 @@ function App(): React.ReactElement {
               />
             </div>
             {activeTab?.type === 'file' && (
-              <FileViewer filePath={activeTab.meta.filePath as string} />
+              <FileViewer filePath={activeTab.meta.filePath as string} scrollToLine={activeTab.meta.scrollToLine as number | undefined} />
             )}
             {activeTab?.type === 'diff' && (
               <DiffViewer filePath={activeTab.meta.filePath as string} />

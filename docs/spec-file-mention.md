@@ -79,28 +79,47 @@ interface InputBarProps {
 }
 ```
 
-发送给 Pi 的 prompt command 中，mention 路径被内联替换：
+### 3.1 发送给 Pi 的格式（2024-06 更新：对齐主流做法）
 
+**主流做法（Cursor / VS Code Copilot / Windsurf）**：@mention 的文件内容**绝不出现在用户消息文本中**。文件内容作为结构化上下文与用户文本**分开发送**。
+
+| 工具 | Chat UI 显示 | AI 收到的格式 |
+|------|-------------|--------------|
+| Cursor | pill/chip（文件名） | 文件内容注入结构化 context，与用户文本分离 |
+| VS Code Copilot | attachment pill | `<attachments>` XML tag，用户文本在 `<prompt>` tag |
+| Windsurf | context item | 优先级 pipeline 组装，与用户文本分离 |
+
+**Xi 的策略**：
+
+1. **Chat UI**：用户消息只显示 `@filename`，不显示文件内容
+2. **发送给 Pi**：`mentions` 字段传给 Pi SDK，由 SDK 读取文件内容注入 context
+3. **Fallback**：如果 Pi SDK 不支持 `mentions` 字段，在 `message` 之外用结构化标记追加（而非直接拼入用户消息文本）
+
+发送格式：
 ```
-用户输入: "fix the bug in @login.ts"
-发送: { type: 'prompt', message: 'fix the bug in @login.ts', mentions: [{ type: 'file', path: '/path/src/auth/login.ts', name: 'login.ts' }] }
+{ 
+  type: 'prompt', 
+  message: 'fix the bug in @login.ts',    ← 用户文本不变
+  mentions: [{ type: 'file', path: '/path/src/auth/login.ts', name: 'login.ts' }]
+}
 ```
 
-Pi SDK 会根据 `mentions` 字段自动读取文件内容注入 context。如果 SDK 不支持 `mentions` 字段，则 fallback 为在 message 文本中追加文件内容：
+Pi SDK 处理 `mentions` 字段读取文件内容。如果 SDK 不支持，fallback 为追加到 message 末尾，但使用 XML 标记分隔：
 
 ```
 fix the bug in @login.ts
 
---- File: src/auth/login.ts ---
+<attachment id="login.ts">
 <file content>
---- End File ---
+</attachment>
+```
 ```
 
 ### 3.2 选择 fallback 策略
 
-优先检查 Pi SDK 是否支持 `mentions` 字段。如果支持 → 结构化发送；如果不支持 → 文本 fallback。
+优先检查 Pi SDK 是否支持 `mentions` 字段。如果支持 → 结构化发送；如果不支持 → XML attachment fallback。
 
-Phase 1 先用文本 fallback（简单可靠），后续 Pi SDK 升级后切到结构化。
+**重要**：无论哪种 fallback，文件内容都**不混入用户消息文本**。用户在 Chat UI 中只看到 `@filename`，不看到文件原文。这与 Cursor / VS Code Copilot / Windsurf 的做法一致。
 
 ## 4. UI 设计
 

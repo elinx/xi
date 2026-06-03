@@ -10,7 +10,7 @@ interface RightPanelProps {
   onToggleCollapse: () => void
   width: number
   onResizeStart: (e: React.MouseEvent) => void
-  onFileSelect: (filePath: string) => void
+  onFileSelect: (filePath: string, scrollToLine?: number) => void
   onDiffSelect: (filePath: string) => void
 }
 

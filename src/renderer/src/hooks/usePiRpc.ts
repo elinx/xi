@@ -25,7 +25,7 @@ interface UsePiRpcReturn {
   isConnected: boolean
   currentModel: PiModelInfo | null
   thinkingLevel: string | null
-  sendPrompt: (text: string, images?: { data: string; mimeType: string }[]) => void
+  sendPrompt: (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => void
   abort: () => Promise<void>
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
@@ -464,7 +464,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   }, [])
 
   const sendPrompt = useCallback(
-    (text: string, images?: { data: string; mimeType: string }[]) => {
+    (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
       const command: Record<string, unknown> = {
         type: 'prompt',
         message: text,
@@ -475,6 +475,13 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           type: 'image' as const,
           data: img.data,
           mimeType: img.mimeType,
+        }))
+      }
+      if (mentions && mentions.length > 0) {
+        command.mentions = mentions.map((m) => ({
+          type: m.type,
+          path: m.path,
+          name: m.name,
         }))
       }
       window.api.sendCommand(command)

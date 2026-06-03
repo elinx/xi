@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 
 interface FileViewerProps {
   filePath: string
+  scrollToLine?: number
 }
 
 interface FileData {
@@ -49,11 +50,12 @@ function isBinaryExt(ext: string): boolean {
   return binary.has(ext)
 }
 
-export default function FileViewer({ filePath }: FileViewerProps) {
+export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) {
   const [fileData, setFileData] = useState<FileData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const loadFile = useCallback(async (path: string) => {
     setLoading(true)
@@ -116,6 +118,19 @@ export default function FileViewer({ filePath }: FileViewerProps) {
     return () => { cancelled = true }
   }, [fileData])
 
+  useEffect(() => {
+    if (scrollToLine == null || !containerRef.current) return
+    const raf = requestAnimationFrame(() => {
+      const el = containerRef.current?.querySelector(`[data-line="${scrollToLine}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('line-flash')
+        setTimeout(() => el.classList.remove('line-flash'), 2000)
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [scrollToLine, highlightedHtml])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -151,7 +166,7 @@ export default function FileViewer({ filePath }: FileViewerProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" ref={containerRef}>
         {isMarkdown ? (
           <div className="prose prose-sm max-w-none p-4 [&_img]:max-w-full [&_img]:rounded">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{fileData.content}</ReactMarkdown>
@@ -165,7 +180,7 @@ export default function FileViewer({ filePath }: FileViewerProps) {
           <pre className="text-xs leading-5 font-mono">
             <code>
               {lines.map((line, i) => (
-                <div key={i} className="flex hover:bg-gray-50">
+                <div key={i} className="flex hover:bg-gray-50" data-line={i + 1}>
                   <span
                     className="flex-shrink-0 text-right text-gray-300 select-none pr-4 pl-4 sticky left-0 bg-white"
                     style={{ minWidth: `${String(lineCount).length + 2}ch` }}

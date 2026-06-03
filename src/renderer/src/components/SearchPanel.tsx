@@ -12,7 +12,7 @@ interface SearchResult {
 }
 
 interface SearchPanelProps {
-  onFileSelect: (filePath: string) => void
+  onFileSelect: (filePath: string, scrollToLine?: number) => void
 }
 
 export default function SearchPanel({ onFileSelect }: SearchPanelProps) {
@@ -158,7 +158,7 @@ export default function SearchPanel({ onFileSelect }: SearchPanelProps) {
                 <button
                   key={i}
                   className="w-full flex items-start gap-2 px-3 pl-8 py-1 text-[11px] font-mono text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors text-left"
-                  onClick={() => onFileSelect(file.filePath)}
+                  onClick={() => onFileSelect(file.filePath, match.lineNumber)}
                 >
                   <span className="text-gray-300 shrink-0 select-none w-6 text-right">{match.lineNumber}</span>
                   <span className="truncate">{highlightLine(match.lineContent, match.matchStart, match.matchEnd)}</span>

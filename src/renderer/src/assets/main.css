@@ -38,3 +38,8 @@
 .shiki-highlight .line:hover {
   background-color: #f9fafb;
 }
+
+.line-flash {
+  background-color: rgba(255, 200, 0, 0.15);
+  transition: background-color 2s ease-out;
+}
