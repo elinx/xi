@@ -1,9 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
 import type { PiModelInfo } from '../types/session'
+import type { FileEntry } from '../hooks/useFileIndex'
+import { useFileMention, type MentionItem } from '../hooks/useFileMention'
 import ModelSelector from './ModelSelector'
+import FileMentionDropdown from './FileMentionDropdown'
 
 interface InputBarProps {
-  onSend: (text: string, images?: { data: string; mimeType: string }[]) => void
+  onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[]) => void
   disabled: boolean
   isConnected: boolean
   isStreaming?: boolean
@@ -15,13 +18,16 @@ interface InputBarProps {
   currentModel?: PiModelInfo | null
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   getAvailableModels?: () => Promise<PiModelInfo[]>
+  files: FileEntry[]
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const mention = useFileMention(files)
 
   const showStop = isStreaming || isBackgroundStreaming
   const noModel = isConnected && !currentModel
@@ -30,15 +36,17 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     const trimmed = text.trim()
     if (!trimmed && pastedImages.length === 0) return
     if (disabled) return
-    onSend(trimmed, pastedImages.length > 0 ? pastedImages : undefined)
+    onSend(trimmed, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined)
     setText('')
     setPastedImages([])
+    mention.clearMentions()
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [text, pastedImages, disabled, onSend])
+  }, [text, pastedImages, disabled, onSend, mention])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (mention.onKeyDown(e)) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
@@ -46,11 +54,28 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   }
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>): void {
-    setText(e.target.value)
+    const value = e.target.value
+    setText(value)
+    mention.onTextInput(value, e.target.selectionStart ?? value.length)
     const el = e.target
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 96) + 'px'
   }
+
+  const handleMentionSelect = useCallback((file: FileEntry) => {
+    const before = text.substring(0, mention.triggerStart)
+    const after = text.substring(mention.triggerStart + 1 + mention.query.length)
+    const mentionText = `@${file.name} `
+    setText(before + mentionText + after)
+    mention.selectItem(file)
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newPos = before.length + mentionText.length
+        textareaRef.current.setSelectionRange(newPos, newPos)
+        textareaRef.current.focus()
+      }
+    }, 0)
+  }, [text, mention])
 
   function handlePaste(e: React.ClipboardEvent): void {
     const items = e.clipboardData.items
@@ -72,7 +97,6 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     }
   }
 
-  // Merged status line: lazy switch info integrated into Pi Connected status
   let statusDot: React.ReactNode
   let statusText: React.ReactNode
 
@@ -151,18 +175,26 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
           ))}
         </div>
       )}
-      <div className="flex items-end gap-2">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          disabled={disabled || noModel}
-          rows={1}
-          placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (paste images with Ctrl+V)'}
-          className="flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
-        />
+      <div className="flex items-end gap-2 relative">
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            disabled={disabled || noModel}
+            rows={1}
+            placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (@ to mention files)'}
+            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
+          />
+          <FileMentionDropdown
+            files={mention.filteredFiles}
+            selectedIndex={mention.selectedIndex}
+            onSelect={handleMentionSelect}
+            visible={mention.open}
+          />
+        </div>
         {showStop ? (
           <button
             onClick={onStop}

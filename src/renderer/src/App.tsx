@@ -327,7 +327,25 @@ function App(): React.ReactElement {
   const isLazySwitchedRef = useRef(isLazySwitched)
   isLazySwitchedRef.current = isLazySwitched
 
-  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[]) => {
+  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
+    let finalText = text
+    if (mentions && mentions.length > 0) {
+      const fileContexts: string[] = []
+      for (const m of mentions) {
+        if (m.type === 'file') {
+          try {
+            const result = await window.api.readFile(m.path)
+            if (result.ok && result.data) {
+              fileContexts.push(`--- File: ${result.data.path} ---\n${result.data.content}\n--- End File ---`)
+            }
+          } catch {}
+        }
+      }
+      if (fileContexts.length > 0) {
+        finalText = text + '\n\n' + fileContexts.join('\n\n')
+      }
+    }
+
     if (!isLazySwitchedRef.current && isPiStreaming()) return
 
     if (isLazySwitchedRef.current) {
@@ -341,10 +359,10 @@ function App(): React.ReactElement {
         await loadHistory()
         await loadForkPoints(targetPath)
         await refresh()
-        sendPrompt(text, images)
+        sendPrompt(finalText, images)
       }
     } else {
-      sendPrompt(text, images)
+      sendPrompt(finalText, images)
     }
   }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, sendPrompt, isPiStreaming, setPiConnectedPath])
 
@@ -752,6 +770,7 @@ function App(): React.ReactElement {
               currentModel={currentModel}
               onSetModel={setModel}
               getAvailableModels={getAvailableModels}
+              files={indexedFiles}
             />
           )}
         </div>
