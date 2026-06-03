@@ -4,6 +4,8 @@ import { useSessionManager } from './hooks/useSessionManager'
 import { useSessionCache } from './hooks/useSessionCache'
 import { useLayoutStore } from './hooks/useLayoutStore'
 import { useTabStore, SESSION_TAB_ID, SETTINGS_TAB_ID, type TabType } from './hooks/useTabStore'
+import { useFileIndex } from './hooks/useFileIndex'
+import { useCommandRegistry } from './hooks/useCommandRegistry'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import LeftPanel from './components/LeftPanel'
@@ -15,6 +17,7 @@ import TerminalPane from './components/TerminalPane'
 import { TokenUsageRing } from './components/TokenUsageRing'
 import WelcomeDialog from './components/WelcomeDialog'
 import SettingsPanel from './components/SettingsPanel'
+import CommandPalette from './components/CommandPalette'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage } from './types/message'
 import type { ForkPoint } from './types/session'
@@ -118,6 +121,7 @@ function App(): React.ReactElement {
   const isSessionTabActive = activeTab?.type === 'session'
 
   const [isLeftResizing, setIsLeftResizing] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const leftResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const leftWidthRef = useRef(leftPanelWidth)
   leftWidthRef.current = leftPanelWidth
@@ -144,6 +148,9 @@ function App(): React.ReactElement {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isLeftResizing, setLeftPanelWidth])
+
+  const { files: indexedFiles, loading: filesLoading, refresh: refreshFileIndex } = useFileIndex()
+  const commands = useCommandRegistry()
 
   const handleLeftResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -433,6 +440,7 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
+      if (paletteOpen) return
       if (e.key === 'Escape') {
         if (isPiStreaming()) abort()
       }
@@ -449,10 +457,15 @@ function App(): React.ReactElement {
         e.preventDefault()
         addTab({ type: 'terminal', title: 'Terminal', closable: true, meta: {} })
       }
+      if (mod && e.key === 'p') {
+        e.preventDefault()
+        refreshFileIndex()
+        setPaletteOpen(true)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [abort, isPiStreaming, toggleLeftPanel, toggleRightPanel, addTab])
+  }, [abort, isPiStreaming, toggleLeftPanel, toggleRightPanel, addTab, paletteOpen, refreshFileIndex])
 
   useEffect(() => {
     const api = window.api as typeof window.api & { watchStart?: () => Promise<{ ok: boolean }>; watchStop?: () => Promise<{ ok: boolean }> }
@@ -755,20 +768,35 @@ function App(): React.ReactElement {
         />
       </div>
 
-      {showWelcome && (
-         <WelcomeDialog
-           getProviderAuthStatus={getProviderAuthStatus}
-           setApiKey={setApiKey}
-           removeAuth={removeAuth}
-           registerCustomProvider={registerCustomProvider}
-            testProvider={testProvider}
-            getProviderConfig={getProviderConfig}
-            onAuthChange={() => {
-             getAvailableModels()
-           }}
-           onSkip={() => setShowWelcome(false)}
-         />
-      )}
+       {showWelcome && (
+          <WelcomeDialog
+            getProviderAuthStatus={getProviderAuthStatus}
+            setApiKey={setApiKey}
+            removeAuth={removeAuth}
+            registerCustomProvider={registerCustomProvider}
+             testProvider={testProvider}
+             getProviderConfig={getProviderConfig}
+             onAuthChange={() => {
+              getAvailableModels()
+            }}
+            onSkip={() => setShowWelcome(false)}
+          />
+       )}
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        files={indexedFiles}
+        filesLoading={filesLoading}
+        sessions={(sessions?.projects?.flatMap(p => p.allSessions) ?? []).map(s => ({
+          name: s.name || '',
+          filePath: s.filePath,
+          isCurrent: s.filePath === currentSession?.filePath,
+        }))}
+        commands={commands}
+        onFileSelect={(filePath) => addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })}
+        onSessionSelect={(sessionPath) => switchSession(sessionPath)}
+      />
     </div>
   )
 }

@@ -26,6 +26,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
+    "cmdk": "^1.1.1",
     "fabric": "^6.9.1",
     "node-pty": "^1.1.0",
     "react": "^19.0.0",
