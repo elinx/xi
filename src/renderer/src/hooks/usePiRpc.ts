@@ -41,6 +41,8 @@ interface UsePiRpcReturn {
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
+  getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
 }
 
 function inferContextWindow(model: string): number {
@@ -611,5 +613,17 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result.ok
   }, [])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn }
+  const testProviderFn = useCallback(async (provider: string, overrides?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string; latencyMs?: number }> => {
+    type ApiWithTest = typeof window.api & { testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }> }
+    const result = await (window.api as ApiWithTest).testProvider(provider, overrides)
+    return result
+  }, [])
+
+  const getProviderConfigFn = useCallback(async (provider: string): Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }> => {
+    type ApiWithConfig = typeof window.api & { getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }> }
+    const result = await (window.api as ApiWithConfig).getProviderConfig(provider)
+    return result
+  }, [])
+
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn }
 }

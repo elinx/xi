@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import type { LeftPanelView } from '../hooks/useLayoutStore'
 import SessionSidebar from './SessionSidebar'
-import ProviderSetup from './ProviderSetup'
 import SkillsPanel from './SkillsPanel'
 import McpPanel from './McpPanel'
 
@@ -15,7 +14,6 @@ interface LeftPanelProps {
   projectName: string
   projectPath: string | undefined
   onOpenDirectory: () => void
-  onOpenConfigDir: () => void
   sessions: import('../types/session').SessionListResult | null
   currentSession: import('../types/session').SessionInfo | null
   onSwitchSession: (sessionPath: string) => void
@@ -24,11 +22,6 @@ interface LeftPanelProps {
   onDeleteSession: (sessionPath: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
-  getProviderAuthStatus: () => Promise<Record<string, { configured: boolean }>>
-  setApiKey: (provider: string, key: string) => Promise<{ ok: boolean; error?: string }>
-  removeAuth: (provider: string) => Promise<{ ok: boolean }>
-  registerCustomProvider: (name: string, apiKey: string, baseUrl: string) => Promise<{ ok: boolean; error?: string }>
-  onAuthChange: () => void
 }
 
 function ChatIcon({ className }: { className?: string }) {
@@ -57,20 +50,10 @@ function McpIcon({ className }: { className?: string }) {
   )
 }
 
-function SettingsIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  )
-}
-
 const toggleViews: { id: LeftPanelView; title: string; icon: ReactNode }[] = [
   { id: 'sessions', title: 'Sessions', icon: <ChatIcon className="w-4 h-4" /> },
   { id: 'skills', title: 'Skills', icon: <WrenchIcon className="w-4 h-4" /> },
   { id: 'mcp', title: 'MCP', icon: <McpIcon className="w-4 h-4" /> },
-  { id: 'settings', title: 'Settings', icon: <SettingsIcon className="w-4 h-4" /> },
 ]
 
 export default function LeftPanel({
@@ -83,7 +66,6 @@ export default function LeftPanel({
   projectName,
   projectPath,
   onOpenDirectory,
-  onOpenConfigDir,
   sessions,
   currentSession,
   onSwitchSession,
@@ -92,11 +74,6 @@ export default function LeftPanel({
   onDeleteSession,
   onSetSessionStatus,
   onForkFromEnd,
-  getProviderAuthStatus,
-  setApiKey,
-  removeAuth,
-  registerCustomProvider,
-  onAuthChange,
 }: LeftPanelProps) {
   if (collapsed) return null
 
@@ -146,29 +123,6 @@ export default function LeftPanel({
         )}
         {view === 'mcp' && (
           <McpPanel />
-        )}
-        {view === 'settings' && (
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-900">Settings</h2>
-              <button
-                onClick={onOpenConfigDir}
-                className="rounded p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                title="Open config directory (~/.pi/agent/)"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-              </button>
-            </div>
-            <ProviderSetup
-              getProviderAuthStatus={getProviderAuthStatus}
-              setApiKey={setApiKey}
-              removeAuth={removeAuth}
-              registerCustomProvider={registerCustomProvider}
-              onAuthChange={onAuthChange}
-            />
-          </div>
         )}
       </div>
     </div>

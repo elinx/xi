@@ -1,17 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type TabType = 'session' | 'file' | 'diff' | 'terminal'
+export type TabType = 'session' | 'file' | 'diff' | 'terminal' | 'settings'
 
 export interface TabInfo {
   id: string
   type: TabType
   title: string
   closable: boolean
+  dirty?: boolean
   meta: Record<string, unknown>
 }
 
 const SESSION_TAB_ID = 'tab-session'
+export const SETTINGS_TAB_ID = 'tab-settings'
 
 function createSessionTab(): TabInfo {
   return {

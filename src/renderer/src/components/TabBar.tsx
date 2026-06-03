@@ -46,6 +46,13 @@ function TabIcon({ type }: { type: TabType }) {
           <line x1="8" y1="11" x2="12" y2="11" />
         </svg>
       )
+    case 'settings':
+      return (
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="8" cy="8" r="2" />
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4" />
+        </svg>
+      )
   }
 }
 
@@ -98,6 +105,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
               style={noDrag}
             >
               <TabIcon type={tab.type} />
+              {tab.dirty && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
               <span className="truncate max-w-[120px]">{tab.title}</span>
               {tab.closable && (
                 <span

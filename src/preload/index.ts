@@ -110,6 +110,12 @@ const api = {
   registerCustomProvider: (provider: string, config: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:registerCustomProvider', provider, config),
 
+  testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string; latencyMs?: number }> =>
+    ipcRenderer.invoke('provider:test', provider, overrides),
+
+  getProviderConfig: (provider: string): Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }> =>
+    ipcRenderer.invoke('provider:getConfig', provider),
+
   openConfigDir: (): void =>
     ipcRenderer.send('app:openConfigDir'),
 
@@ -118,6 +124,9 @@ const api = {
 
   readFile: (filePath: string): Promise<{ ok: boolean; data?: { content: string; name: string; ext: string; path: string }; error?: string }> =>
     ipcRenderer.invoke('fs:readFile', filePath),
+
+  writeFile: (filePath: string, content: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('fs:writeFile', filePath, content),
 
   watchStart: (): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('fs:watchStart'),

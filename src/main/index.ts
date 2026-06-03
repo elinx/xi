@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
 import { join, basename, extname, dirname } from 'path'
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { simpleGit } from 'simple-git'
 import { watch } from 'chokidar'
 import { PiSDKBridge } from './pi-sdk-bridge'
@@ -193,6 +193,147 @@ function registerIpcHandlers(): void {
       await piBridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
       return { ok: true }
     } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('provider:getConfig', async (_event, provider: string) => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const configDir = join(homeDir, '.pi', 'agent')
+      for (const configFile of ['models.json', 'settings.json']) {
+        const configPath = join(configDir, configFile)
+        if (existsSync(configPath)) {
+          const data = JSON.parse(readFileSync(configPath, 'utf-8'))
+          const providerData = data.providers?.[provider]
+          if (providerData) return { ok: true, config: providerData }
+        }
+      }
+      return { ok: false, error: 'Provider not found' }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('provider:test', async (_event, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => {
+    try {
+      const providerBaseUrls: Record<string, string> = {
+        anthropic: 'https://api.anthropic.com',
+        openai: 'https://api.openai.com',
+        google: 'https://generativelanguage.googleapis.com',
+        deepseek: 'https://api.deepseek.com',
+        openrouter: 'https://openrouter.ai',
+        groq: 'https://api.groq.com',
+        xai: 'https://api.x.ai',
+        mistral: 'https://api.mistral.ai',
+      }
+
+      let baseUrl = overrides?.baseUrl ?? providerBaseUrls[provider]
+      if (!baseUrl) {
+        try {
+          const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+          const configDir = join(homeDir, '.pi', 'agent')
+          for (const configFile of ['models.json', 'settings.json']) {
+            const configPath = join(configDir, configFile)
+            if (existsSync(configPath)) {
+              const data = JSON.parse(readFileSync(configPath, 'utf-8'))
+              const custom = data.providers?.[provider]
+              if (custom?.baseUrl) { baseUrl = custom.baseUrl; break }
+            }
+          }
+        } catch {}
+      }
+      if (!baseUrl) return { ok: false, error: 'Unknown provider' }
+
+      let apiKey = overrides?.apiKey ?? ''
+      if (!apiKey) {
+        const envMap: Record<string, string> = {
+          anthropic: 'ANTHROPIC_API_KEY',
+          openai: 'OPENAI_API_KEY',
+          google: 'GOOGLE_API_KEY',
+          deepseek: 'DEEPSEEK_API_KEY',
+          openrouter: 'OPENROUTER_API_KEY',
+          groq: 'GROQ_API_KEY',
+          xai: 'XAI_API_KEY',
+          mistral: 'MISTRAL_API_KEY',
+        }
+        const envKey = envMap[provider]
+        if (envKey && process.env[envKey]) {
+          apiKey = process.env[envKey]!
+        }
+      }
+      if (!apiKey && piBridge?.isConnected) {
+        try {
+          const authData = await Promise.race([
+            piBridge.sendRpcCommand({ type: 'get_provider_auth_status' }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+          ]) as Record<string, unknown> | null
+          if (authData) {
+            const authStatus = authData as Record<string, { configured: boolean; source?: string }>
+            if (authStatus?.[provider]?.configured) {
+              try {
+                const keyData = await Promise.race([
+                  piBridge.sendRpcCommand({ type: 'get_api_key', provider }),
+                  new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+                ]) as Record<string, unknown> | null
+                if (keyData && typeof keyData.apiKey === 'string') apiKey = keyData.apiKey
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+      if (!apiKey) {
+        try {
+          const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
+          for (const configFile of ['auth.json', 'models.json']) {
+            const configPath = join(configDir, configFile)
+            if (existsSync(configPath)) {
+              const data = JSON.parse(readFileSync(configPath, 'utf-8'))
+              const providerData = data[provider] ?? data.providers?.[provider]
+              if (providerData?.apiKey) { apiKey = providerData.apiKey; break }
+            }
+          }
+        } catch {}
+      }
+      if (!apiKey) return { ok: false, error: 'No API key configured' }
+
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10_000)
+
+      let url: string
+      let headers: Record<string, string>
+      if (provider === 'anthropic') {
+        url = `${baseUrl}/v1/models`
+        headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+      } else if (provider === 'google') {
+        url = `${baseUrl}/v1beta/models?key=${apiKey}`
+        headers = {}
+      } else {
+        url = `${baseUrl}/v1/models`
+        headers = { 'Authorization': `Bearer ${apiKey}` }
+      }
+
+      const start = Date.now()
+      const response = await fetch(url, { signal: controller.signal, headers })
+      clearTimeout(timeout)
+
+      if (response.ok) {
+        return { ok: true, latencyMs: Date.now() - start }
+      }
+      if (response.status === 401 || response.status === 403) {
+        return { ok: false, error: 'Invalid API key' }
+      }
+      return { ok: false, error: `HTTP ${response.status}` }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return { ok: false, error: 'Connection timed out' }
+      }
+      if (err instanceof TypeError && err.cause instanceof Error) {
+        const code = (err.cause as NodeJS.ErrnoException).code
+        if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
+          return { ok: false, error: 'Cannot reach server' }
+        }
+      }
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
@@ -564,6 +705,19 @@ function registerIpcHandlers(): void {
       const name = basename(filePath)
       const ext = extname(filePath).slice(1)
       return { ok: true, data: { content, name, ext, path: filePath } }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
+    try {
+      const dir = dirname(filePath)
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
+      writeFileSync(filePath, content, 'utf-8')
+      return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

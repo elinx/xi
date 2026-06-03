@@ -8,11 +8,13 @@ interface WelcomeDialogProps {
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
+  getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   onAuthChange?: () => void
   onSkip: () => void
 }
 
-function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
+function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
 
   return (
@@ -58,12 +60,14 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
             </div>
             <div className="px-6 pb-5 overflow-y-auto">
               <ProviderSetup
-              getProviderAuthStatus={getProviderAuthStatus}
-              setApiKey={setApiKey}
-              removeAuth={removeAuth}
-              registerCustomProvider={registerCustomProvider}
-              onAuthChange={onAuthChange}
-            />
+                getProviderAuthStatus={getProviderAuthStatus}
+                setApiKey={setApiKey}
+                removeAuth={removeAuth}
+                registerCustomProvider={registerCustomProvider}
+                testProvider={testProvider}
+                getProviderConfig={getProviderConfig}
+                onAuthChange={onAuthChange}
+              />
             </div>
           </div>
         )}

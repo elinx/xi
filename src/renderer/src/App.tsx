@@ -3,7 +3,7 @@ import { usePiRpc, type UsePiRpcOptions } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
 import { useSessionCache } from './hooks/useSessionCache'
 import { useLayoutStore } from './hooks/useLayoutStore'
-import { useTabStore, SESSION_TAB_ID, type TabType } from './hooks/useTabStore'
+import { useTabStore, SESSION_TAB_ID, SETTINGS_TAB_ID, type TabType } from './hooks/useTabStore'
 import ChatView from './components/ChatView'
 import InputBar from './components/InputBar'
 import LeftPanel from './components/LeftPanel'
@@ -14,7 +14,7 @@ import DiffViewer from './components/DiffViewer'
 import TerminalPane from './components/TerminalPane'
 import { TokenUsageRing } from './components/TokenUsageRing'
 import WelcomeDialog from './components/WelcomeDialog'
-import ProviderSetup from './components/ProviderSetup'
+import SettingsPanel from './components/SettingsPanel'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage } from './types/message'
 import type { ForkPoint } from './types/session'
@@ -79,7 +79,7 @@ function App(): React.ReactElement {
     piConnectedSessionPath: piConnectedPath,
   }), [updatePiConnectedMessages, updatePiConnectedTokenUsage, setPiConnectedStreaming, updatePiConnectedForkPoints, piConnectedPath])
 
-  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const isLazySwitched = sessionCache.displayedSessionPath !== null && sessionCache.displayedSessionPath !== piConnectedPath
@@ -91,7 +91,6 @@ function App(): React.ReactElement {
 
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
-  const [showProviderSetup, setShowProviderSetup] = useState(false)
   const welcomeCheckDone = useRef(false)
 
   const leftPanelView = useLayoutStore(s => s.leftPanelView)
@@ -475,6 +474,12 @@ function App(): React.ReactElement {
     return cleanup
   }, [])
 
+  useEffect(() => {
+    if (activeTab?.type === 'diff') {
+      setRightPanelView('git')
+    }
+  }, [activeTab?.type, setRightPanelView])
+
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   const projects = sessions?.projects ?? []
   const projectName = projects[0]?.projectPath.split(/[/\\]/).pop() ?? 'Sessions'
@@ -486,13 +491,21 @@ function App(): React.ReactElement {
   const handleDiffSelect = useCallback((filePath: string) => {
     const name = filePath.split(/[/\\]/).pop() ?? filePath
     addTab({ type: 'diff', title: `diff: ${name}`, closable: true, meta: { filePath } })
-  }, [addTab])
+    setRightPanelView('git')
+  }, [addTab, setRightPanelView])
 
   const handleAddTab = useCallback((type: TabType) => {
     if (type === 'terminal') {
       addTab({ type: 'terminal', title: 'Terminal', closable: true, meta: {} })
+    } else if (type === 'settings') {
+      const existing = tabs.find(t => t.id === SETTINGS_TAB_ID)
+      if (existing) {
+        setActiveTab(SETTINGS_TAB_ID)
+      } else {
+        addTab({ id: SETTINGS_TAB_ID, type: 'settings', title: 'Settings', closable: true, meta: {} })
+      }
     }
-  }, [addTab])
+  }, [addTab, tabs, setActiveTab])
 
    return (
         <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
@@ -548,11 +561,18 @@ function App(): React.ReactElement {
               )}
               <div className="flex items-center gap-2 flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
-                 <button
-                   onClick={() => setShowProviderSetup(true)}
-                   className={`rounded px-2 py-0.5 text-xs font-medium transition-colors text-gray-500 hover:text-gray-700`}
-                   title="Configure providers"
-                 >
+                  <button
+                     onClick={() => {
+                       const existing = tabs.find(t => t.id === SETTINGS_TAB_ID)
+                       if (existing) {
+                         setActiveTab(SETTINGS_TAB_ID)
+                       } else {
+                         addTab({ id: SETTINGS_TAB_ID, type: 'settings', title: 'Settings', closable: true, meta: {} })
+                       }
+                     }}
+                    className={`rounded px-2 py-0.5 text-xs font-medium transition-colors text-gray-500 hover:text-gray-700`}
+                    title="Settings"
+                  >
                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -636,31 +656,25 @@ function App(): React.ReactElement {
          </div>
 
          <div className="flex flex-1 overflow-hidden">
-        <LeftPanel
-          view={leftPanelView}
-          onViewChange={setLeftPanelView}
-          collapsed={leftPanelCollapsed}
-          onToggleCollapse={() => toggleLeftPanel()}
-          width={leftPanelWidth}
-          onResizeStart={handleLeftResizeStart}
-          projectName={projectName}
-          projectPath={projects[0]?.projectPath ?? undefined}
-          onOpenDirectory={handleOpenDirectory}
-          onOpenConfigDir={() => window.api.openConfigDir()}
-          sessions={sessions}
-          currentSession={currentSession}
-          onSwitchSession={handleSwitchSession}
-          onNewSession={handleNewSession}
-          onRenameSession={renameSession}
-          onDeleteSession={deleteSession}
-          onSetSessionStatus={setSessionStatus}
-          onForkFromEnd={handleForkFromEnd}
-          getProviderAuthStatus={getProviderAuthStatus}
-          setApiKey={setApiKey}
-          removeAuth={removeAuth}
-          registerCustomProvider={registerCustomProvider}
-          onAuthChange={() => { getAvailableModels() }}
-        />
+         <LeftPanel
+           view={leftPanelView}
+           onViewChange={setLeftPanelView}
+           collapsed={leftPanelCollapsed}
+           onToggleCollapse={() => toggleLeftPanel()}
+           width={leftPanelWidth}
+           onResizeStart={handleLeftResizeStart}
+           projectName={projectName}
+           projectPath={projects[0]?.projectPath ?? undefined}
+           onOpenDirectory={handleOpenDirectory}
+           sessions={sessions}
+           currentSession={currentSession}
+           onSwitchSession={handleSwitchSession}
+           onNewSession={handleNewSession}
+           onRenameSession={renameSession}
+           onDeleteSession={deleteSession}
+           onSetSessionStatus={setSessionStatus}
+           onForkFromEnd={handleForkFromEnd}
+         />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <TabBar
@@ -697,6 +711,18 @@ function App(): React.ReactElement {
                 <TerminalPane ptyId={t.id} />
               </div>
             ))}
+            {activeTab?.type === 'settings' && (
+              <SettingsPanel
+                onOpenConfigDir={() => window.api.openConfigDir()}
+                getProviderAuthStatus={getProviderAuthStatus}
+                setApiKey={setApiKey}
+                removeAuth={removeAuth}
+                registerCustomProvider={registerCustomProvider}
+                testProvider={testProvider}
+                getProviderConfig={getProviderConfig}
+                onAuthChange={() => { getAvailableModels() }}
+              />
+            )}
           </div>
 
           {isSessionTabActive && (
@@ -730,62 +756,18 @@ function App(): React.ReactElement {
       </div>
 
       {showWelcome && (
-        <WelcomeDialog
-          getProviderAuthStatus={getProviderAuthStatus}
-          setApiKey={setApiKey}
-          removeAuth={removeAuth}
-          registerCustomProvider={registerCustomProvider}
-          onAuthChange={() => {
-            getAvailableModels()
-          }}
-          onSkip={() => setShowWelcome(false)}
-        />
-      )}
-
-      {showProviderSetup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowProviderSetup(false)}
-        >
-          <div
-            className="w-full max-w-md max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-6 py-5 flex-shrink-0">
-              <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => window.api.openConfigDir()}
-                  className="rounded p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                  title="Open config directory (~/.pi/agent/)"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setShowProviderSetup(false)}
-                  className="rounded p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="px-6 pb-5 overflow-y-auto flex-1">
-              <ProviderSetup
-                getProviderAuthStatus={getProviderAuthStatus}
-                setApiKey={setApiKey}
-                removeAuth={removeAuth}
-                registerCustomProvider={registerCustomProvider}
-                onAuthChange={() => {
-                  getAvailableModels()
-                }}
-               />
-            </div>
-          </div>
-        </div>
+         <WelcomeDialog
+           getProviderAuthStatus={getProviderAuthStatus}
+           setApiKey={setApiKey}
+           removeAuth={removeAuth}
+           registerCustomProvider={registerCustomProvider}
+            testProvider={testProvider}
+            getProviderConfig={getProviderConfig}
+            onAuthChange={() => {
+             getAvailableModels()
+           }}
+           onSkip={() => setShowWelcome(false)}
+         />
       )}
     </div>
   )
