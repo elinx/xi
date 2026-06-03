@@ -477,13 +477,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           mimeType: img.mimeType,
         }))
       }
-      if (mentions && mentions.length > 0) {
-        command.mentions = mentions.map((m) => ({
-          type: m.type,
-          path: m.path,
-          name: m.name,
-        }))
-      }
+      // omit mentions: Pi SDK injects file content if present (bug)
+      void mentions
       window.api.sendCommand(command)
     },
     [],

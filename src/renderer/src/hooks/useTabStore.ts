@@ -46,7 +46,12 @@ export const useTabStore = create<TabState>()(
         const id = tab.id ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
         const existing = get().findTabByMeta(tab.type, 'filePath', tab.meta.filePath)
         if (existing) {
-          set({ activeTabId: existing.id })
+          set((state) => ({
+            tabs: state.tabs.map((t) =>
+              t.id === existing.id ? { ...t, meta: { ...t.meta, ...tab.meta } } : t
+            ),
+            activeTabId: existing.id,
+          }))
           return existing.id
         }
         set((state) => ({

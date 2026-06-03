@@ -120,16 +120,23 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
 
   useEffect(() => {
     if (scrollToLine == null || !containerRef.current) return
-    const raf = requestAnimationFrame(() => {
-      const el = containerRef.current?.querySelector(`[data-line="${scrollToLine}"]`)
+    let attempts = 0
+    const maxAttempts = 10
+    function tryScroll() {
+      if (!containerRef.current) return
+      const el = containerRef.current.querySelector(`[data-line="${scrollToLine}"]`)
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         el.classList.add('line-flash')
         setTimeout(() => el.classList.remove('line-flash'), 2000)
+      } else if (attempts < maxAttempts) {
+        attempts++
+        requestAnimationFrame(tryScroll)
       }
-    })
+    }
+    const raf = requestAnimationFrame(tryScroll)
     return () => cancelAnimationFrame(raf)
-  }, [scrollToLine, highlightedHtml])
+  }, [scrollToLine, highlightedHtml, fileData])
 
   if (loading) {
     return (
