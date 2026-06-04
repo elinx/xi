@@ -719,6 +719,7 @@ function App(): React.ReactElement {
                 getForkMessages={getForkMessages}
                 forkPoints={displayedForkPoints}
                 viewMode={viewMode}
+                onFileSelect={(p) => handleFileSelect(p)}
               />
             </div>
             {activeTab?.type === 'file' && (

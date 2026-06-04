@@ -35,6 +35,7 @@ interface ChatViewProps {
   getForkMessages: () => Promise<ForkableMessage[]>
   forkPoints: ForkPoint[]
   viewMode: ViewMode
+  onFileSelect?: (filePath: string) => void
 }
 
 function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
@@ -64,14 +65,11 @@ function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement 
   )
 }
 
-function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreaming?: boolean }): React.ReactElement {
-  // Thinking content uses its own renderer
+function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void }): React.ReactElement {
   if (block.subtype === 'thinking') {
     return <ThinkingBlockRenderer content={block.content} isStreaming={isStreaming} />
   }
 
-  // During streaming, skip expensive ReactMarkdown parsing to reduce flicker.
-  // Use lightweight <pre>-based rendering; switch to full markdown once stable.
   if (isStreaming) {
     return (
       <div className="prose prose-sm max-w-none whitespace-pre-wrap break-words text-sm leading-relaxed">
@@ -80,11 +78,73 @@ function TextBlockRenderer({ block, isStreaming }: { block: TextBlock; isStreami
       </div>
     )
   }
+
+  if (onFileSelect) {
+    return (
+      <div className="prose prose-sm max-w-none">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            p: ({ children }) => <p>{renderMentionLinks(children, onFileSelect)}</p>,
+            li: ({ children }) => <li>{renderMentionLinks(children, onFileSelect)}</li>,
+          }}
+        >{block.content}</ReactMarkdown>
+      </div>
+    )
+  }
+
   return (
     <div className="prose prose-sm max-w-none">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
     </div>
   )
+}
+
+const MENTION_RE = /@([\w./-]+(?:\/[\w./-]+)*)/g
+
+function renderMentionLinks(children: React.ReactNode, onFileSelect: (filePath: string) => void): React.ReactNode {
+  if (typeof children === 'string') {
+    return renderMentionText(children, onFileSelect)
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, i) => {
+      if (typeof child === 'string') {
+        return <React.Fragment key={i}>{renderMentionText(child, onFileSelect)}</React.Fragment>
+      }
+      return child
+    })
+  }
+  return children
+}
+
+function renderMentionText(text: string, onFileSelect: (filePath: string) => void): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  const re = new RegExp(MENTION_RE.source, 'g')
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+    const filePath = match[1]
+    parts.push(
+      <button
+        key={match.index}
+        onClick={() => onFileSelect(filePath)}
+        className="inline-flex items-center text-blue-600 hover:text-blue-800 hover:underline font-medium align-baseline bg-transparent border-0 p-0 cursor-pointer"
+      >
+        <svg className="w-3 h-3 mr-0.5 inline-block shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+        {filePath}
+      </button>
+    )
+    lastIndex = re.lastIndex
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+  return parts.length > 0 ? parts : [text]
 }
 
 function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
@@ -630,6 +690,7 @@ function MessageBlocksRenderer({
   onEnterAnnotation,
   onExitAnnotation,
   onSendFeedback,
+  onFileSelect,
 }: {
   msg: ChatMessage
   isStreaming: boolean
@@ -638,6 +699,7 @@ function MessageBlocksRenderer({
   onEnterAnnotation: (messageId: string, blockIndex: number) => void
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
+  onFileSelect?: (filePath: string) => void
 }): React.ReactElement {
   // Identify paired tool_result indices (right after their tool_call)
   const pairedResultIndices = new Set<number>()
@@ -683,6 +745,8 @@ function MessageBlocksRenderer({
         onEnterAnnotation={onEnterAnnotation}
         onExitAnnotation={onExitAnnotation}
         onSendFeedback={onSendFeedback}
+        onFileSelect={onFileSelect}
+        isUser={msg.role === 'user'}
       />
     )
   }
@@ -710,6 +774,8 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   onEnterAnnotation,
   onExitAnnotation,
   onSendFeedback,
+  onFileSelect,
+  isUser,
 }: {
   block: ContentBlock
   messageId: string
@@ -719,10 +785,12 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   onEnterAnnotation: (messageId: string, blockIndex: number) => void
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
+  onFileSelect?: (filePath: string) => void
+  isUser?: boolean
 }): React.ReactElement | null {
   switch (block.type) {
     case 'text':
-      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} />
+      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={isUser ? onFileSelect : undefined} />
     case 'image':
       return (
         <AnnotatableImageBlock
@@ -900,6 +968,7 @@ function TurnCard({
   forkPoints,
   isStreaming,
   streamingMessageId,
+  onFileSelect,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -918,6 +987,7 @@ function TurnCard({
   forkPoints: ForkPoint[]
   isStreaming: boolean
   streamingMessageId: string | null
+  onFileSelect?: (filePath: string) => void
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const agentSummary = getAgentSummary(turn.assistantMessages)
@@ -966,15 +1036,7 @@ function TurnCard({
                       )}
                     </div>
                   </div>
-                  <MessageBlocksRenderer
-                    msg={msg}
-                    isStreaming={isStreaming}
-                    streamingMessageId={streamingMessageId}
-                    annotatingTarget={annotatingTarget}
-                    onEnterAnnotation={onEnterAnnotation}
-                    onExitAnnotation={onExitAnnotation}
-                    onSendFeedback={onSendFeedback}
-                  />
+                  <MessageBlocksRenderer msg={msg} isStreaming={isStreaming} streamingMessageId={streamingMessageId} annotatingTarget={annotatingTarget} onEnterAnnotation={onEnterAnnotation} onExitAnnotation={onExitAnnotation} onSendFeedback={onSendFeedback} onFileSelect={onFileSelect} />
                   {msgForkPoints.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                       {msgForkPoints.map((fp, idx) => (
@@ -1034,6 +1096,7 @@ function OutlineRow({
   forkPoints,
   isStreaming,
   streamingMessageId,
+  onFileSelect,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -1052,6 +1115,7 @@ function OutlineRow({
   forkPoints: ForkPoint[]
   isStreaming: boolean
   streamingMessageId: string | null
+  onFileSelect?: (filePath: string) => void
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
 
@@ -1100,15 +1164,7 @@ function OutlineRow({
                       )}
                     </div>
                   </div>
-                  <MessageBlocksRenderer
-                    msg={msg}
-                    isStreaming={isStreaming}
-                    streamingMessageId={streamingMessageId}
-                    annotatingTarget={annotatingTarget}
-                    onEnterAnnotation={onEnterAnnotation}
-                    onExitAnnotation={onExitAnnotation}
-                    onSendFeedback={onSendFeedback}
-                  />
+                  <MessageBlocksRenderer msg={msg} isStreaming={isStreaming} streamingMessageId={streamingMessageId} annotatingTarget={annotatingTarget} onEnterAnnotation={onEnterAnnotation} onExitAnnotation={onExitAnnotation} onSendFeedback={onSendFeedback} onFileSelect={onFileSelect} />
                   {msgForkPoints.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
                       {msgForkPoints.map((fp, idx) => (
@@ -1147,7 +1203,7 @@ function OutlineRow({
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -1332,6 +1388,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               forkPoints={forkPoints}
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
+              onFileSelect={onFileSelect}
             />
           ))}
           <div ref={bottomRef} />
@@ -1358,6 +1415,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               forkPoints={forkPoints}
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
+              onFileSelect={onFileSelect}
             />
           ))}
           <div ref={bottomRef} />
