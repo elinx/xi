@@ -608,6 +608,7 @@ function MergedBlocksRenderer({
   onEnterAnnotation,
   onExitAnnotation,
   onSendFeedback,
+  onFileSelect,
 }: {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -616,12 +617,13 @@ function MergedBlocksRenderer({
   onEnterAnnotation: (messageId: string, blockIndex: number) => void
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
+  onFileSelect?: (filePath: string) => void
 }): React.ReactElement {
   // Flatten all blocks, track which message each came from
-  const allBlocks: { block: ContentBlock; msgId: string; blockIdx: number }[] = []
+  const allBlocks: { block: ContentBlock; msgId: string; blockIdx: number; isUser: boolean }[] = []
   for (const msg of messages) {
     msg.blocks.forEach((block, idx) => {
-      allBlocks.push({ block, msgId: msg.id, blockIdx: idx })
+      allBlocks.push({ block, msgId: msg.id, blockIdx: idx, isUser: msg.role === 'user' })
     })
   }
 
@@ -669,6 +671,8 @@ function MergedBlocksRenderer({
         onEnterAnnotation={onEnterAnnotation}
         onExitAnnotation={onExitAnnotation}
         onSendFeedback={onSendFeedback}
+        onFileSelect={onFileSelect}
+        isUser={allBlocks[j].isUser}
       />
     )
   }
@@ -1343,6 +1347,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                     onEnterAnnotation={handleEnterAnnotation}
                     onExitAnnotation={handleExitAnnotation}
                     onSendFeedback={handleSendFeedback}
+                    onFileSelect={onFileSelect}
                   />
                   {msgForkPoints.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
