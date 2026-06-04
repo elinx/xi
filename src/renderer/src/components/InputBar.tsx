@@ -104,34 +104,30 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     if (suppressMentionRef.current) return
     if (!editorRef.current) return
     const sel = window.getSelection()
-    const cursorPos = sel?.focusOffset ?? 0
-    const textBeforeCursor = getPlainTextUpToCursor()
-    mention.onTextInput(getPlainText(), cursorPos)
-  }
+    if (!sel || !sel.focusNode) return
 
-  function getPlainTextUpToCursor(): string {
-    const sel = window.getSelection()
-    if (!sel || !sel.focusNode || !editorRef.current) return ''
-    let text = ''
-    let reachedFocus = false
-    for (const node of editorRef.current.childNodes) {
-      if (node === sel.focusNode || (sel.focusNode && node.contains(sel.focusNode))) {
+    // Only detect @ mentions in the text node where the cursor is,
+    // never from pill nodes (data-mention-path)
+    let cursorText = ''
+    let cursorOffset = 0
+    if (sel.focusNode.nodeType === Node.TEXT_NODE) {
+      cursorText = sel.focusNode.textContent ?? ''
+      cursorOffset = sel.focusOffset
+      // Walk previous siblings to build the full line text before cursor
+      let node = sel.focusNode.previousSibling
+      while (node) {
         if (node instanceof HTMLElement && node.dataset.mentionPath) {
-          text += '@' + node.dataset.mentionPath
+          cursorText = '\u00A0' + cursorText
+          cursorOffset += 1
         } else {
-          const nodeText = node.textContent ?? ''
-          text += nodeText.substring(0, sel.focusOffset)
+          const t = node.textContent ?? ''
+          cursorText = t + cursorText
+          cursorOffset += t.length
         }
-        reachedFocus = true
-        break
-      }
-      if (node instanceof HTMLElement && node.dataset.mentionPath) {
-        text += '@' + node.dataset.mentionPath
-      } else {
-        text += node.textContent ?? ''
+        node = node.previousSibling
       }
     }
-    return text
+    mention.onTextInput(cursorText, cursorOffset)
   }
 
   const handleMentionSelect = useCallback((file: FileEntry) => {
