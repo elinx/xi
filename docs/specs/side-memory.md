@@ -1,0 +1,176 @@
+# Side Memory — Design Spec
+
+## Overview
+
+Side memory is a per-project knowledge store that captures conversation summaries automatically. It enables:
+- Searching across past sessions without loading full histories
+- Forking from compressed context instead of full conversation
+- Building institutional knowledge across sessions
+
+**This spec does NOT include auto-compact.** Compaction of the active context window is out of scope.
+
+## Problem
+
+As sessions grow, context windows fill up. When context is full:
+- You can't fork effectively (the fork inherits the full context)
+- You can't search past conversations efficiently
+- Knowledge from old sessions is lost unless you manually read them
+
+Side memory solves this by maintaining a compressed, searchable index of all sessions.
+
+## Architecture
+
+### Storage
+
+Side memory is stored per-project in:
+```
+<project-dir>/.pi/side-memory/
+  index.json          ← session index (id, name, summary, timestamps)
+  summaries/
+    <session-id>.md   ← per-session summary
+```
+
+### Session Summary Format
+
+Each session gets a markdown summary:
+
+```markdown
+# Session: "Refactor Auth Module"
+
+## Created
+2025-01-15T10:30:00Z
+
+## Last Active
+2025-01-15T14:22:00Z
+
+## Summary
+- Refactored auth middleware from callback-based to async/await
+- Fixed JWT token refresh race condition
+- Added rate limiting to login endpoint
+
+## Key Decisions
+- Chose httpOnly cookies over localStorage for token storage
+- Used Redis for rate limiting (not in-memory)
+
+## Files Changed
+- src/middleware/auth.ts
+- src/routes/login.ts
+- src/utils/rate-limit.ts
+
+## Outcome
+Successfully deployed. All auth tests passing.
+```
+
+### Index Format
+
+```json
+[
+  {
+    "sessionId": "abc123",
+    "name": "Refactor Auth Module",
+    "summary": "Refactored auth middleware, fixed JWT refresh, added rate limiting",
+    "createdAt": "2025-01-15T10:30:00Z",
+    "lastActiveAt": "2025-01-15T14:22:00Z",
+    "status": "completed",
+    "messageCount": 42,
+    "filesChanged": ["src/middleware/auth.ts", "src/routes/login.ts", "src/utils/rate-limit.ts"],
+    "tags": ["auth", "middleware", "security"]
+  }
+]
+```
+
+## Generation Flow
+
+### Automatic (on session end)
+
+When a session transitions to `completed` status:
+
+1. Pi's `onAgentEnd` fires
+2. Xi sends a prompt to Pi: "Summarize this session concisely, including key decisions, files changed, and outcome"
+3. Pi generates the summary
+4. Xi writes the summary to `.pi/side-memory/summaries/<session-id>.md`
+5. Xi updates `.pi/side-memory/index.json`
+
+**Guard**: User can undo within 5 seconds (similar to Gmail's undo send). A toast appears: "Session summary generated" with an Undo button.
+
+### Manual
+
+User can trigger summary generation at any time via:
+- Command Palette: "Summarize current session"
+- Session context menu: "Generate summary"
+
+## Search
+
+### UI
+
+Add a "Memory" tab to the left sidebar (alongside Sessions, Skills, MCP):
+
+```
+🔍 Search memory...
+─────────────────────
+📋 Refactor Auth Module
+   auth, middleware, security · Jan 15
+   
+🐛 Fix Payment Bug  
+   payments, stripe · Jan 12
+   
+✨ Add Dark Mode
+   ui, theme · Jan 10
+```
+
+### Search Implementation
+
+1. Load `index.json` into memory
+2. Filter by keyword match against `name`, `summary`, `tags`, `filesChanged`
+3. Click result → open full summary in a tab
+4. From summary → "Open Session" button to load the original session
+
+### Cross-Session Search
+
+The search panel also supports searching full session histories (not just summaries):
+- Uses the existing `fs:search` IPC (ripgrep) to search `.jsonl` files
+- Results show matching message snippets with session context
+
+## Forking from Side Memory
+
+When forking a session where context is full:
+
+1. User clicks "Fork" on a session
+2. If context usage > 80%, offer two options:
+   - **Full fork**: Inherit full context (may hit limits)
+   - **Compressed fork**: Inherit side memory summary + current task only
+3. Compressed fork creates a new session with the summary prepended as context
+
+This is a future enhancement — not in Phase 1.
+
+## Implementation Phases
+
+### Phase 1: Summary Generation & Storage
+- Create `.pi/side-memory/` directory structure
+- Implement summary generation on session end
+- Write summary files and update index
+- Add "undo" toast (5s window)
+- Add manual "Summarize session" command
+
+### Phase 2: Memory Search UI
+- Add "Memory" tab to left sidebar
+- Load and search `index.json`
+- Display summary results
+- "Open Session" button from summary
+
+### Phase 3: Cross-Session Search
+- Ripgrep across `.jsonl` session files
+- Display matching messages with session context
+- Jump to session from search results
+
+### Phase 4: Compressed Forking
+- Detect context usage > 80% on fork
+- Offer compressed fork option
+- Inject side memory summary as context in new session
+
+## Open Questions
+
+1. Should summaries be generated by the current Pi model or a cheaper/faster model?
+2. Should side memory be shared across projects (e.g., a global knowledge base)?
+3. Should we auto-tag sessions based on content, or let users tag manually?
+4. How large should summaries be? (Suggestion: 500-1000 tokens)
