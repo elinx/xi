@@ -37,6 +37,8 @@ interface ChatViewProps {
   viewMode: ViewMode
   onFileSelect?: (filePath: string) => void
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
+  onForwardMessage?: (messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => void
+  sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
 }
 
 function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
@@ -108,7 +110,8 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
           {segments.map((seg, i) =>
             seg.type === 'mention'
               ? <MentionPill key={i} filePath={seg.value} onClick={() => onFileSelect(seg.value)} />
-              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>          )}
+              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>
+          )}
         </p>
       </div>
     )
@@ -1247,7 +1250,52 @@ function OutlineRow({
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage }: ChatViewProps): React.ReactElement {
+function SessionPickerModal({ sessions, onSelect, onClose }: { sessions: Array<{ filePath: string; name: string | null; isMain: boolean }>; onSelect: (sessionPath: string) => void; onClose: () => void }): React.ReactElement {
+  const [query, setQuery] = useState('')
+  const filtered = sessions.filter(s => {
+    const name = s.name || (s.isMain ? 'Main' : 'Session')
+    return name.toLowerCase().includes(query.toLowerCase())
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-72 rounded-lg border border-gray-200 bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="border-b border-gray-200 px-3 py-2">
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search sessions..."
+            className="w-full text-sm outline-none"
+            onKeyDown={e => {
+              if (e.key === 'Escape') onClose()
+              if (e.key === 'Enter' && filtered.length > 0) onSelect(filtered[0].filePath)
+            }}
+          />
+        </div>
+        <div className="max-h-56 overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="px-3 py-4 text-center text-xs text-gray-400">No sessions found</div>
+          )}
+          {filtered.map(s => (
+            <button
+              key={s.filePath}
+              onClick={() => onSelect(s.filePath)}
+              className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
+              </svg>
+              <span className="truncate">{s.name || (s.isMain ? 'Main' : 'Session')}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, sessions }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
@@ -1259,6 +1307,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const [forkInputMessageId, setForkInputMessageId] = useState<string | null>(null)
   const [forkEntryId, setForkEntryId] = useState<string | null>(null)
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set())
+  const [forwardingMessage, setForwardingMessage] = useState<{ id: string; role: 'user' | 'assistant'; content: string } | null>(null)
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -1400,6 +1449,23 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                           </svg>
                         </button>
                       )}
+                      {onForwardMessage && sessions && !isStreaming && (
+                        <button
+                          onClick={() => {
+                            const textContent = allBlocks
+                              .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+                              .map((b) => b.content)
+                              .join('\n')
+                            setForwardingMessage({ id: firstMsg.id, role: isUser ? 'user' : 'assistant', content: textContent })
+                          }}
+                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                          title="Forward to session"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
@@ -1514,6 +1580,16 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
           </svg>
         </button>
+      )}
+      {forwardingMessage && onForwardMessage && sessions && (
+        <SessionPickerModal
+          sessions={sessions}
+          onSelect={(sessionPath) => {
+            onForwardMessage(forwardingMessage.id, forwardingMessage.role, forwardingMessage.content, sessionPath)
+            setForwardingMessage(null)
+          }}
+          onClose={() => setForwardingMessage(null)}
+        />
       )}
     </div>
   )

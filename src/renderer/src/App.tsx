@@ -361,6 +361,27 @@ function App(): React.ReactElement {
 
   const handleClearQuotes = useCallback(() => setQuotes([]), [])
 
+  const handleForwardMessage = useCallback(async (_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
+    const prevPath = piConnectedPathRef.current
+    if (!prevPath) return
+    if (isPiStreaming()) await abort()
+    const result = await switchSession(targetSessionPath)
+    if (result.success) {
+      setPiConnectedPath(targetSessionPath)
+      const forwardedText = `[Forwarded ${role} message]:\n${content}`
+      sendPrompt(forwardedText)
+      await abort()
+      const switchBack = await switchSession(prevPath)
+      if (switchBack.success) {
+        setPiConnectedPath(prevPath)
+        clearMessages()
+        await loadHistory()
+        await loadForkPoints(prevPath)
+      }
+      refresh()
+    }
+  }, [abort, switchSession, sendPrompt, clearMessages, loadHistory, loadForkPoints, refresh, setPiConnectedPath])
+
   const isLazySwitchedRef = useRef(isLazySwitched)
   isLazySwitchedRef.current = isLazySwitched
 
@@ -810,6 +831,8 @@ function App(): React.ReactElement {
                 viewMode={viewMode}
                 onFileSelect={(p) => handleFileSelect(p)}
                 onQuoteMessage={handleQuoteMessage}
+                onForwardMessage={handleForwardMessage}
+                sessions={sessions?.projects?.flatMap(p => p.allSessions).map(s => ({ filePath: s.filePath, name: s.name, isMain: s.isMain }))}
               />
             </div>
             {activeTab?.type === 'file' && (
