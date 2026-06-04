@@ -522,9 +522,9 @@ function App(): React.ReactElement {
     addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath, scrollToLine } })
   }, [addTab])
 
-  const handleDiffSelect = useCallback((filePath: string) => {
+  const handleDiffSelect = useCallback((filePath: string, commitHash?: string) => {
     const name = filePath.split(/[/\\]/).pop() ?? filePath
-    addTab({ type: 'diff', title: `diff: ${name}`, closable: true, meta: { filePath } })
+    addTab({ type: 'diff', title: commitHash ? `${commitHash.slice(0, 7)}: ${name}` : `diff: ${name}`, closable: true, meta: { filePath, commitHash } })
     setRightPanelView('git')
   }, [addTab, setRightPanelView])
 
@@ -739,7 +739,7 @@ function App(): React.ReactElement {
               <FileViewer filePath={activeTab.meta.filePath as string} scrollToLine={activeTab.meta.scrollToLine as number | undefined} />
             )}
             {activeTab?.type === 'diff' && (
-              <DiffViewer filePath={activeTab.meta.filePath as string} />
+              <DiffViewer filePath={activeTab.meta.filePath as string} commitHash={activeTab.meta.commitHash as string | undefined} />
             )}
             {tabs.filter(t => t.type === 'terminal').map(t => (
               <div key={t.id} className={activeTab?.id === t.id ? 'h-full' : 'hidden'}>

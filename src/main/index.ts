@@ -906,6 +906,163 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('git:log', async (_event, options?: { maxCount?: number; skip?: number }) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      const isRepo = await git.checkIsRepo()
+      if (!isRepo) return { ok: false, error: 'Not a git repository' }
+      const maxCount = options?.maxCount ?? 50
+      const skip = options?.skip ?? 0
+      const logArgs = [`--max-count=${maxCount}`]
+      if (skip > 0) logArgs.push(`--skip=${skip}`)
+      const log = await git.log(logArgs)
+      const commits = log.all.map((entry) => ({
+        hash: entry.hash,
+        shortHash: entry.hash.slice(0, 7),
+        message: entry.message,
+        body: entry.body,
+        author_name: entry.author_name,
+        author_email: entry.author_email,
+        date: entry.date,
+        refs: entry.refs,
+      }))
+      return { ok: true, data: commits }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:commitDetail', async (_event, hash: string) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      // Get commit info + stat using git show
+      const formatStr = '%H%n%h%n%s%n%b%n%an%n%ae%n%aI%n%D'
+      const raw = await git.show(['--stat=4096', `--format=${formatStr}`, hash])
+      const lines = raw.split('\n')
+      // First 8 lines are the formatted commit info
+      const fullHash = lines[0] || ''
+      const shortHash = lines[1] || ''
+      const message = lines[2] || ''
+      // body may span multiple lines until author_name line
+      // Find the author line by looking for email pattern after body
+      // Body may span multiple lines; we detect author_name line by checking
+      // if the NEXT line looks like an email (contains @)
+      let bodyEndIdx = 3
+      for (let i = 3; i < lines.length - 1; i++) {
+        // The author email line typically looks like: user@example.com
+        if (lines[i + 1].includes('@') && !lines[i + 1].includes('://')) {
+          bodyEndIdx = i
+          break
+        }
+      }
+      const body = lines.slice(3, bodyEndIdx).join('\n').trimEnd()
+      const authorName = lines[bodyEndIdx] || ''
+      const authorEmail = lines[bodyEndIdx + 1] || ''
+      const date = lines[bodyEndIdx + 2] || ''
+      const refs = lines[bodyEndIdx + 3] || ''
+
+      // Parse stat section (after the blank line following refs)
+      const statStart = bodyEndIdx + 4
+      const files: Array<{ path: string; status: string; additions: number; deletions: number }> = []
+
+      // Find the stat lines - they look like:
+      //  src/file.ts | 2 +-
+      //  src/added.ts | 5 ++++
+      //  src/deleted.ts | 10 ----------
+      // or for renames:  old => new | ...
+      for (let i = statStart; i < lines.length; i++) {
+        const line = lines[i]
+        if (!line.trim() || line.startsWith('commit ') || line.startsWith('Author:') || line.startsWith('Date:')) continue
+        const statMatch = line.match(/\s+(.+?)\s+\|\s+(\d+)\s+([+-]+)/)
+        if (statMatch) {
+          let filePath = statMatch[1].trim()
+          // Handle rename: "old => new" or "{old => new}/file.ts"
+          let status = 'M'
+          const plusCount = (statMatch[3].match(/\+/g) || []).length
+          const minusCount = (statMatch[3].match(/-/g) || []).length
+          if (filePath.includes('=>')) {
+            if (plusCount > 0 && minusCount === 0) status = 'R'
+            else status = 'M' // rename + modify
+            // Show the new path
+            const renameMatch = filePath.match(/=>\s*(.+)/)
+            if (renameMatch) {
+              const newPath = renameMatch[1].trim()
+              // Handle {old => new}/file.ts style
+              const braceMatch = filePath.match(/\{(.+?)\s*=>\s*(.+?)\}/)
+              if (braceMatch) {
+                filePath = filePath.replace(/\{.+?\s*=>\s*(.+?)\}/, braceMatch[2].trim())
+              } else {
+                filePath = newPath
+              }
+            }
+          } else if (minusCount > 0 && plusCount === 0) {
+            // All deletions - but could be a modify too. Check if file exists?
+            // For now, let's check the diff for actual status
+            status = 'M' // We'll refine this below
+          }
+          // Binary files show as: file.bin | Bin 123 -> 456 bytes
+          const binMatch = line.match(/\s+(.+?)\s+\|\s+Bin\s+/)
+          if (!binMatch) {
+            files.push({ path: filePath, status, additions: plusCount, deletions: minusCount })
+          }
+        }
+      }
+
+      // Refine file statuses using diff-tree if available
+      try {
+        const nameStatus = await git.raw(['diff-tree', '--no-commit-id', '--name-status', '-r', hash])
+        const statusMap = new Map<string, string>()
+        for (const nsLine of nameStatus.split('\n')) {
+          const parts = nsLine.trim().split('\t')
+          if (parts.length >= 2) {
+            // Status like M, A, D, R100, C100
+            const statusCode = parts[0].trim().charAt(0)
+            // For renames, parts[1] is old path, parts[2] is new path
+            const fpath = parts.length >= 3 ? parts[2] : parts[1]
+            statusMap.set(fpath, statusCode)
+          }
+        }
+        // Update files with accurate statuses
+        for (const f of files) {
+          const accurate = statusMap.get(f.path)
+          if (accurate) f.status = accurate
+        }
+      } catch {
+        // diff-tree may fail for initial commits, that's ok
+      }
+
+      return {
+        ok: true,
+        data: {
+          hash: fullHash,
+          shortHash,
+          message,
+          body,
+          author_name: authorName,
+          author_email: authorEmail,
+          date,
+          refs,
+          files,
+        },
+      }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('git:commitFileDiff', async (_event, hash: string, filePath: string) => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      const diff = await git.show([hash, '--', filePath])
+      return { ok: true, data: diff }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   let watcherCleanup: (() => void) | null = null
 
   function parseGitignore(rootDir: string): string[] {

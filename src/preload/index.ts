@@ -173,6 +173,42 @@ const api = {
   gitDiscard: (filePaths: string[]): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('git:discard', filePaths),
 
+  gitLog: (options?: { maxCount?: number; skip?: number }): Promise<{
+    ok: boolean
+    data?: Array<{
+      hash: string
+      shortHash: string
+      message: string
+      body: string
+      author_name: string
+      author_email: string
+      date: string
+      refs: string
+    }>
+    error?: string
+  }> =>
+    ipcRenderer.invoke('git:log', options),
+
+  gitCommitDetail: (hash: string): Promise<{
+    ok: boolean
+    data?: {
+      hash: string
+      shortHash: string
+      message: string
+      body: string
+      author_name: string
+      author_email: string
+      date: string
+      refs: string
+      files: Array<{ path: string; status: string; additions: number; deletions: number }>
+    }
+    error?: string
+  }> =>
+    ipcRenderer.invoke('git:commitDetail', hash),
+
+  gitCommitFileDiff: (hash: string, filePath: string): Promise<{ ok: boolean; data?: string; error?: string }> =>
+    ipcRenderer.invoke('git:commitFileDiff', hash, filePath),
+
   listSkills: (): Promise<{
     ok: boolean
     data?: Array<{ name: string; description: string; source: string; scope: string }>

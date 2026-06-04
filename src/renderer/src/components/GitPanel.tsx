@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import GitLogList from './GitLogList'
 
 interface GitFile {
   path: string
@@ -34,13 +35,22 @@ function statusColor(status: string): string {
   }
 }
 
-export default function GitPanel({ onFileSelect }: { onFileSelect?: (filePath: string) => void }) {
+type SubTab = 'changes' | 'log'
+
+export default function GitPanel({
+  onFileSelect,
+  onCommitFileSelect,
+}: {
+  onFileSelect?: (filePath: string) => void
+  onCommitFileSelect?: (hash: string, filePath: string) => void
+}) {
   const [status, setStatus] = useState<GitStatusData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [commitMsg, setCommitMsg] = useState('')
   const [committing, setCommitting] = useState(false)
   const [staging, setStaging] = useState<string | null>(null)
+  const [subTab, setSubTab] = useState<SubTab>('changes')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -166,6 +176,7 @@ export default function GitPanel({ onFileSelect }: { onFileSelect?: (filePath: s
 
   return (
     <div className="text-xs flex flex-col h-full">
+      {/* Branch header */}
       <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2 flex-shrink-0">
         <span className="font-medium text-gray-700">{status.branch}</span>
         {status.ahead > 0 && <span className="text-green-600">↑{status.ahead}</span>}
@@ -209,81 +220,121 @@ export default function GitPanel({ onFileSelect }: { onFileSelect?: (filePath: s
         )}
       </div>
 
+      {/* Sub-tab: Changes / Log */}
+      <div className="flex border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={() => setSubTab('changes')}
+          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+            subTab === 'changes'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Changes
+          {status.files.length > 0 && (
+            <span className="ml-1 text-[10px] text-gray-400">({status.files.length})</span>
+          )}
+        </button>
+        <button
+          onClick={() => setSubTab('log')}
+          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+            subTab === 'log'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Log
+        </button>
+      </div>
+
+      {/* Content area */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {staged.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-3 py-1.5 text-gray-500 font-medium">Staged Changes ({staged.length})</div>
-            {staged.map(f => (
-              <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
-                <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>{statusLabel(f.status)}</span>
-                <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
-                <button
-                  onClick={() => handleUnstage(f.path)}
-                  disabled={staging !== null}
-                  className="rounded p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  title="Unstage"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-                  </svg>
-                </button>
+        {subTab === 'changes' && (
+          <>
+            {staged.length > 0 && (
+              <div className="border-b border-gray-200">
+                <div className="px-3 py-1.5 text-gray-500 font-medium">Staged Changes ({staged.length})</div>
+                {staged.map(f => (
+                  <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
+                    <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>{statusLabel(f.status)}</span>
+                    <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
+                    <button
+                      onClick={() => handleUnstage(f.path)}
+                      disabled={staging !== null}
+                      className="rounded p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="Unstage"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+
+            {unstaged.length > 0 && (
+              <div className="border-b border-gray-200">
+                <div className="px-3 py-1.5 text-gray-500 font-medium">Changes ({unstaged.length})</div>
+                {unstaged.map(f => (
+                  <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
+                    <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>{statusLabel(f.status)}</span>
+                    <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
+                    <button
+                      onClick={() => handleStage(f.path)}
+                      disabled={staging !== null}
+                      className="rounded p-0.5 text-gray-400 hover:text-green-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="Stage"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {untracked.length > 0 && (
+              <div className="border-b border-gray-200">
+                <div className="px-3 py-1.5 text-gray-500 font-medium">Untracked ({untracked.length})</div>
+                {untracked.map(f => (
+                  <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
+                    <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>U</span>
+                    <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
+                    <button
+                      onClick={() => handleStage(f.path)}
+                      disabled={staging !== null}
+                      className="rounded p-0.5 text-gray-400 hover:text-green-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="Stage"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {status.files.length === 0 && (
+              <div className="px-3 py-4 text-gray-400 text-center">
+                No changes
+                <div className="mt-1 text-[10px]">
+                  Switch to <button onClick={() => setSubTab('log')} className="text-blue-500 hover:underline">Log</button> to see commit history
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {unstaged.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-3 py-1.5 text-gray-500 font-medium">Changes ({unstaged.length})</div>
-            {unstaged.map(f => (
-              <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
-                <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>{statusLabel(f.status)}</span>
-                <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
-                <button
-                  onClick={() => handleStage(f.path)}
-                  disabled={staging !== null}
-                  className="rounded p-0.5 text-gray-400 hover:text-green-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  title="Stage"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {untracked.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-3 py-1.5 text-gray-500 font-medium">Untracked ({untracked.length})</div>
-            {untracked.map(f => (
-              <div key={f.path} className="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 group" title={f.path}>
-                <span className={`w-4 text-center font-mono font-semibold ${statusColor(f.status)}`}>U</span>
-                <span className="text-gray-700 truncate flex-1 cursor-pointer" onClick={() => onFileSelect?.(f.path)}>{f.path}</span>
-                <button
-                  onClick={() => handleStage(f.path)}
-                  disabled={staging !== null}
-                  className="rounded p-0.5 text-gray-400 hover:text-green-600 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  title="Stage"
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {status.files.length === 0 && (
-          <div className="px-3 py-4 text-gray-400 text-center">
-            No changes
-          </div>
+        {subTab === 'log' && (
+          <GitLogList onCommitFileSelect={onCommitFileSelect} />
         )}
       </div>
 
-      {staged.length > 0 && (
+      {/* Commit input (only in Changes tab with staged files) */}
+      {subTab === 'changes' && staged.length > 0 && (
         <div className="border-t border-gray-200 p-2 flex-shrink-0">
           <textarea
             value={commitMsg}

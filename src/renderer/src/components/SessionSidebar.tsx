@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
+import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
 
 interface SessionSidebarProps {
   sessions: SessionListResult | null
@@ -41,9 +42,6 @@ function getDisplayName(session: SessionInfo): string {
   return `${month} ${day} ${hh}:${mm}`
 }
 
-const SLOT_W = 16
-const LINE_LEFT = 8
-const R = 3
 const GRAY = '#e5e7eb'
 const BLUE = '#3b82f6'
 
@@ -53,155 +51,7 @@ function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): bool
   return node.children.some((child) => isDescendantOf(child, sessionPath))
 }
 
-function GuideLine({ highlight }: { highlight: boolean }) {
-  return (
-    <div
-      className="flex-shrink-0 relative pointer-events-none"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    >
-      <div
-        className="absolute"
-        style={{ left: LINE_LEFT, top: 0, bottom: 0, width: 1.5, backgroundColor: highlight ? BLUE : GRAY }}
-      />
-    </div>
-  )
-}
 
-function GuideBranch({ active, highlight }: { active: boolean; highlight?: boolean }) {
-  const color = active ? BLUE : GRAY
-  return (
-    <div
-      className="flex-shrink-0 relative pointer-events-none overflow-visible"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    >
-      <div
-        className="absolute"
-        style={{ left: LINE_LEFT, top: 0, height: `calc(50% - ${R}px)`, width: 1.5, backgroundColor: color }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT,
-          top: `calc(50% - ${R}px)`,
-          width: R,
-          height: R,
-          borderLeft: `1.5px solid ${color}`,
-          borderBottom: `1.5px solid ${color}`,
-          borderBottomLeftRadius: R,
-        }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT + R,
-          top: `calc(50% - 1.5px)`,
-          width: SLOT_W - LINE_LEFT - R + 3,
-          height: 1.5,
-          backgroundColor: color,
-        }}
-      />
-      <div
-        className="absolute"
-        style={{ left: LINE_LEFT, top: '50%', bottom: 0, width: 1.5, backgroundColor: GRAY }}
-      />
-      {highlight && (
-        <div
-          className="absolute"
-          style={{ left: LINE_LEFT, top: 0, bottom: 0, width: 1.5, backgroundColor: BLUE }}
-        />
-      )}
-    </div>
-  )
-}
-
-function GuideElbow({ active }: { active: boolean }) {
-  const color = active ? BLUE : GRAY
-  return (
-    <div
-      className="flex-shrink-0 relative pointer-events-none overflow-visible"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    >
-      <div
-        className="absolute"
-        style={{ left: LINE_LEFT, top: 0, height: `calc(50% - ${R}px)`, width: 1.5, backgroundColor: color }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT,
-          top: `calc(50% - ${R}px)`,
-          width: R,
-          height: R,
-          borderLeft: `1.5px solid ${color}`,
-          borderBottom: `1.5px solid ${color}`,
-          borderBottomLeftRadius: R,
-        }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT + R,
-          top: `calc(50% - 1.5px)`,
-          width: SLOT_W - LINE_LEFT - R + 3,
-          height: 1.5,
-          backgroundColor: color,
-        }}
-      />
-    </div>
-  )
-}
-
-function GuideSlot() {
-  return (
-    <div
-      className="flex-shrink-0"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    />
-  )
-}
-
-function DotSlot({
-  active,
-  hasChildren,
-  isExpanded,
-  highlight,
-  completed,
-}: {
-  active: boolean
-  hasChildren: boolean
-  isExpanded: boolean
-  highlight: boolean
-  completed: boolean
-}) {
-  return (
-    <div
-      className="flex-shrink-0 flex items-center justify-center relative"
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-    >
-      <div
-        className={
-          active
-            ? 'w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-500 flex-shrink-0'
-            : completed
-              ? 'w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-gray-300 flex-shrink-0'
-              : 'w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-blue-500 flex-shrink-0'
-        }
-      />
-      {hasChildren && isExpanded && (
-        <div
-          className="absolute"
-          style={{
-            left: LINE_LEFT,
-            top: 'calc(50% + 5px)',
-            bottom: 0,
-            width: 1.5,
-            backgroundColor: highlight ? BLUE : GRAY,
-          }}
-        />
-      )}
-    </div>
-  )
-}
 
 function SessionNode({
   node,
@@ -283,22 +133,13 @@ function SessionNode({
       isDescendantOf(child, currentSessionPath)
   )
 
-  const renderGuides = () => {
-    if (ancestorLines.length === 0) return null
-    return ancestorLines.map((entry, i) => {
-      const isConnector = i === ancestorLines.length - 1
-      if (isConnector) {
-        if (entry.hasLine) {
-          return <GuideBranch key={i} active={entry.branchActive} highlight={entry.highlight && !entry.branchActive} />
-        }
-        return <GuideElbow key={i} active={entry.branchActive} />
-      }
-      if (entry.hasLine) {
-        return <GuideLine key={i} highlight={entry.highlight && !entry.branchActive} />
-      }
-      return <GuideSlot key={i} />
-    })
-  }
+  const guides = [...sessionAncestorLinesToGuides(ancestorLines), sessionDotToGuide({
+    active: isOnActivePath || isActive || node.session.isMain,
+    hasChildren,
+    isExpanded,
+    highlight: hasChildOnActivePath,
+    completed: isCompleted,
+  })]
 
   return (
     <div>
@@ -316,15 +157,8 @@ function SessionNode({
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => onContextMenu(e, node.session)}
       >
-        {renderGuides()}
-        <DotSlot
-          active={isOnActivePath || isActive || node.session.isMain}
-          hasChildren={hasChildren}
-          isExpanded={isExpanded}
-          highlight={hasChildOnActivePath}
-          completed={isCompleted}
-        />
-        <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
+        <TreeGraphRow guides={guides}>
+          <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
           {isRenaming ? (
             <input
               autoFocus
@@ -449,7 +283,8 @@ function SessionNode({
               )}
             </button>
           )}
-        </div>
+          </div>
+        </TreeGraphRow>
       </div>
 
       {isForking && (

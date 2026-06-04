@@ -11,7 +11,7 @@ interface RightPanelProps {
   width: number
   onResizeStart: (e: React.MouseEvent) => void
   onFileSelect: (filePath: string, scrollToLine?: number) => void
-  onDiffSelect: (filePath: string) => void
+  onDiffSelect: (filePath: string, commitHash?: string) => void
 }
 
 function FolderIcon({ className }: { className?: string }) {
@@ -95,7 +95,10 @@ export default function RightPanel({
           </div>
         )}
         {view === 'git' && (
-          <GitPanel onFileSelect={onDiffSelect} />
+          <GitPanel
+            onFileSelect={onDiffSelect}
+            onCommitFileSelect={(hash, filePath) => onDiffSelect(filePath, hash)}
+          />
         )}
         {view === 'search' && (
           <SearchPanel onFileSelect={onFileSelect} />
