@@ -100,6 +100,10 @@ export function useFileIndex(): FileIndexResult {
   }, []);
 
   useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  useEffect(() => {
     const api = window.api as typeof window.api & { onFsChanged?: (cb: () => void) => () => void };
     if (!api.onFsChanged) return;
     const unsub = api.onFsChanged(() => {
