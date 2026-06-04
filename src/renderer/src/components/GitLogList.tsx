@@ -273,7 +273,7 @@ export default function GitLogList({
         return (
           <div key={commit.hash} className="border-b border-gray-100">
             <div
-              className="group flex hover:bg-gray-100 cursor-pointer transition-colors"
+              className={`group flex cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-100'}`
               onClick={() => handleToggleCommit(commit.hash)}
             >
               {/* Graph column — fixed width, absolute-positioned dot & lines */}
