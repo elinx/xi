@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { PiModelInfo } from '../types/session'
 import type { FileEntry } from '../hooks/useFileIndex'
 import { useFileMention, type MentionItem } from '../hooks/useFileMention'
@@ -22,30 +22,57 @@ interface InputBarProps {
 }
 
 function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files }: InputBarProps): React.ReactElement {
-  const [text, setText] = useState('')
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
 
   const mention = useFileMention(files)
 
   const showStop = isStreaming || isBackgroundStreaming
   const noModel = isConnected && !currentModel
 
+  const getPlainText = useCallback((): string => {
+    if (!editorRef.current) return ''
+    let text = ''
+    for (const node of editorRef.current.childNodes) {
+      if (node instanceof HTMLElement && node.dataset.mentionPath) {
+        text += '@' + node.dataset.mentionPath
+      } else {
+        text += node.textContent ?? ''
+      }
+    }
+    return text
+  }, [])
+
+  const isEmpty = useCallback((): boolean => {
+    if (!editorRef.current) return true
+    return !editorRef.current.textContent?.trim()
+  }, [])
+
   const handleSubmit = useCallback((): void => {
-    const trimmed = text.trim()
-    if (!trimmed && pastedImages.length === 0) return
+    const text = getPlainText().trim()
+    if (!text && pastedImages.length === 0) return
     if (disabled) return
-    onSend(trimmed, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined)
-    setText('')
+    onSend(text, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined)
+    if (editorRef.current) {
+      editorRef.current.innerHTML = ''
+    }
     setPastedImages([])
     mention.clearMentions()
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
-  }, [text, pastedImages, disabled, onSend, mention])
+  }, [getPlainText, pastedImages, disabled, onSend, mention])
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+  useEffect(() => {
+    if (!editorRef.current) return
+    const el = editorRef.current
+    const observer = new MutationObserver(() => {
+      el.style.height = 'auto'
+      el.style.height = Math.min(el.scrollHeight, 96) + 'px'
+    })
+    observer.observe(el, { childList: true, characterData: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
     if (mention.open) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
@@ -71,34 +98,88 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     }
   }
 
-  function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>): void {
-    const value = e.target.value
-    setText(value)
-    mention.onTextInput(value, e.target.selectionStart ?? value.length)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 96) + 'px'
+  function handleEditorInput(): void {
+    if (!editorRef.current) return
+    const sel = window.getSelection()
+    const cursorPos = sel?.focusOffset ?? 0
+    const textBeforeCursor = getPlainTextUpToCursor()
+    mention.onTextInput(getPlainText(), cursorPos)
+  }
+
+  function getPlainTextUpToCursor(): string {
+    const sel = window.getSelection()
+    if (!sel || !sel.focusNode || !editorRef.current) return ''
+    let text = ''
+    let reachedFocus = false
+    for (const node of editorRef.current.childNodes) {
+      if (node === sel.focusNode || (sel.focusNode && node.contains(sel.focusNode))) {
+        if (node instanceof HTMLElement && node.dataset.mentionPath) {
+          text += '@' + node.dataset.mentionPath
+        } else {
+          const nodeText = node.textContent ?? ''
+          text += nodeText.substring(0, sel.focusOffset)
+        }
+        reachedFocus = true
+        break
+      }
+      if (node instanceof HTMLElement && node.dataset.mentionPath) {
+        text += '@' + node.dataset.mentionPath
+      } else {
+        text += node.textContent ?? ''
+      }
+    }
+    return text
   }
 
   const handleMentionSelect = useCallback((file: FileEntry) => {
-    const before = text.substring(0, mention.triggerStart)
-    const after = text.substring(mention.triggerStart + 1 + mention.query.length)
-    const mentionText = `@${file.relativePath} `
-    setText(before + mentionText + after)
-    mention.selectItem(file)
-    setTimeout(() => {
-      if (textareaRef.current) {
-        const newPos = before.length + mentionText.length
-        textareaRef.current.setSelectionRange(newPos, newPos)
-        textareaRef.current.focus()
-      }
-    }, 0)
-  }, [text, mention])
+    if (!editorRef.current) return
+    const sel = window.getSelection()
+    if (!sel || !sel.focusNode) return
 
-  function handlePaste(e: React.ClipboardEvent): void {
+    const textNode = sel.focusNode.nodeType === Node.TEXT_NODE ? sel.focusNode as Text : null
+    const textContent = textNode?.textContent ?? ''
+    const cursorOffset = sel.focusOffset
+
+    const textBeforeCursor = textContent.substring(0, cursorOffset)
+    const atPos = textBeforeCursor.lastIndexOf('@')
+    if (atPos === -1) return
+
+    const before = textContent.substring(0, atPos)
+    const after = textContent.substring(cursorOffset)
+
+    const pill = document.createElement('span')
+    pill.contentEditable = 'false'
+    pill.dataset.mentionPath = file.relativePath
+    pill.className = 'inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-blue-100 text-blue-700 text-[13px] leading-5 align-baseline select-none cursor-default'
+    pill.innerHTML = `<svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>${file.relativePath}`
+
+    if (textNode && textNode.parentNode) {
+      const parent = textNode.parentNode
+      const afterNode = after.length > 0 ? document.createTextNode(after + '\u00A0') : document.createTextNode('\u00A0')
+
+      if (before.length > 0) {
+        parent.insertBefore(document.createTextNode(before), textNode)
+      }
+      parent.insertBefore(pill, textNode)
+      parent.insertBefore(afterNode, textNode)
+      parent.removeChild(textNode)
+
+      const range = document.createRange()
+      range.setStart(afterNode, after.length > 0 ? after.length + 1 : 1)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+
+    mention.selectItem(file)
+  }, [mention])
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>): void {
     const items = e.clipboardData.items
+    let hasImage = false
     for (const item of items) {
       if (item.type.startsWith('image/')) {
+        hasImage = true
         e.preventDefault()
         const blob = item.getAsFile()
         if (!blob) continue
@@ -112,6 +193,11 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
         }
         reader.readAsDataURL(blob)
       }
+    }
+    if (!hasImage) {
+      e.preventDefault()
+      const text = e.clipboardData.getData('text/plain')
+      document.execCommand('insertText', false, text)
     }
   }
 
@@ -195,16 +281,14 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
       )}
       <div className="flex items-end gap-2 relative">
         <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={handleInput}
+          <div
+            ref={editorRef}
+            contentEditable
             onKeyDown={handleKeyDown}
+            onInput={handleEditorInput}
             onPaste={handlePaste}
-            disabled={disabled || noModel}
-            rows={1}
-            placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (@ to mention files)'}
-            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50"
+            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (@ to mention files)'}
+            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
           />
           <FileMentionDropdown
             files={mention.filteredFiles}
@@ -223,7 +307,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={disabled || noModel || (!text.trim() && pastedImages.length === 0)}
+            disabled={disabled || noModel || (isEmpty() && pastedImages.length === 0)}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
           >
             Send
