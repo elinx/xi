@@ -108,7 +108,7 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
   )
 }
 
-const MENTION_RE = /@([\w][\w./-]*(?:\/[\w./-]+)+)/g
+const MENTION_RE = /@([\w][\w-]*(?:[\/.][\w./-]+)+)/g
 
 interface TextSegment { type: 'text'; value: string }
 interface MentionSegment { type: 'mention'; value: string }
