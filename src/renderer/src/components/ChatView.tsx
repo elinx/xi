@@ -80,15 +80,23 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
   }
 
   if (onFileSelect) {
+    const segments = splitByMentions(block.content)
+    if (segments.length === 1 && segments[0].type === 'text') {
+      return (
+        <div className="prose prose-sm max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+        </div>
+      )
+    }
     return (
       <div className="prose prose-sm max-w-none">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            p: ({ children }) => <p>{renderMentionLinks(children, onFileSelect)}</p>,
-            li: ({ children }) => <li>{renderMentionLinks(children, onFileSelect)}</li>,
-          }}
-        >{block.content}</ReactMarkdown>
+        <p>
+          {segments.map((seg, i) =>
+            seg.type === 'mention'
+              ? <MentionPill key={i} filePath={seg.value} onClick={() => onFileSelect(seg.value)} />
+              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <>{children}</>, li: ({ children }) => <>{children}</> }}>{seg.value}</ReactMarkdown>
+          )}
+        </p>
       </div>
     )
   }
@@ -100,51 +108,42 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
   )
 }
 
-const MENTION_RE = /@([\w./-]+(?:\/[\w./-]+)*)/g
+const MENTION_RE = /@([\w][\w./-]*(?:\/[\w./-]+)+)/g
 
-function renderMentionLinks(children: React.ReactNode, onFileSelect: (filePath: string) => void): React.ReactNode {
-  if (typeof children === 'string') {
-    return renderMentionText(children, onFileSelect)
-  }
-  if (Array.isArray(children)) {
-    return children.map((child, i) => {
-      if (typeof child === 'string') {
-        return <React.Fragment key={i}>{renderMentionText(child, onFileSelect)}</React.Fragment>
-      }
-      return child
-    })
-  }
-  return children
-}
+interface TextSegment { type: 'text'; value: string }
+interface MentionSegment { type: 'mention'; value: string }
+type Segment = TextSegment | MentionSegment
 
-function renderMentionText(text: string, onFileSelect: (filePath: string) => void): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
+function splitByMentions(text: string): Segment[] {
+  const segments: Segment[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null
   const re = new RegExp(MENTION_RE.source, 'g')
   while ((match = re.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
+      segments.push({ type: 'text', value: text.slice(lastIndex, match.index) })
     }
-    const filePath = match[1]
-    parts.push(
-      <button
-        key={match.index}
-        onClick={() => onFileSelect(filePath)}
-        className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-blue-100 text-blue-700 text-[13px] leading-5 align-baseline hover:bg-blue-200 transition-colors cursor-pointer border-0"
-      >
-        <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-        </svg>
-        {filePath}
-      </button>
-    )
+    segments.push({ type: 'mention', value: match[1] })
     lastIndex = re.lastIndex
   }
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
+    segments.push({ type: 'text', value: text.slice(lastIndex) })
   }
-  return parts.length > 0 ? parts : [text]
+  return segments.length > 0 ? segments : [{ type: 'text', value: text }]
+}
+
+function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => void }): React.ReactElement {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-blue-100 text-blue-700 text-[13px] leading-5 align-baseline hover:bg-blue-200 transition-colors cursor-pointer border-0"
+    >
+      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+      {filePath}
+    </button>
+  )
 }
 
 function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
