@@ -54,6 +54,31 @@ export interface ConvertResult {
  *
  * This is the shared conversion logic extracted from usePiRpc's loadHistory().
  */
+export function splitUserContentIntoBlocks(content: string): ContentBlock[] {
+  const blocks: ContentBlock[] = []
+  const quoteRe = /^> \[Quoted (user|assistant) message\]:\n((?:> .*\n)*> .*$|(?:> .*\n)*)/gm
+  let quoteMatch: RegExpExecArray | null
+  let lastEnd = 0
+  while ((quoteMatch = quoteRe.exec(content)) !== null) {
+    if (quoteMatch.index > lastEnd) {
+      const between = content.slice(lastEnd, quoteMatch.index).trim()
+      if (between) blocks.push({ type: 'text', content: between })
+    }
+    const quoteRole = quoteMatch[1] as 'user' | 'assistant'
+    const quoteContent = quoteMatch[2].replace(/^> ?/gm, '').trim()
+    blocks.push({ type: 'quote', role: quoteRole, content: quoteContent })
+    lastEnd = quoteMatch.index + quoteMatch[0].length
+  }
+  const remaining = content.slice(lastEnd).trim()
+  if (remaining) {
+    blocks.push({ type: 'text', content: remaining })
+  }
+  if (blocks.length === 0) {
+    blocks.push({ type: 'text', content })
+  }
+  return blocks
+}
+
 export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertResult {
   const chatMessages: ChatMessage[] = []
 
@@ -73,7 +98,7 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
       chatMessages.push({
         id: crypto.randomUUID(),
         role: 'user',
-        blocks: [{ type: 'text', content }],
+        blocks: splitUserContentIntoBlocks(content),
         timestamp: typeof msg.timestamp === 'number' ? msg.timestamp : Date.now(),
         piEntryId,
       })

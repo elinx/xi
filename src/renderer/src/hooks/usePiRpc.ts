@@ -11,7 +11,7 @@ import type {
   PiContentBlock,
 } from '../types/pi-events'
 import type { ForkPoint, PiModelInfo } from '../types/session'
-import { convertPiMessagesToChatMessages, type TokenUsage } from '../utils/convert-messages'
+import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, type TokenUsage } from '../utils/convert-messages'
 
 export interface UsePiRpcOptions {
   onMessagesUpdate: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void
@@ -147,31 +147,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                     .map((c) => c.text)
                     .join('')
 
-            const blocks: ContentBlock[] = []
-            const quoteRe = /^> \[Quoted (user|assistant) message\]:\n((?:> .*\n)*)/gm
-            let quoteMatch: RegExpExecArray | null
-            let lastEnd = 0
-            while ((quoteMatch = quoteRe.exec(userContent)) !== null) {
-              if (quoteMatch.index > lastEnd) {
-                blocks.push({ type: 'text', content: userContent.slice(lastEnd, quoteMatch.index).trim() })
-              }
-              const quoteRole = quoteMatch[1] as 'user' | 'assistant'
-              const quoteContent = quoteMatch[2].replace(/^> /gm, '').trim()
-              blocks.push({ type: 'quote', role: quoteRole, content: quoteContent })
-              lastEnd = quoteMatch.index + quoteMatch[0].length
-            }
-            const remaining = userContent.slice(lastEnd).trim()
-            if (remaining) {
-              blocks.push({ type: 'text', content: remaining })
-            }
-            if (blocks.length === 0) {
-              blocks.push({ type: 'text', content: userContent })
-            }
-
             const userChatMsg: ChatMessage = {
               id: crypto.randomUUID(),
               role: 'user',
-              blocks,
+              blocks: splitUserContentIntoBlocks(userContent),
               timestamp: userMsg.timestamp,
             }
             onMessagesUpdate((prev) => [...prev, userChatMsg])
