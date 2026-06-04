@@ -22,6 +22,7 @@ import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage } from './types/message'
 import type { ForkPoint } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
+import type { QuotedMessage } from './components/QuoteCard'
 
 function getDisplayName(session: { name: string | null; createdAt: string }): string {
   if (session.name) return session.name
@@ -206,9 +207,9 @@ function App(): React.ReactElement {
   }, [rightPanelWidth])
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('xi-view-mode') as ViewMode
-    return saved === 'normal' || saved === 'turn' || saved === 'outline' ? saved : 'normal'
+    return (localStorage.getItem('xi-settings-view-mode') as ViewMode) || 'normal'
   })
+  const [quotes, setQuotes] = useState<QuotedMessage[]>([])
 
   const activeSessionPath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
   const activeSession = activeSessionPath
@@ -346,14 +347,33 @@ function App(): React.ReactElement {
     }
   }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
+  const handleQuoteMessage = useCallback((messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => {
+    setQuotes(prev => {
+      if (prev.some(q => q.messageId === messageId)) return prev
+      return [...prev, { messageId, role, content, timestamp }]
+    })
+  }, [])
+
+  const handleRemoveQuote = useCallback((messageId: string) => {
+    setQuotes(prev => prev.filter(q => q.messageId !== messageId))
+  }, [])
+
+  const handleClearQuotes = useCallback(() => setQuotes([]), [])
+
   const isLazySwitchedRef = useRef(isLazySwitched)
   isLazySwitchedRef.current = isLazySwitched
 
-  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
+  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>, quotes?: QuotedMessage[]) => {
     if (!isLazySwitchedRef.current && isPiStreaming()) return
 
+    let finalText = text
+    if (quotes && quotes.length > 0) {
+      const quotedText = quotes.map(q => `[Quoted ${q.role} message]:\n${q.content}`).join('\n\n')
+      finalText = quotedText + '\n\n' + text
+    }
+
     const doSend = () => {
-      sendPrompt(text, images, mentions)
+      sendPrompt(finalText, images, mentions)
     }
 
     if (isLazySwitchedRef.current) {
@@ -763,6 +783,7 @@ function App(): React.ReactElement {
                 forkPoints={displayedForkPoints}
                 viewMode={viewMode}
                 onFileSelect={(p) => handleFileSelect(p)}
+                onQuoteMessage={handleQuoteMessage}
               />
             </div>
             {activeTab?.type === 'file' && (
@@ -806,6 +827,9 @@ function App(): React.ReactElement {
               getAvailableModels={getAvailableModels}
               files={indexedFiles}
               sentMessages={sentMessages}
+              quotes={quotes}
+              onRemoveQuote={handleRemoveQuote}
+              onClearQuotes={handleClearQuotes}
             />
           )}
         </div>
@@ -819,6 +843,7 @@ function App(): React.ReactElement {
           onResizeStart={handleRightResizeStart}
           onFileSelect={handleFileSelect}
           onDiffSelect={handleDiffSelect}
+          onQuoteMessage={handleQuoteMessage}
         />
       </div>
 

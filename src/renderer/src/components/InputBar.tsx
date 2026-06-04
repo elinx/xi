@@ -4,9 +4,10 @@ import type { FileEntry } from '../hooks/useFileIndex'
 import { useFileMention, type MentionItem } from '../hooks/useFileMention'
 import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
+import QuoteCard, { type QuotedMessage } from './QuoteCard'
 
 interface InputBarProps {
-  onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[]) => void
+  onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => void
   disabled: boolean
   isConnected: boolean
   isStreaming?: boolean
@@ -20,9 +21,12 @@ interface InputBarProps {
   getAvailableModels?: () => Promise<PiModelInfo[]>
   files: FileEntry[]
   sentMessages: string[]
+  quotes: QuotedMessage[]
+  onRemoveQuote: (messageId: string) => void
+  onClearQuotes: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files, sentMessages }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -147,7 +151,8 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     const text = getPlainText().trim()
     if (!text && pastedImages.length === 0) return
     if (disabled) return
-    onSend(text, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined)
+    onSend(text, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined, quotes.length > 0 ? quotes : undefined)
+    if (quotes.length > 0) onClearQuotes()
     if (editorRef.current) {
       editorRef.current.innerHTML = ''
     }
@@ -366,7 +371,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   }
 
   return (
-    <div className="border-t border-gray-200 bg-white px-4 py-3 relative">
+    <div className="relative">
+      <QuoteCard quotes={quotes} onRemove={onRemoveQuote} onClear={onClearQuotes} />
+      <div className="border-t border-gray-200 bg-white px-4 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
         {statusDot}
         {statusText}
@@ -437,6 +444,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
             Send
           </button>
         )}
+      </div>
       </div>
     </div>
   )
