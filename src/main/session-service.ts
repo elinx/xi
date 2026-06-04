@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import type {
   SessionInfo,
@@ -348,4 +348,26 @@ export function getForkPoints(sessionPath: string): ForkPoint[] {
   }
 
   return forkPoints
+}
+
+export function getLastSession(cwd: string): string | null {
+  const dir = getSessionDir(cwd)
+  const filePath = join(dir, 'last-session.json')
+  if (!existsSync(filePath)) return null
+  try {
+    const data = JSON.parse(readFileSync(filePath, 'utf-8')) as { sessionPath: string; updatedAt: string }
+    if (typeof data.sessionPath !== 'string') return null
+    if (!existsSync(data.sessionPath)) return null
+    return data.sessionPath
+  } catch {
+    return null
+  }
+}
+
+export function saveLastSession(cwd: string, sessionPath: string): void {
+  const dir = getSessionDir(cwd)
+  const filePath = join(dir, 'last-session.json')
+  try {
+    writeFileSync(filePath, JSON.stringify({ sessionPath, updatedAt: new Date().toISOString() }, null, 2))
+  } catch {}
 }

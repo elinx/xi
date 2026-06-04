@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
 type Theme = 'system' | 'light' | 'dark'
+type StartupSession = 'last' | 'main'
 
 function GeneralSettings(): React.ReactElement {
   const [fontSize, setFontSize] = useState(() => {
@@ -11,6 +12,9 @@ function GeneralSettings(): React.ReactElement {
   })
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('xi-settings-theme') as Theme) || 'system'
+  })
+  const [startupSession, setStartupSession] = useState<StartupSession>(() => {
+    return (localStorage.getItem('xi-settings-startup-session') as StartupSession) || 'last'
   })
 
   useEffect(() => {
@@ -32,6 +36,11 @@ function GeneralSettings(): React.ReactElement {
   const handleThemeChange = (value: Theme) => {
     setTheme(value)
     localStorage.setItem('xi-settings-theme', value)
+  }
+
+  const handleStartupSessionChange = (value: StartupSession) => {
+    setStartupSession(value)
+    localStorage.setItem('xi-settings-startup-session', value)
   }
 
   return (
@@ -63,6 +72,17 @@ function GeneralSettings(): React.ReactElement {
             placeholder="e.g. claude-3-5-sonnet-20241022"
             className="w-full max-w-[180px] rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
+        </div>
+        <div className="flex items-center justify-between h-9">
+          <span className="text-xs text-gray-700">Startup Session</span>
+          <select
+            value={startupSession}
+            onChange={(e) => handleStartupSessionChange(e.target.value as StartupSession)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            <option value="last">Last Session</option>
+            <option value="main">Main Session</option>
+          </select>
         </div>
       </div>
 

@@ -644,6 +644,15 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('session:getLastSession', () => {
+    return sessionService.getLastSession(process.cwd())
+  })
+
+  ipcMain.handle('session:saveLastSession', (_event, sessionPath: string) => {
+    sessionService.saveLastSession(process.cwd(), sessionPath)
+    return { ok: true }
+  })
+
   const HIDDEN_DIRS = new Set(['node_modules', '.git', 'out', 'dist', '.pi', '.sisyphus', '.claude', '.playwright-cli'])
   const HIDDEN_PREFIXES = new Set(['.'])
 
@@ -1331,6 +1340,16 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  if (piBridge?.isConnected) {
+    try {
+      const stateData = piBridge.sendRpcCommand({ type: 'get_state' }) as Promise<Record<string, unknown>>
+      stateData.then((data) => {
+        if (typeof data.sessionFile === 'string') {
+          sessionService.saveLastSession(process.cwd(), data.sessionFile)
+        }
+      }).catch(() => {})
+    } catch {}
+  }
   piBridge?.stop().catch((err: Error) => {
     console.error('[PiSDKBridge] Error during shutdown:', err.message)
   })

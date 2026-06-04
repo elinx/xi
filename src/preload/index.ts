@@ -258,6 +258,12 @@ const api = {
 
   getProjectPath: (): Promise<string> =>
     ipcRenderer.invoke('app:getProjectPath'),
+
+  getLastSession: (): Promise<string | null> =>
+    ipcRenderer.invoke('session:getLastSession'),
+
+  saveLastSession: (sessionPath: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('session:saveLastSession', sessionPath),
 }
 
 contextBridge.exposeInMainWorld('api', api)

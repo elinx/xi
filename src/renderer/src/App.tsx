@@ -278,6 +278,7 @@ function App(): React.ReactElement {
       await loadHistory()
       await loadForkPoints(sessionPath)
       await refresh()
+      window.api.saveLastSession(sessionPath)
     } else {
       await displaySessionRef.current(sessionPath)
     }
@@ -295,6 +296,8 @@ function App(): React.ReactElement {
     if (result) {
       await refresh()
       setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+      const path = currentSessionRef.current?.filePath
+      if (path) window.api.saveLastSession(path)
     }
   }, [abort, clearMessages, newSession, refresh, isPiStreaming, setPiConnectedPath])
 
@@ -307,6 +310,8 @@ function App(): React.ReactElement {
     await loadHistory()
     await refresh()
     setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+    const path = currentSessionRef.current?.filePath
+    if (path) window.api.saveLastSession(path)
   }, [abort, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
   const handleForkFromEnd = useCallback(async (sessionPath: string, name: string) => {
@@ -321,6 +326,8 @@ function App(): React.ReactElement {
     await loadHistory()
     await refresh()
     setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+    const path = currentSessionRef.current?.filePath
+    if (path) window.api.saveLastSession(path)
   }, [abort, getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
   const handleClearSession = useCallback(async () => {
@@ -334,6 +341,8 @@ function App(): React.ReactElement {
       await loadHistory()
       await refresh()
       setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
+      const path = currentSessionRef.current?.filePath
+      if (path) window.api.saveLastSession(path)
     }
   }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
 
@@ -409,6 +418,27 @@ function App(): React.ReactElement {
       displaySessionRef.current(currentSession.filePath).then(() => {
         loadHistory()
       })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, currentSession?.filePath])
+
+  const startupRestoredRef = useRef(false)
+  useEffect(() => {
+    if (startupRestoredRef.current) return
+    if (!isConnected || !currentSession?.filePath) return
+    startupRestoredRef.current = true
+    const startupPref = localStorage.getItem('xi-settings-startup-session') || 'last'
+    if (startupPref !== 'last') return
+    window.api.getLastSession().then(async (lastPath) => {
+      if (!lastPath || currentSession.filePath === lastPath) return
+      const result = await switchSession(lastPath)
+      if (result.success) {
+        setPiConnectedPath(lastPath)
+        clearMessages()
+        await loadHistory()
+        await loadForkPoints(lastPath)
+        await refresh()
+      }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, currentSession?.filePath])
