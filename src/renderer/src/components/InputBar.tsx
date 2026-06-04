@@ -46,7 +46,25 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   }, [text, pastedImages, disabled, onSend, mention])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (mention.onKeyDown(e)) return
+    if (mention.open) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        mention.onKeyDown(e)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const file = mention.filteredFiles[mention.selectedIndex]
+        if (file) handleMentionSelect(file)
+        else mention.close()
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        mention.close()
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
