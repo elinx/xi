@@ -1249,6 +1249,9 @@ function OutlineRow({
 
 function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const isNearBottomRef = useRef(true)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
     blockIndex: number
@@ -1306,9 +1309,23 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     setForkEntryId(null)
   }, [])
 
-  // Throttled scroll: only scroll on animation frames to avoid jank
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    isNearBottomRef.current = nearBottom
+    setShowScrollToBottom(!nearBottom)
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    isNearBottomRef.current = true
+    setShowScrollToBottom(false)
+  }, [])
+
   const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
+    if (!isNearBottomRef.current) return
     if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null
@@ -1322,7 +1339,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white px-4 py-6">
+    <div className="relative flex flex-1">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white px-4 py-6">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
@@ -1485,6 +1503,17 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           ))}
           <div ref={bottomRef} />
         </div>
+      )}
+      </div>
+      {showScrollToBottom && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white shadow-lg border border-gray-200 p-2 text-gray-500 hover:text-gray-700 hover:shadow-xl transition-all cursor-pointer"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+          </svg>
+        </button>
       )}
     </div>
   )
