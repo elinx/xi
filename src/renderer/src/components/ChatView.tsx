@@ -1064,8 +1064,8 @@ function TurnCard({
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                         title="Fork from here"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 2.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm1.5-.5a.5.5 0 100 1 .5.5 0 000-1zM2 2.5A2.5 2.5 0 014.5 0h2a2.5 2.5 0 012.45 2h3.05a1.5 1.5 0 110 1H8.95A2.51 2.51 0 017 4.95V7.1a2.5 2.5 0 010 3.8v1.15a1.5 1.5 0 11-1 0V10.9a2.5 2.5 0 010-3.8V4.95A2.51 2.51 0 014.55 3h-.05v6.15a1.5 1.5 0 11-1 0V3H2.5a1.5 1.5 0 110-1H2zm.5 1a.5.5 0 100-1 .5.5 0 000 1zm9 0a.5.5 0 100-1 .5.5 0 000 1zM6 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-.5 0a.5.5 0 10-1 0 .5.5 0 001 0zm-1 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm.5-1.5a.5.5 0 10-1 0 .5.5 0 001 0z" />
                         </svg>
                       </button>
                       {forkInputMessageId === msg.id && forkEntryId && (
@@ -1195,8 +1195,8 @@ function OutlineRow({
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                         title="Fork from here"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 2.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm1.5-.5a.5.5 0 100 1 .5.5 0 000-1zM2 2.5A2.5 2.5 0 014.5 0h2a2.5 2.5 0 012.45 2h3.05a1.5 1.5 0 110 1H8.95A2.51 2.51 0 017 4.95V7.1a2.5 2.5 0 010 3.8v1.15a1.5 1.5 0 11-1 0V10.9a2.5 2.5 0 010-3.8V4.95A2.51 2.51 0 014.55 3h-.05v6.15a1.5 1.5 0 11-1 0V3H2.5a1.5 1.5 0 110-1H2zm.5 1a.5.5 0 100-1 .5.5 0 000 1zm9 0a.5.5 0 100-1 .5.5 0 000 1zM6 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-.5 0a.5.5 0 10-1 0 .5.5 0 001 0zm-1 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm.5-1.5a.5.5 0 10-1 0 .5.5 0 001 0z" />
                         </svg>
                       </button>
                       {forkInputMessageId === msg.id && forkEntryId && (
@@ -1387,8 +1387,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
                         title="Fork from here"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 2.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm1.5-.5a.5.5 0 100 1 .5.5 0 000-1zM2 2.5A2.5 2.5 0 014.5 0h2a2.5 2.5 0 012.45 2h3.05a1.5 1.5 0 110 1H8.95A2.51 2.51 0 017 4.95V7.1a2.5 2.5 0 010 3.8v1.15a1.5 1.5 0 11-1 0V10.9a2.5 2.5 0 010-3.8V4.95A2.51 2.51 0 014.55 3h-.05v6.15a1.5 1.5 0 11-1 0V3H2.5a1.5 1.5 0 110-1H2zm.5 1a.5.5 0 100-1 .5.5 0 000 1zm9 0a.5.5 0 100-1 .5.5 0 000 1zM6 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-.5 0a.5.5 0 10-1 0 .5.5 0 001 0zm-1 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm.5-1.5a.5.5 0 10-1 0 .5.5 0 001 0z" />
                         </svg>
                       </button>
                       {forkInputMessageId === firstMsg.id && forkEntryId && (
