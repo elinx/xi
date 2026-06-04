@@ -1332,7 +1332,6 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                               .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
                               .map((b) => b.content)
                               .join('\n')
-                              .slice(0, 200)
                             onQuoteMessage(firstMsg.id, isUser ? 'user' : 'assistant', textContent, firstMsg.timestamp ?? Date.now())
                           }}
                           className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
