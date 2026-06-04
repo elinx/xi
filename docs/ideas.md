@@ -32,6 +32,21 @@ bugfix: 生成的时候向上滚动，滚动不了，而且闪屏
 ## chat everwhere
 - 像是git commit的地方，不应该还是跟原来一样让用户输入message，应该是一个chat box或者有一个按钮让agent自动生成commit message
 
+## search
+- 给 agent 提供搜索其他 session 的能力，memory 存在 session 的树形结构中，而不是线性的 session 中
+- session不能提供自动compact的能力：
+  - 从某一个节点fork
+  - 如果context满了没法 fork：用side memory实时的压缩的，用这个side memory进行fork，每一个对话结束的时候生成一个摘要自动加入到side memory，用户可以在 5s 之内回退掉
+- 当然还能够搜索代码
+
+
+## forward
+- 转发消息，像聊天界面一样，可以把选中的消息转发给一个session
+
+## subagents
+- subagents是agent自动产生的，像session一样要产生一个session的页面
+- session的名字前面要加一个图标，表示是自动产生的，不是用户创建的
+- 当前有一个session的状态按钮，应该加到tab上面吧，没必要单独一个区域
 
 
 ## 产品
