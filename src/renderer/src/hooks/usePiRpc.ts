@@ -147,10 +147,31 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                     .map((c) => c.text)
                     .join('')
 
+            const blocks: ContentBlock[] = []
+            const quoteRe = /^> \[Quoted (user|assistant) message\]:\n((?:> .*\n)*)/gm
+            let quoteMatch: RegExpExecArray | null
+            let lastEnd = 0
+            while ((quoteMatch = quoteRe.exec(userContent)) !== null) {
+              if (quoteMatch.index > lastEnd) {
+                blocks.push({ type: 'text', content: userContent.slice(lastEnd, quoteMatch.index).trim() })
+              }
+              const quoteRole = quoteMatch[1] as 'user' | 'assistant'
+              const quoteContent = quoteMatch[2].replace(/^> /gm, '').trim()
+              blocks.push({ type: 'quote', role: quoteRole, content: quoteContent })
+              lastEnd = quoteMatch.index + quoteMatch[0].length
+            }
+            const remaining = userContent.slice(lastEnd).trim()
+            if (remaining) {
+              blocks.push({ type: 'text', content: remaining })
+            }
+            if (blocks.length === 0) {
+              blocks.push({ type: 'text', content: userContent })
+            }
+
             const userChatMsg: ChatMessage = {
               id: crypto.randomUUID(),
               role: 'user',
-              blocks: [{ type: 'text', content: userContent }],
+              blocks,
               timestamp: userMsg.timestamp,
             }
             onMessagesUpdate((prev) => [...prev, userChatMsg])

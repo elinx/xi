@@ -66,36 +66,9 @@ function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement 
   )
 }
 
-function CollapsibleBlockquote({ children }: { children: React.ReactNode }): React.ReactElement {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="my-1 rounded-md border-l-2 border-gray-300 bg-gray-50">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-      >
-        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-        </svg>
-        Quoted message
-      </button>
-      {open && (
-        <div className="px-3 pb-2 text-xs text-gray-500 leading-4">
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const mdComponents = {
-  blockquote: ({ children }: { children: React.ReactNode }) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
-}
-
 const mdComponentsInline = {
   p: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   li: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  blockquote: ({ children }: { children: React.ReactNode }) => <CollapsibleBlockquote>{children}</CollapsibleBlockquote>,
 }
 
 function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void }): React.ReactElement {
@@ -117,7 +90,7 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
     if (segments.length === 1 && segments[0].type === 'text') {
       return (
         <div className="prose prose-sm max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{block.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
         </div>
       )
     }
@@ -127,8 +100,7 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
           {segments.map((seg, i) =>
             seg.type === 'mention'
               ? <MentionPill key={i} filePath={seg.value} onClick={() => onFileSelect(seg.value)} />
-              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>
-          )}
+              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>          )}
         </p>
       </div>
     )
@@ -180,12 +152,21 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
 }
 
 function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 'assistant'; content: string } }): React.ReactElement {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="mb-1 rounded-md border-l-2 border-gray-300 bg-gray-50 px-3 py-2">
-      <span className="text-[10px] text-gray-400 font-medium">
-        {block.role === 'user' ? 'You' : 'Pi'}
-      </span>
-      <p className="text-xs text-gray-500 mt-0.5 line-clamp-4 leading-4">{block.content}</p>
+    <div className="mb-1 rounded-md border-l-2 border-gray-300 bg-gray-50">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+      >
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+        </svg>
+        Quoted {block.role === 'user' ? 'You' : 'Pi'} message
+      </button>
+      {open && (
+        <div className="px-3 pb-2 text-xs text-gray-500 leading-4 whitespace-pre-wrap">{block.content}</div>
+      )}
     </div>
   )
 }
