@@ -83,7 +83,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   const handleMentionSelect = useCallback((file: FileEntry) => {
     const before = text.substring(0, mention.triggerStart)
     const after = text.substring(mention.triggerStart + 1 + mention.query.length)
-    const mentionText = `@${file.name} `
+    const mentionText = `@${file.relativePath} `
     setText(before + mentionText + after)
     mention.selectItem(file)
     setTimeout(() => {
