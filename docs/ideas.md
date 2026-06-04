@@ -42,6 +42,7 @@ bugfix: 生成的时候向上滚动，滚动不了，而且闪屏
 
 ## forward
 - 转发消息，像聊天界面一样，可以把选中的消息转发给一个session
+- 引用消息，直接引用好像也很棒，是不是只在当前的session引用比较好？或者可以在其他的session引用也可以；引用之后是不是不能直接发送给agent，因为human可能要针对性提问的，引用可的内容可以叠在inputbox上方吧
 
 ## subagents
 - subagents是agent自动产生的，像session一样要产生一个session的页面
