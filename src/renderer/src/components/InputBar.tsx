@@ -19,12 +19,17 @@ interface InputBarProps {
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   getAvailableModels?: () => Promise<PiModelInfo[]>
   files: FileEntry[]
+  sentMessages: string[]
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files, sentMessages }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const draftRef = useRef('')
+  const draftMentionsRef = useRef<MentionItem[]>([])
+  const suppressMentionRef = useRef(false)
 
   const mention = useFileMention(files)
 
@@ -37,6 +42,8 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     for (const node of editorRef.current.childNodes) {
       if (node instanceof HTMLElement && node.dataset.mentionPath) {
         text += '@' + node.dataset.mentionPath
+      } else if (node instanceof HTMLBRElement) {
+        text += '\n'
       } else {
         text += node.textContent ?? ''
       }
@@ -49,6 +56,93 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     return !editorRef.current.textContent?.trim()
   }, [])
 
+  const setEditorText = useCallback((text: string): void => {
+    if (!editorRef.current) return
+    // Suppress mention detection during programmatic text replacement
+    suppressMentionRef.current = true
+    editorRef.current.innerHTML = ''
+    if (text) {
+      // Convert newlines to <br> elements for proper rendering in contentEditable
+      const lines = text.split('\n')
+      for (let i = 0; i < lines.length; i++) {
+        if (i > 0) editorRef.current.appendChild(document.createElement('br'))
+        editorRef.current.appendChild(document.createTextNode(lines[i]))
+      }
+    }
+    // Move cursor to end
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(editorRef.current)
+      range.collapse(false)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    // Close any open mention dropdown
+    mention.close()
+    setTimeout(() => { suppressMentionRef.current = false }, 100)
+  }, [mention])
+
+  const restoreDraft = useCallback((): void => {
+    if (!editorRef.current) return
+    suppressMentionRef.current = true
+    editorRef.current.innerHTML = draftRef.current
+    // Move cursor to end
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(editorRef.current)
+      range.collapse(false)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    // Restore mention state to match the restored DOM
+    mention.setMentions(draftMentionsRef.current)
+    mention.close()
+    setTimeout(() => { suppressMentionRef.current = false }, 100)
+  }, [mention])
+
+  const navigateHistory = useCallback((direction: 'up' | 'down'): void => {
+    if (sentMessages.length === 0) return
+
+    // First ↑: save draft as innerHTML + mentions to preserve mention pills
+    if (historyIndex === -1 && direction === 'up') {
+      draftRef.current = editorRef.current?.innerHTML ?? ''
+      draftMentionsRef.current = [...mention.mentions]
+    }
+
+    let newIndex: number
+    if (direction === 'up') {
+      newIndex = historyIndex === -1 ? 0 : Math.min(historyIndex + 1, sentMessages.length - 1)
+    } else {
+      if (historyIndex === -1) return
+      newIndex = historyIndex - 1
+    }
+
+    setHistoryIndex(newIndex)
+    if (newIndex === -1) {
+      // Restoring draft — use innerHTML to preserve mention pills
+      restoreDraft()
+    } else {
+      // History message — plain text, clear any mention state from draft
+      mention.clearMentions()
+      setEditorText(sentMessages[newIndex])
+    }
+  }, [historyIndex, sentMessages, setEditorText, restoreDraft])
+
+  const resetHistory = useCallback((): void => {
+    setHistoryIndex(-1)
+    draftRef.current = ''
+    draftMentionsRef.current = []
+  }, [])
+
+  // Reset history when sentMessages changes (session switch)
+  useEffect(() => {
+    setHistoryIndex(-1)
+    draftRef.current = ''
+    draftMentionsRef.current = []
+  }, [sentMessages])
+
   const handleSubmit = useCallback((): void => {
     const text = getPlainText().trim()
     if (!text && pastedImages.length === 0) return
@@ -59,6 +153,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     }
     setPastedImages([])
     mention.clearMentions()
+    setHistoryIndex(-1)
+    draftRef.current = ''
+    draftMentionsRef.current = []
   }, [getPlainText, pastedImages, disabled, onSend, mention])
 
   useEffect(() => {
@@ -92,13 +189,38 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
         return
       }
     }
+    // History navigation
+    if (sentMessages.length > 0) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        navigateHistory('up')
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        navigateHistory('down')
+        return
+      }
+      // Escape while browsing history: restore draft and reset
+      if (e.key === 'Escape' && historyIndex !== -1) {
+        e.preventDefault()
+        restoreDraft()
+        setHistoryIndex(-1)
+        draftRef.current = ''
+        draftMentionsRef.current = []
+        return
+      }
+    }
+    // Reset history pointer on any other key (except modifiers and Enter)
+    // Enter is handled by handleSubmit which does its own reset
+    if (historyIndex !== -1 && !['Shift', 'Meta', 'Control', 'Alt', 'Enter'].includes(e.key)) {
+      resetHistory()
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
   }
-
-  const suppressMentionRef = useRef(false)
 
   function handleEditorInput(): void {
     if (suppressMentionRef.current) return

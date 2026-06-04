@@ -121,5 +121,6 @@ export function useFileMention(files: FileEntry[]) {
     mentions,
     popMention,
     clearMentions,
+    setMentions,
   }
 }

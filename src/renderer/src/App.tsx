@@ -92,6 +92,19 @@ function App(): React.ReactElement {
   const displayedStreaming = sessionCache.isDisplayedStreaming
   const displayedStreamingId = sessionCache.displayedStreamingMessageId
 
+  const sentMessages = useMemo(() => {
+    return displayedMessages
+      .filter(msg => msg.role === 'user')
+      .map(msg => {
+        return msg.blocks
+          .filter((b): b is import('./types/message').TextBlock => b.type === 'text' && !('subtype' in b && b.subtype))
+          .map(b => b.content)
+          .join('\n')
+      })
+      .filter(text => text.trim().length > 0)
+      .reverse()  // newest first
+  }, [displayedMessages])
+
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
   const welcomeCheckDone = useRef(false)
@@ -762,6 +775,7 @@ function App(): React.ReactElement {
               onSetModel={setModel}
               getAvailableModels={getAvailableModels}
               files={indexedFiles}
+              sentMessages={sentMessages}
             />
           )}
         </div>
