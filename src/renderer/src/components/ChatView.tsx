@@ -147,6 +147,17 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
   )
 }
 
+function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 'assistant'; content: string } }): React.ReactElement {
+  return (
+    <div className="mb-1 rounded-md border-l-2 border-gray-300 bg-gray-50 px-3 py-2">
+      <span className="text-[10px] text-gray-400 font-medium">
+        {block.role === 'user' ? 'You' : 'Pi'}
+      </span>
+      <p className="text-xs text-gray-500 mt-0.5 line-clamp-4 leading-4">{block.content}</p>
+    </div>
+  )
+}
+
 function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
   const [collapsed, setCollapsed] = useState(true)
   const lineCount = content.split('\n').length
@@ -795,6 +806,8 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   switch (block.type) {
     case 'text':
       return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={isUser ? onFileSelect : undefined} />
+    case 'quote':
+      return <QuoteBlockRenderer block={block} />
     case 'image':
       return (
         <AnnotatableImageBlock

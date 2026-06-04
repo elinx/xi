@@ -8,6 +8,7 @@ export interface ChatMessage {
 
 export type ContentBlock =
   | TextBlock
+  | QuoteBlock
   | ImageBlock
   | HtmlBlock
   | ToolCallBlock
@@ -18,6 +19,12 @@ export interface TextBlock {
   type: 'text';
   content: string;
   subtype?: 'thinking';
+}
+
+export interface QuoteBlock {
+  type: 'quote';
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface ImageBlock {

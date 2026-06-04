@@ -368,7 +368,7 @@ function App(): React.ReactElement {
 
     let finalText = text
     if (quotes && quotes.length > 0) {
-      const quotedText = quotes.map(q => `[Quoted ${q.role} message]:\n${q.content}`).join('\n\n')
+      const quotedText = quotes.map(q => `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`).join('\n\n')
       finalText = quotedText + '\n\n' + text
     }
 
