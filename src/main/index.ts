@@ -652,7 +652,7 @@ function registerIpcHandlers(): void {
       if (!existsSync(dirPath)) {
         return { ok: false, error: 'Directory not found' }
       }
-      let entries = readdirSync(dirPath)
+      const entries = readdirSync(dirPath)
         .filter((name) => !HIDDEN_DIRS.has(name) && !HIDDEN_PREFIXES.has(name[0]))
         .map((name) => {
           const fullPath = join(dirPath, name)
@@ -664,20 +664,6 @@ function registerIpcHandlers(): void {
           }
         })
         .filter(Boolean) as Array<{ name: string; path: string; isDirectory: boolean }>
-
-      try {
-        if (entries.length > 0) {
-          const projectPath = process.cwd()
-          const git = simpleGit(projectPath)
-          const isRepo = await git.checkIsRepo()
-          if (isRepo) {
-            const paths = entries.map(e => e.path)
-            const ignored = await git.checkIgnore(paths)
-            const ignoredSet = new Set(ignored)
-            entries = entries.filter(e => !ignoredSet.has(e.path))
-          }
-        }
-      } catch {}
 
       entries.sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
