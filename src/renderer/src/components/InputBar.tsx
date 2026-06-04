@@ -98,7 +98,10 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     }
   }
 
+  const suppressMentionRef = useRef(false)
+
   function handleEditorInput(): void {
+    if (suppressMentionRef.current) return
     if (!editorRef.current) return
     const sel = window.getSelection()
     const cursorPos = sel?.focusOffset ?? 0
@@ -136,6 +139,8 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     const sel = window.getSelection()
     if (!sel || !sel.focusNode) return
 
+    suppressMentionRef.current = true
+
     const textNode = sel.focusNode.nodeType === Node.TEXT_NODE ? sel.focusNode as Text : null
     const textContent = textNode?.textContent ?? ''
     const cursorOffset = sel.focusOffset
@@ -172,6 +177,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
     }
 
     mention.selectItem(file)
+    setTimeout(() => { suppressMentionRef.current = false }, 100)
   }, [mention])
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>): void {
