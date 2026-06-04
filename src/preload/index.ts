@@ -161,6 +161,9 @@ const api = {
   gitDiff: (filePath: string, staged?: boolean): Promise<{ ok: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke('git:diff', filePath, staged),
 
+  gitDiffCached: (): Promise<{ ok: boolean; data?: string; error?: string }> =>
+    ipcRenderer.invoke('git:diffCached'),
+
   gitStage: (filePaths: string[]): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('git:stage', filePaths),
 

@@ -12,6 +12,8 @@ interface RightPanelProps {
   onResizeStart: (e: React.MouseEvent) => void
   onFileSelect: (filePath: string, scrollToLine?: number) => void
   onDiffSelect: (filePath: string, commitHash?: string) => void
+  onRequestCommitMessage?: (diff: string) => void
+  commitMessageFromAI?: string
 }
 
 function FolderIcon({ className }: { className?: string }) {
@@ -51,6 +53,8 @@ export default function RightPanel({
   onResizeStart,
   onFileSelect,
   onDiffSelect,
+  onRequestCommitMessage,
+  commitMessageFromAI,
 }: RightPanelProps) {
   if (collapsed) return null
 
@@ -98,6 +102,8 @@ export default function RightPanel({
           <GitPanel
             onFileSelect={onDiffSelect}
             onCommitFileSelect={(hash, filePath) => onDiffSelect(filePath, hash)}
+            onRequestCommitMessage={onRequestCommitMessage}
+            commitMessageFromAI={commitMessageFromAI}
           />
         )}
         {view === 'search' && (

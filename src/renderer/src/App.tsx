@@ -19,7 +19,7 @@ import WelcomeDialog from './components/WelcomeDialog'
 import SettingsPanel from './components/SettingsPanel'
 import CommandPalette from './components/CommandPalette'
 import type { ViewMode } from './utils/compact-view'
-import type { ChatMessage } from './types/message'
+import type { ChatMessage, TextBlock } from './types/message'
 import type { ForkPoint } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
@@ -210,7 +210,8 @@ function App(): React.ReactElement {
     return (localStorage.getItem('xi-settings-view-mode') as ViewMode) || 'normal'
   })
   const [quotes, setQuotes] = useState<QuotedMessage[]>([])
-
+  const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
+  const pendingCommitGenerationRef = useRef(false)
   const activeSessionPath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
   const activeSession = activeSessionPath
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
@@ -394,6 +395,13 @@ function App(): React.ReactElement {
     }
   }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, sendPrompt, isPiStreaming, setPiConnectedPath])
 
+  const handleRequestCommitMessage = useCallback((diff: string) => {
+    pendingCommitGenerationRef.current = true
+    setCommitMessageFromAI(undefined)
+    const prompt = `Generate a concise git commit message for the following staged diff. Only output the commit message, nothing else:\n\n${diff}`
+    sendPrompt(prompt)
+  }, [sendPrompt])
+
   const handleStop = useCallback(async () => {
     if (isLazySwitchedRef.current) {
       await abort()
@@ -480,6 +488,24 @@ function App(): React.ReactElement {
       })
     }
   }, [isConnected, getProviderAuthStatus])
+
+  useEffect(() => {
+    if (!displayedStreaming && pendingCommitGenerationRef.current) {
+      pendingCommitGenerationRef.current = false
+      const msgs = sessionCache.displayedMessages
+      const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant')
+      if (lastAssistant) {
+        const text = lastAssistant.blocks
+          .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+          .map(b => b.content)
+          .join('\n')
+          .trim()
+        if (text) {
+          setCommitMessageFromAI(text)
+        }
+      }
+    }
+  }, [displayedStreaming, sessionCache.displayedMessages])
 
   useEffect(() => {
     setOnAgentEnd(() => () => {
@@ -843,7 +869,8 @@ function App(): React.ReactElement {
           onResizeStart={handleRightResizeStart}
           onFileSelect={handleFileSelect}
           onDiffSelect={handleDiffSelect}
-          onQuoteMessage={handleQuoteMessage}
+          onRequestCommitMessage={handleRequestCommitMessage}
+          commitMessageFromAI={commitMessageFromAI}
         />
       </div>
 

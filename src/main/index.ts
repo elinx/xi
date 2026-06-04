@@ -871,6 +871,17 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('git:diffCached', async () => {
+    try {
+      const projectPath = process.cwd()
+      const git = simpleGit(projectPath)
+      const diff = await git.diff(['--cached'])
+      return { ok: true, data: diff }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('git:stage', async (_event, filePaths: string[]) => {
     try {
       const projectPath = process.cwd()
