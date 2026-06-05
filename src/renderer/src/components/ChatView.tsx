@@ -1485,15 +1485,18 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   useEffect(() => {
     const el = scrollContainerRef.current
     if (!el) return
+    let wasHidden = el.offsetWidth === 0 || el.offsetHeight === 0
     const observer = new ResizeObserver(() => {
-      // Container just became visible (was hidden or zero-size)
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+      const isHidden = el.offsetWidth === 0 || el.offsetHeight === 0
+      // Only act when transitioning from hidden → visible
+      if (wasHidden && !isHidden) {
         if (isNearBottomRef.current) {
           bottomRef.current?.scrollIntoView({ behavior: 'auto' })
         } else {
           el.scrollTop = savedScrollTopRef.current
         }
       }
+      wasHidden = isHidden
     })
     observer.observe(el)
     return () => observer.disconnect()
