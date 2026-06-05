@@ -56,7 +56,7 @@ export interface ConvertResult {
  */
 export function splitUserContentIntoBlocks(content: string): ContentBlock[] {
   const blocks: ContentBlock[] = []
-  const quoteRe = /^> \[Quoted (user|assistant) message\]:\n((?:> .*\n)*> .*$|(?:> .*\n)*)/gm
+  const quoteRe = /^> \[(Quoted|Forwarded) (user|assistant) message(?: from "([^"]*)")?\]:\n((?:> .*\n)*> .*$|(?:> .*\n)*)/gm
   let quoteMatch: RegExpExecArray | null
   let lastEnd = 0
   while ((quoteMatch = quoteRe.exec(content)) !== null) {
@@ -64,9 +64,10 @@ export function splitUserContentIntoBlocks(content: string): ContentBlock[] {
       const between = content.slice(lastEnd, quoteMatch.index).trim()
       if (between) blocks.push({ type: 'text', content: between })
     }
-    const quoteRole = quoteMatch[1] as 'user' | 'assistant'
-    const quoteContent = quoteMatch[2].replace(/^> ?/gm, '').trim()
-    blocks.push({ type: 'quote', role: quoteRole, content: quoteContent })
+    const quoteRole = quoteMatch[2] as 'user' | 'assistant'
+    const sourceSessionName = quoteMatch[3] || undefined
+    const quoteContent = quoteMatch[4].replace(/^> ?/gm, '').trim()
+    blocks.push({ type: 'quote', role: quoteRole, content: quoteContent, sourceSessionName })
     lastEnd = quoteMatch.index + quoteMatch[0].length
   }
   const remaining = content.slice(lastEnd).trim()
