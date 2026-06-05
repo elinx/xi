@@ -55,4 +55,6 @@ bugfix: 生成的时候向上滚动，滚动不了，而且闪屏
 2. 按照 DeepSeek 的愿景，将来似乎可以达到无限上下文
 3. 所以session才是first class component
 4. human应该尽量少编辑代码或者文件，只解决手痒的问题，所以编辑功能不用特别强大，只要有就行。但是diff view功能一定要强大，要让human有掌控感。
+5. agentd的吞吐太大了，human根本追不上，需要很长时间才能理解，所以有必要把所有的思考、执行过程展现出来
+6. 不能外包思考，human还是要赶上agent的，要从 agent 学习和理解。
 

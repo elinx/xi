@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type {
@@ -11,6 +12,7 @@ import type {
   HtmlBlock,
   Annotation,
 } from '../types/message'
+import ChatContextMenu from './ChatContextMenu'
 import type { ForkableMessage, ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
@@ -1010,6 +1012,9 @@ function TurnCard({
   isStreaming,
   streamingMessageId,
   onFileSelect,
+  onQuoteMessage,
+  onForwardClick,
+  sessions,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -1029,6 +1034,9 @@ function TurnCard({
   isStreaming: boolean
   streamingMessageId: string | null
   onFileSelect?: (filePath: string) => void
+  onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
+  onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
+  sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const agentSummary = getAgentSummary(turn.assistantMessages)
@@ -1050,9 +1058,14 @@ function TurnCard({
           <div className="space-y-4 px-4 pb-4">
             {allMessages.map((msg) => {
               const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+              const msgTextBlocks = msg.blocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+              const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
               return (
                 <div
                   key={msg.id}
+                  data-msg-id={msg.id}
+                  data-msg-role={msg.role}
+                  data-msg-blocks={JSON.stringify(msg.blocks)}
                   className={`group relative rounded-lg px-4 py-3 ${
                     msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
                   }`}
@@ -1061,7 +1074,30 @@ function TurnCard({
                     <span className="text-xs font-medium text-gray-500">
                       {msg.role === 'user' ? 'You' : 'Pi'}
                     </span>
-                    <div className="relative">
+                    <div className="relative flex items-center gap-1">
+                      <CopyButton blocks={msg.blocks} />
+                      {onQuoteMessage && !isStreaming && (
+                        <button
+                          onClick={() => onQuoteMessage(msg.id, msg.role as 'user' | 'assistant', msgTextContent, msg.timestamp ?? Date.now())}
+                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                          title="Quote message"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                          </svg>
+                        </button>
+                      )}
+                      {onForwardClick && !isStreaming && (
+                        <button
+                          onClick={() => onForwardClick(msg.id, msg.role as 'user' | 'assistant', msgTextContent)}
+                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                          title="Forward to session"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() => onForkClick(msg.id, msg.piEntryId)}
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
@@ -1141,6 +1177,9 @@ function OutlineRow({
   isStreaming,
   streamingMessageId,
   onFileSelect,
+  onQuoteMessage,
+  onForwardClick,
+  sessions,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -1160,6 +1199,9 @@ function OutlineRow({
   isStreaming: boolean
   streamingMessageId: string | null
   onFileSelect?: (filePath: string) => void
+  onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
+  onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
+  sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
 
@@ -1181,9 +1223,14 @@ function OutlineRow({
           <div className="space-y-4 px-4 pb-4">
             {allMessages.map((msg) => {
               const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
+              const msgTextBlocks = msg.blocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+              const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
               return (
                 <div
                   key={msg.id}
+                  data-msg-id={msg.id}
+                  data-msg-role={msg.role}
+                  data-msg-blocks={JSON.stringify(msg.blocks)}
                   className={`group relative rounded-lg px-4 py-3 ${
                     msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
                   }`}
@@ -1192,7 +1239,30 @@ function OutlineRow({
                     <span className="text-xs font-medium text-gray-500">
                       {msg.role === 'user' ? 'You' : 'Pi'}
                     </span>
-                    <div className="relative">
+                    <div className="relative flex items-center gap-1">
+                      <CopyButton blocks={msg.blocks} />
+                      {onQuoteMessage && !isStreaming && (
+                        <button
+                          onClick={() => onQuoteMessage(msg.id, msg.role as 'user' | 'assistant', msgTextContent, msg.timestamp ?? Date.now())}
+                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                          title="Quote message"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                          </svg>
+                        </button>
+                      )}
+                      {onForwardClick && !isStreaming && (
+                        <button
+                          onClick={() => onForwardClick(msg.id, msg.role as 'user' | 'assistant', msgTextContent)}
+                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
+                          title="Forward to session"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() => onForkClick(msg.id, msg.piEntryId)}
                         className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
@@ -1308,6 +1378,13 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const [forkEntryId, setForkEntryId] = useState<string | null>(null)
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set())
   const [forwardingMessage, setForwardingMessage] = useState<{ id: string; role: 'user' | 'assistant'; content: string } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    messageId: string
+    messageRole: 'user' | 'assistant'
+    messageBlocks: ContentBlock[]
+  } | null>(null)
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -1358,6 +1435,22 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     setForkEntryId(null)
   }, [])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    const msgEl = (e.target as HTMLElement).closest('[data-msg-id]') as HTMLElement | null
+    if (!msgEl) return
+    e.preventDefault()
+    const msgId = msgEl.dataset.msgId!
+    const msgRole = msgEl.dataset.msgRole as 'user' | 'assistant'
+    const msgBlocks = msgEl.dataset.msgBlocks
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      messageId: msgId,
+      messageRole: msgRole,
+      messageBlocks: msgBlocks ? JSON.parse(msgBlocks) : [],
+    })
+  }, [])
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
@@ -1389,7 +1482,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
 
   return (
     <div className="relative flex flex-1">
-      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-white px-4 py-6">
+      <div ref={scrollContainerRef} onScroll={handleScroll} onContextMenu={handleContextMenu} className="flex-1 overflow-y-auto bg-white px-4 py-6">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
@@ -1422,9 +1515,13 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               return (
                 <div
                   key={gi}
+                  data-msg-id={firstMsg.id}
+                  data-msg-role={isUser ? 'user' : 'assistant'}
+                  data-msg-blocks={JSON.stringify(allBlocks)}
                   className={`group relative rounded-lg px-4 py-3 ${
                     isUser ? 'bg-blue-50' : 'bg-gray-50'
-                  }`}
+                  }`
+                  }
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-500">
@@ -1538,6 +1635,9 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
               onFileSelect={onFileSelect}
+              onQuoteMessage={onQuoteMessage}
+              onForwardClick={(id, role, content) => setForwardingMessage({ id, role, content })}
+              sessions={sessions}
             />
           ))}
           <div ref={bottomRef} />
@@ -1565,6 +1665,9 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
               onFileSelect={onFileSelect}
+              onQuoteMessage={onQuoteMessage}
+              onForwardClick={(id, role, content) => setForwardingMessage({ id, role, content })}
+              sessions={sessions}
             />
           ))}
           <div ref={bottomRef} />
@@ -1590,6 +1693,45 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           }}
           onClose={() => setForwardingMessage(null)}
         />
+      )}
+      {contextMenu && createPortal(
+        <>
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 9998 }}
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setContextMenu(null) }}
+          />
+          <ChatContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            messageBlocks={contextMenu.messageBlocks}
+            messageRole={contextMenu.messageRole}
+            isStreaming={isStreaming}
+            onQuote={() => {
+              if (!onQuoteMessage) return
+              const textContent = contextMenu.messageBlocks
+                .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+                .map((b) => b.content)
+                .join('\n')
+              const msg = messages.find(m => m.id === contextMenu.messageId)
+              onQuoteMessage(contextMenu.messageId, contextMenu.messageRole, textContent, msg?.timestamp ?? Date.now())
+            }}
+            onForward={() => {
+              const textContent = contextMenu.messageBlocks
+                .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+                .map((b) => b.content)
+                .join('\n')
+              setForwardingMessage({ id: contextMenu.messageId, role: contextMenu.messageRole, content: textContent })
+            }}
+            onFork={() => {
+              const msg = messages.find(m => m.id === contextMenu.messageId)
+              handleForkClick(contextMenu.messageId, msg?.piEntryId)
+            }}
+            onClose={() => setContextMenu(null)}
+          />
+        </>,
+        document.body
       )}
     </div>
   )
