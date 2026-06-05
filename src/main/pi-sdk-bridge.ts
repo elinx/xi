@@ -25,10 +25,16 @@ interface UtilityChild {
 }
 
 export class PiSDKBridge extends EventEmitter {
+  private sessionId: string
   private child: UtilityChild | null = null
   private pendingCommands = new Map<string, PendingCommand>()
   private _isConnected = false
   private _sessionFilePath: string | null = null
+
+  constructor(sessionId: string) {
+    super()
+    this.sessionId = sessionId
+  }
 
   get isConnected(): boolean {
     return this._isConnected && this.child !== null
@@ -36,6 +42,10 @@ export class PiSDKBridge extends EventEmitter {
 
   get sessionFilePath(): string | null {
     return this._sessionFilePath
+  }
+
+  get id(): string {
+    return this.sessionId
   }
 
   async start(cwd: string, sessionPath?: string): Promise<void> {
@@ -64,7 +74,7 @@ export class PiSDKBridge extends EventEmitter {
     this.linkGlobalAgentConfig(localAgentDir)
 
     const child = utilityProcess.fork(workerPath, [], {
-      serviceName: 'pi-sdk',
+      serviceName: `pi-sdk-${this.sessionId}`,
       stdio: 'pipe',
       env: { ...process.env },
     }) as unknown as UtilityChild
@@ -179,12 +189,13 @@ export class PiSDKBridge extends EventEmitter {
         if (data?.sessionFile && typeof data.sessionFile === 'string') {
           this._sessionFilePath = data.sessionFile
         }
-        this.emit('connected')
+        this.emit('connected', { ...(typeof data === 'object' && data !== null ? data : {}), sessionId: this.sessionId })
         break
       }
 
       case 'event': {
-        this.emit('event', msg.data)
+        const eventData = (typeof msg.data === 'object' && msg.data !== null) ? msg.data as Record<string, unknown> : {}
+        this.emit('event', { ...eventData, sessionId: this.sessionId })
         break
       }
 
@@ -202,7 +213,7 @@ export class PiSDKBridge extends EventEmitter {
             }
           }
         }
-        this.emit('response', msg)
+        this.emit('response', { ...msg, sessionId: this.sessionId })
         break
       }
 
@@ -216,7 +227,7 @@ export class PiSDKBridge extends EventEmitter {
       }
 
       default:
-        this.emit('event', msg)
+        this.emit('event', { ...msg, sessionId: this.sessionId })
     }
   }
 
