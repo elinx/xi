@@ -34,6 +34,7 @@ interface TabState {
   setActiveTab: (tabId: string) => void
   updateTab: (tabId: string, updates: Partial<TabInfo>) => void
   findTabByMeta: (type: TabType, key: string, value: unknown) => TabInfo | undefined
+  resetTabs: () => void
 }
 
 export const useTabStore = create<TabState>()(
@@ -94,6 +95,10 @@ export const useTabStore = create<TabState>()(
 
       findTabByMeta: (type, key, value) => {
         return get().tabs.find((t) => t.type === type && t.meta[key] === value)
+      },
+
+      resetTabs: () => {
+        set({ tabs: [createSessionTab()], activeTabId: SESSION_TAB_ID })
       },
     }),
     {

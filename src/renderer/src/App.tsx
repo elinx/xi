@@ -131,6 +131,7 @@ function App(): React.ReactElement {
   const closeTab = useTabStore(s => s.closeTab)
   const updateTab = useTabStore(s => s.updateTab)
   const addTab = useTabStore(s => s.addTab)
+  const resetTabs = useTabStore(s => s.resetTabs)
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isSessionTabActive = activeTab?.type === 'session'
 
@@ -244,6 +245,7 @@ function App(): React.ReactElement {
   async function handleOpenDirectory(): Promise<void> {
     const result = await window.api.openDirectory()
     if (!result.ok) return
+    resetTabs()
     clearMessages()
     await refresh()
     refreshFileIndex()
