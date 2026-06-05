@@ -1478,6 +1478,13 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     }
   }, [messages, isStreaming])
 
+  // When viewMode changes, scroll to bottom if we were near bottom
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    }
+  }, [viewMode])
+
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
   return (
