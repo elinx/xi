@@ -246,6 +246,10 @@ function App(): React.ReactElement {
     if (!result.ok) return
     clearMessages()
     await refresh()
+    refreshFileIndex()
+    const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
+    try { await fsApi.watchStop?.() } catch {}
+    try { await fsApi.watchStart?.() } catch {}
   }
 
   useEffect(() => {
@@ -613,7 +617,8 @@ function App(): React.ReactElement {
 
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   const projects = sessions?.projects ?? []
-  const projectName = projects[0]?.projectPath.split(/[/\\]/).pop() ?? 'Sessions'
+  const projectPath = projects[0]?.projectPath
+  const projectName = projectPath?.split(/[/\\]/).pop() ?? 'Sessions'
 
   const handleFileSelect = useCallback((filePath: string, scrollToLine?: number) => {
     addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath, scrollToLine } })
@@ -894,6 +899,7 @@ function App(): React.ReactElement {
           onDiffSelect={handleDiffSelect}
           onRequestCommitMessage={handleRequestCommitMessage}
           commitMessageFromAI={commitMessageFromAI}
+          projectPath={projectPath}
         />
       </div>
 

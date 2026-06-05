@@ -397,6 +397,7 @@ function registerIpcHandlers(): void {
         return { ok: false }
       }
       const newCwd = result.filePaths[0]
+      process.chdir(newCwd)
       try {
         await piBridge?.stop()
       } catch {}

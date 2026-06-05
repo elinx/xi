@@ -14,6 +14,7 @@ interface RightPanelProps {
   onDiffSelect: (filePath: string, commitHash?: string) => void
   onRequestCommitMessage?: (diff: string) => void
   commitMessageFromAI?: string
+  projectPath?: string
 }
 
 function FolderIcon({ className }: { className?: string }) {
@@ -55,6 +56,7 @@ export default function RightPanel({
   onDiffSelect,
   onRequestCommitMessage,
   commitMessageFromAI,
+  projectPath,
 }: RightPanelProps) {
   if (collapsed) return null
 
@@ -95,7 +97,7 @@ export default function RightPanel({
       <div className="flex-1 min-h-0 overflow-hidden">
         {view === 'files' && (
           <div className="h-full overflow-y-auto">
-            <FileTree onFileSelect={onFileSelect} />
+            <FileTree key={projectPath} onFileSelect={onFileSelect} />
           </div>
         )}
         {view === 'git' && (
