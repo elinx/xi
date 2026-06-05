@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import ProviderSetup from './ProviderSetup'
 
 type AuthStatusMap = Record<string, { configured: boolean; source?: string }>
@@ -16,9 +16,27 @@ interface WelcomeDialogProps {
 
 function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
+  const [hasConfiguredProvider, setHasConfiguredProvider] = useState(false)
+
+  const refreshHasConfigured = useCallback(() => {
+    getProviderAuthStatus().then((status) => {
+      setHasConfiguredProvider(Object.values(status).some(s => s.configured))
+    })
+  }, [getProviderAuthStatus])
+
+  useEffect(() => {
+    if (showSetup) {
+      refreshHasConfigured()
+    }
+  }, [showSetup, refreshHasConfigured])
+
+  const handleAuthChange = useCallback(() => {
+    refreshHasConfigured()
+    onAuthChange?.()
+  }, [refreshHasConfigured, onAuthChange])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onSkip}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={(!showSetup || hasConfiguredProvider) ? onSkip : undefined}>
       <div className="w-full max-w-md max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
         {!showSetup ? (
           <div className="px-8 py-10 text-center">
@@ -50,15 +68,22 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
             <div className="flex items-center justify-between px-6 py-5 flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
               <button
-                onClick={() => setShowSetup(false)}
+                onClick={() => {
+                  if (hasConfiguredProvider) {
+                    onSkip()
+                  } else {
+                    setShowSetup(false)
+                  }
+                }}
                 className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                title={hasConfiguredProvider ? 'Done' : 'Back'}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="px-6 pb-5 overflow-y-auto">
+            <div className="px-6 overflow-y-auto">
               <ProviderSetup
                 getProviderAuthStatus={getProviderAuthStatus}
                 setApiKey={setApiKey}
@@ -66,9 +91,19 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
-                onAuthChange={onAuthChange}
+                onAuthChange={handleAuthChange}
               />
             </div>
+            {hasConfiguredProvider && (
+              <div className="px-6 py-4 flex-shrink-0 border-t border-gray-100">
+                <button
+                  onClick={onSkip}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+                >
+                  Start Using Xi
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

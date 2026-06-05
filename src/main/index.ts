@@ -292,6 +292,7 @@ function registerIpcHandlers(): void {
               const data = JSON.parse(readFileSync(configPath, 'utf-8'))
               const providerData = data[provider] ?? data.providers?.[provider]
               if (providerData?.apiKey) { apiKey = providerData.apiKey; break }
+              if (providerData?.key) { apiKey = providerData.key; break }
             }
           }
         } catch {}
