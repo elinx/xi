@@ -1369,6 +1369,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
+  const savedScrollTopRef = useRef<number>(0)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -1454,6 +1455,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
+    savedScrollTopRef.current = el.scrollTop
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     isNearBottomRef.current = nearBottom
     setShowScrollToBottom(!nearBottom)
@@ -1478,12 +1480,24 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     }
   }, [messages, isStreaming])
 
-  // When viewMode changes, scroll to bottom if we were near bottom
+  // Restore scroll position when the container becomes visible again
+  // (covers: viewMode change, tab switch away and back, panel resize)
   useEffect(() => {
-    if (isNearBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
-    }
-  }, [viewMode])
+    const el = scrollContainerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      // Container just became visible (was hidden or zero-size)
+      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+        if (isNearBottomRef.current) {
+          bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+        } else {
+          el.scrollTop = savedScrollTopRef.current
+        }
+      }
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
