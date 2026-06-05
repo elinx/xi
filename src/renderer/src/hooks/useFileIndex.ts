@@ -70,15 +70,20 @@ export function useFileIndex(): FileIndexResult {
   const staleRef = useRef(true);
   const loadingRef = useRef(false);
 
-  const refresh = useCallback(() => {
-    if (loadingRef.current) return;
-    if (cacheRef.current && !staleRef.current) {
-      setFiles(cacheRef.current);
-      return;
+  const refresh = useCallback((force = false) => {
+    if (loadingRef.current) return
+    if (!force && cacheRef.current && !staleRef.current) {
+      setFiles(cacheRef.current)
+      return
     }
 
-    loadingRef.current = true;
-    setLoading(true);
+    loadingRef.current = true
+    setLoading(true)
+
+    if (force) {
+      cacheRef.current = null
+      staleRef.current = true
+    }
 
     (async () => {
       try {

@@ -248,7 +248,7 @@ function App(): React.ReactElement {
     resetTabs()
     clearMessages()
     await refresh()
-    refreshFileIndex()
+    refreshFileIndex(true)
     const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
     try { await fsApi.watchStop?.() } catch {}
     try { await fsApi.watchStart?.() } catch {}
