@@ -211,9 +211,44 @@ function App(): React.ReactElement {
     return (localStorage.getItem('xi-settings-view-mode') as ViewMode) || 'normal'
   })
   const [quotes, setQuotes] = useState<QuotedMessage[]>([])
+  const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
   const activeSessionPath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
+
+  const currentForwards = activeSessionPath ? (pendingForwards.get(activeSessionPath) ?? []) : []
+  const mergedQuotes = [...quotes, ...currentForwards]
+
+  const handleRemoveQuote = useCallback((messageId: string) => {
+    setQuotes(prev => prev.filter(q => q.messageId !== messageId))
+    setPendingForwards(prev => {
+      const activePath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
+      if (!activePath) return prev
+      const existing = prev.get(activePath)
+      if (!existing) return prev
+      const filtered = existing.filter(q => q.messageId !== messageId)
+      if (filtered.length === existing.length) return prev
+      const next = new Map(prev)
+      if (filtered.length === 0) {
+        next.delete(activePath)
+      } else {
+        next.set(activePath, filtered)
+      }
+      return next
+    })
+  }, [isLazySwitched, sessionCache.displayedSessionPath, currentSession])
+
+  const handleClearQuotes = useCallback(() => {
+    setQuotes([])
+    setPendingForwards(prev => {
+      const activePath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
+      if (!activePath || !prev.has(activePath)) return prev
+      const next = new Map(prev)
+      next.delete(activePath)
+      return next
+    })
+  }, [isLazySwitched, sessionCache.displayedSessionPath, currentSession])
+
   const activeSession = activeSessionPath
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
     : currentSession
@@ -265,6 +300,7 @@ function App(): React.ReactElement {
   }, [])
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
+    setQuotes([])
     const piStreaming = isPiStreaming() || isDisplayedStreamingRef.current
     if (piStreaming && piConnectedPathRef.current !== sessionPath) {
       await displaySessionRef.current(sessionPath)
@@ -361,32 +397,25 @@ function App(): React.ReactElement {
     })
   }, [])
 
-  const handleRemoveQuote = useCallback((messageId: string) => {
-    setQuotes(prev => prev.filter(q => q.messageId !== messageId))
-  }, [])
-
-  const handleClearQuotes = useCallback(() => setQuotes([]), [])
-
-  const handleForwardMessage = useCallback(async (_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
-    const prevPath = piConnectedPathRef.current
-    if (!prevPath) return
-    if (isPiStreaming()) await abort()
-    const result = await switchSession(targetSessionPath)
-    if (result.success) {
-      setPiConnectedPath(targetSessionPath)
-      const forwardedText = `[Forwarded ${role} message]:\n${content}`
-      sendPrompt(forwardedText)
-      await abort()
-      const switchBack = await switchSession(prevPath)
-      if (switchBack.success) {
-        setPiConnectedPath(prevPath)
-        clearMessages()
-        await loadHistory()
-        await loadForkPoints(prevPath)
-      }
-      refresh()
+  const handleForwardMessage = useCallback((_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
+    const sourceSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === (isLazySwitched ? sessionCache.displayedSessionPath : currentSession?.filePath))
+    const sourceSessionName = sourceSession ? getDisplayName(sourceSession) : 'Unknown'
+    const truncatedContent = content.length > 200 ? content.slice(0, 200) + '…' : content
+    const forward: QuotedMessage = {
+      messageId: `fwd-${_messageId}-${Date.now()}`,
+      role,
+      content: truncatedContent,
+      timestamp: Date.now(),
+      sourceSessionPath: targetSessionPath,
+      sourceSessionName,
     }
-  }, [abort, switchSession, sendPrompt, clearMessages, loadHistory, loadForkPoints, refresh, setPiConnectedPath])
+    setPendingForwards(prev => {
+      const next = new Map(prev)
+      const existing = next.get(targetSessionPath) ?? []
+      next.set(targetSessionPath, [...existing, forward])
+      return next
+    })
+  }, [sessions, isLazySwitched, sessionCache.displayedSessionPath, currentSession])
 
   const isLazySwitchedRef = useRef(isLazySwitched)
   isLazySwitchedRef.current = isLazySwitched
@@ -396,12 +425,24 @@ function App(): React.ReactElement {
 
     let finalText = text
     if (quotes && quotes.length > 0) {
-      const quotedText = quotes.map(q => `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`).join('\n\n')
+      const quotedText = quotes.map(q => {
+        if (q.sourceSessionName) {
+          return `> [Forwarded ${q.role} message from "${q.sourceSessionName}"]:\n> ${q.content.replace(/\n/g, '\n> ')}`
+        }
+        return `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`
+      }).join('\n\n')
       finalText = quotedText + '\n\n' + text
     }
 
     const doSend = () => {
       sendPrompt(finalText, images, mentions)
+      setPendingForwards(prev => {
+        const activePath = displayedSessionPathRef.current
+        if (!activePath || !prev.has(activePath)) return prev
+        const next = new Map(prev)
+        next.delete(activePath)
+        return next
+      })
     }
 
     if (isLazySwitchedRef.current) {
@@ -839,6 +880,7 @@ function App(): React.ReactElement {
                 onFileSelect={(p) => handleFileSelect(p)}
                 onQuoteMessage={handleQuoteMessage}
                 onForwardMessage={handleForwardMessage}
+                currentSessionPath={activeSessionPath}
                 sessions={sessions?.projects?.flatMap(p => p.allSessions).map(s => ({ filePath: s.filePath, name: s.name, isMain: s.isMain }))}
               />
             </div>
@@ -883,7 +925,7 @@ function App(): React.ReactElement {
               getAvailableModels={getAvailableModels}
               files={indexedFiles}
               sentMessages={sentMessages}
-              quotes={quotes}
+              quotes={mergedQuotes}
               onRemoveQuote={handleRemoveQuote}
               onClearQuotes={handleClearQuotes}
             />
