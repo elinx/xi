@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import type { PiModelInfo } from '../types/session'
 import type { FileEntry } from '../hooks/useFileIndex'
 import { useFileMention, type MentionItem } from '../hooks/useFileMention'
+import type { WorkerStatus } from '../hooks/useSessionCache'
 import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
 import QuoteCard, { type QuotedMessage } from './QuoteCard'
@@ -12,10 +13,7 @@ interface InputBarProps {
   isConnected: boolean
   isStreaming?: boolean
   onStop?: () => void
-  isLazySwitched?: boolean
-  backgroundSessionName?: string | null
-  isBackgroundStreaming?: boolean
-  isAgentEnding?: boolean
+  workerStatus?: WorkerStatus
   currentModel?: PiModelInfo | null
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   getAvailableModels?: () => Promise<PiModelInfo[]>
@@ -26,7 +24,7 @@ interface InputBarProps {
   onClearQuotes: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySwitched, backgroundSessionName, isBackgroundStreaming, isAgentEnding, currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -37,7 +35,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
 
   const mention = useFileMention(files)
 
-  const showStop = isStreaming || isBackgroundStreaming
+  const showStop = isStreaming
   const noModel = isConnected && !currentModel
 
   const getPlainText = useCallback((): string => {
@@ -333,24 +331,12 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
   let statusDot: React.ReactNode
   let statusText: React.ReactNode
 
-  if (isAgentEnding) {
-    statusDot = <svg className="h-1.5 w-1.5 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-    statusText = <span className="text-blue-600">Switching back…</span>
-  } else if (isBackgroundStreaming && backgroundSessionName) {
-    statusDot = (
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
-      </span>
-    )
-    statusText = (
-      <span className="text-amber-600">
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium">{backgroundSessionName}</span> is running… press <kbd className="rounded border border-amber-200 bg-amber-100 px-1 py-px font-mono text-[10px] leading-none text-amber-600">Esc</kbd> to interrupt
-      </span>
-    )
-  } else if (isStreaming) {
+  if (isStreaming) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
     statusText = <>Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
+  } else if (workerStatus === 'starting') {
+    statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+    statusText = <span className="text-amber-600">Connecting…</span>
   } else if (noModel) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
     statusText = (
@@ -418,7 +404,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, isLazySw
             onKeyDown={handleKeyDown}
             onInput={handleEditorInput}
             onPaste={handlePaste}
-            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : 'Type a message... (@ to mention files)'}
+            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ to mention files)'}
             className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
           />
           <FileMentionDropdown

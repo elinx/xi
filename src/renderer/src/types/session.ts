@@ -81,33 +81,19 @@ export interface ForkPoint {
   childName: string
 }
 
-/** IPC channels for session management between renderer and main process. */
 export interface SessionIpcApi {
-  /** List all sessions grouped by project. */
   listSessions: () => Promise<SessionListResult>
-  /** Get forkable user messages for the current session. */
-  getForkMessages: () => Promise<ForkableMessage[]>
-  /** Fork at a specific entry, creating a new session. */
-  forkAtEntry: (entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
-  /** Switch to a different session. */
+  getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
+  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
-  /** Create a new session with a name and optional parent. */
-  newSession: (name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
-  /** Rename a session. */
-  renameSession: (name: string) => Promise<{ success: boolean; error?: string }>
-  /** Get current session state. */
+  newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
+  renameSession: (sessionPath: string | null, name: string) => Promise<{ success: boolean; error?: string }>
   getCurrentSession: () => Promise<SessionInfo | null>
-  /** Refresh session list (after fork/switch/new operations). */
   refreshSessions: () => Promise<SessionListResult>
-  /** Get all messages in the current Pi session (raw Pi message format). */
-  getMessages: () => Promise<unknown[]>
-  /** Delete a session by file path. Cannot delete the active session. */
+  getMessages: (sessionPath: string | null) => Promise<unknown[]>
   deleteSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
-  /** Get fork points recorded in a session file. */
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
-  /** Clear the current session's conversation (delete JSONL, restart Pi, rename). */
-  clearSession: () => Promise<{ success: boolean; error?: string }>
-  /** Set session status (active/completed). Pure file operation, no Pi RPC. */
+  clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string }>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
 }
 

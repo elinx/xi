@@ -1,22 +1,9 @@
-/**
- * useSessionCache — Manages per-session message caching for Lazy Session Switch.
- *
- * Decouples the "displayed session" (what the user sees) from the
- * "Pi-connected session" (which session the Pi worker is on).
- * When they differ, the displayed session is in read-only mode.
- *
- * Pi events are always written to the Pi-connected session's cache.
- * The UI is only refreshed when the displayed session matches the
- * Pi-connected session (or when the user explicitly switches).
- */
 import { useState, useCallback, useRef } from 'react'
 import type { ChatMessage, ContentBlock } from '../types/message'
 import type { ForkPoint } from '../types/session'
 import { convertPiMessagesToChatMessages, type TokenUsage } from '../utils/convert-messages'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+export type WorkerStatus = 'none' | 'starting' | 'connected' | 'error'
 
 export interface SessionCache {
   sessionPath: string
@@ -27,8 +14,6 @@ export interface SessionCache {
   forkPoints: ForkPoint[]
   loadedAt: number
 
-  // Pi streaming intermediate state — needed to resume receiving deltas
-  // after switching away and back to a streaming session
   currentAssistantId: string | null
   currentContentBlocks: Map<number, ContentBlock>
   toolCallArgsBuffer: Map<number, string>
@@ -37,43 +22,30 @@ export interface SessionCache {
 }
 
 interface UseSessionCacheReturn {
-  // What the user is looking at
   displayedSessionPath: string | null
-  // Messages for the displayed session
   displayedMessages: ChatMessage[]
-  // Whether the displayed session is streaming
   isDisplayedStreaming: boolean
-  // Token usage for the displayed session
   displayedTokenUsage: TokenUsage
-  // Fork points for the displayed session
   displayedForkPoints: ForkPoint[]
-  // Streaming message ID for the displayed session
   displayedStreamingMessageId: string | null
 
-  // Get cache for a specific session
   getCache: (sessionPath: string) => SessionCache | undefined
-  // Get or create cache for a session (loads from JSONL if not cached)
   getOrCreateCache: (sessionPath: string) => Promise<SessionCache>
-  // Update a session's cache (used by usePiRpc to write streaming events)
   updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
-  // Switch the displayed session (does NOT switch Pi connection)
   displaySession: (sessionPath: string) => Promise<void>
-  // Clear a session's cache
   clearCache: (sessionPath: string) => void
-  // Mark a session as streaming / not streaming
   setCacheStreaming: (sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => void
-  // Refresh displayed messages from cache (after cache updates)
   refreshDisplayedMessages: () => void
 
-  updatePiConnectedMessages: (piConnectedPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => void
-  updatePiConnectedTokenUsage: (piConnectedPath: string, updater: (prev: TokenUsage) => TokenUsage) => void
-  setPiConnectedStreaming: (piConnectedPath: string, isStreaming: boolean, streamingMessageId: string | null) => void
-  updatePiConnectedForkPoints: (piConnectedPath: string, forkPoints: ForkPoint[]) => void
-}
+  updateSessionMessages: (sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => void
+  updateSessionTokenUsage: (sessionPath: string, updater: (prev: TokenUsage) => TokenUsage) => void
+  setSessionStreaming: (sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => void
+  updateSessionForkPoints: (sessionPath: string, forkPoints: ForkPoint[]) => void
 
-// ---------------------------------------------------------------------------
-// Initial values
-// ---------------------------------------------------------------------------
+  workerStatuses: Map<string, WorkerStatus>
+  setWorkerStatus: (sessionPath: string, status: WorkerStatus) => void
+  getWorkerStatus: (sessionPath: string) => WorkerStatus
+}
 
 const INITIAL_TOKEN_USAGE: TokenUsage = {
   inputTokens: 0,
@@ -102,10 +74,6 @@ function createEmptyCache(sessionPath: string): SessionCache {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
 export function useSessionCache(): UseSessionCacheReturn {
   const cacheMap = useRef<Map<string, SessionCache>>(new Map())
 
@@ -116,9 +84,10 @@ export function useSessionCache(): UseSessionCacheReturn {
   const [isDisplayedStreaming, setIsDisplayedStreaming] = useState(false)
   const [displayedStreamingMessageId, setDisplayedStreamingMessageId] = useState<string | null>(null)
 
-  // Use a ref for displayedSessionPath to avoid circular dep chains
-  // (callbacks that read displayedSessionPath also set it via setDisplayedSessionPath)
   const displayedSessionPathRef = useRef<string | null>(null)
+
+  const [workerStatuses, setWorkerStatuses] = useState<Map<string, WorkerStatus>>(new Map())
+  const workerStatusesRef = useRef<Map<string, WorkerStatus>>(new Map())
 
   const syncDisplayedFromCache = useCallback((sessionPath: string | null) => {
     if (!sessionPath) {
@@ -147,7 +116,6 @@ export function useSessionCache(): UseSessionCacheReturn {
     const existing = cacheMap.current.get(sessionPath)
     if (existing) return existing
 
-    // Load from JSONL via IPC
     let cache: SessionCache = createEmptyCache(sessionPath)
     try {
       type ApiWithGetMessagesForSession = typeof window.api & {
@@ -180,7 +148,6 @@ export function useSessionCache(): UseSessionCacheReturn {
     const updated = updater(existing)
     cacheMap.current.set(sessionPath, updated)
 
-    // If this is the displayed session, sync UI
     if (sessionPath === displayedSessionPathRef.current) {
       setDisplayedMessages(updated.messages)
       setDisplayedTokenUsage(updated.tokenUsage)
@@ -236,51 +203,60 @@ export function useSessionCache(): UseSessionCacheReturn {
     syncDisplayedFromCache(displayedSessionPathRef.current)
   }, [syncDisplayedFromCache])
 
-  const updatePiConnectedMessages = useCallback((piConnectedPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
-    const cache = cacheMap.current.get(piConnectedPath)
+  const updateSessionMessages = useCallback((sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+    const cache = cacheMap.current.get(sessionPath)
     if (!cache) return
     const updatedMessages = updater(cache.messages)
     const updated = { ...cache, messages: updatedMessages }
-    cacheMap.current.set(piConnectedPath, updated)
+    cacheMap.current.set(sessionPath, updated)
 
-    if (piConnectedPath === displayedSessionPathRef.current) {
+    if (sessionPath === displayedSessionPathRef.current) {
       setDisplayedMessages(updatedMessages)
     }
   }, [])
 
-  const updatePiConnectedTokenUsage = useCallback((piConnectedPath: string, updater: (prev: TokenUsage) => TokenUsage) => {
-    const cache = cacheMap.current.get(piConnectedPath)
+  const updateSessionTokenUsage = useCallback((sessionPath: string, updater: (prev: TokenUsage) => TokenUsage) => {
+    const cache = cacheMap.current.get(sessionPath)
     if (!cache) return
     const updatedTokenUsage = updater(cache.tokenUsage)
     const updated = { ...cache, tokenUsage: updatedTokenUsage }
-    cacheMap.current.set(piConnectedPath, updated)
+    cacheMap.current.set(sessionPath, updated)
 
-    if (piConnectedPath === displayedSessionPathRef.current) {
+    if (sessionPath === displayedSessionPathRef.current) {
       setDisplayedTokenUsage(updatedTokenUsage)
     }
   }, [])
 
-  const setPiConnectedStreaming = useCallback((piConnectedPath: string, isStreaming: boolean, streamingMessageId: string | null) => {
-    const cache = cacheMap.current.get(piConnectedPath)
+  const setSessionStreaming = useCallback((sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => {
+    const cache = cacheMap.current.get(sessionPath)
     if (!cache) return
     const updated = { ...cache, isStreaming, streamingMessageId }
-    cacheMap.current.set(piConnectedPath, updated)
+    cacheMap.current.set(sessionPath, updated)
 
-    if (piConnectedPath === displayedSessionPathRef.current) {
+    if (sessionPath === displayedSessionPathRef.current) {
       setIsDisplayedStreaming(isStreaming)
       setDisplayedStreamingMessageId(streamingMessageId)
     }
   }, [])
 
-  const updatePiConnectedForkPoints = useCallback((piConnectedPath: string, forkPoints: ForkPoint[]) => {
-    const cache = cacheMap.current.get(piConnectedPath)
+  const updateSessionForkPoints = useCallback((sessionPath: string, forkPoints: ForkPoint[]) => {
+    const cache = cacheMap.current.get(sessionPath)
     if (!cache) return
     const updated = { ...cache, forkPoints }
-    cacheMap.current.set(piConnectedPath, updated)
+    cacheMap.current.set(sessionPath, updated)
 
-    if (piConnectedPath === displayedSessionPathRef.current) {
+    if (sessionPath === displayedSessionPathRef.current) {
       setDisplayedForkPoints(forkPoints)
     }
+  }, [])
+
+  const setWorkerStatus = useCallback((sessionPath: string, status: WorkerStatus) => {
+    workerStatusesRef.current.set(sessionPath, status)
+    setWorkerStatuses(new Map(workerStatusesRef.current))
+  }, [])
+
+  const getWorkerStatus = useCallback((sessionPath: string): WorkerStatus => {
+    return workerStatusesRef.current.get(sessionPath) ?? 'none'
   }, [])
 
   return {
@@ -297,9 +273,12 @@ export function useSessionCache(): UseSessionCacheReturn {
     clearCache,
     setCacheStreaming,
     refreshDisplayedMessages,
-    updatePiConnectedMessages,
-    updatePiConnectedTokenUsage,
-    setPiConnectedStreaming,
-    updatePiConnectedForkPoints,
+    updateSessionMessages,
+    updateSessionTokenUsage,
+    setSessionStreaming,
+    updateSessionForkPoints,
+    workerStatuses,
+    setWorkerStatus,
+    getWorkerStatus,
   }
 }
