@@ -15,9 +15,14 @@ export interface WorkerState {
 export class WorkerManager extends EventEmitter {
   private primary: WorkerState | null = null
   private secondaries = new Map<string, WorkerState>()
-  private maxSecondaries = 4
-  private _idleTimeoutMs = 10 * 60 * 1000
+  private _maxSecondaries = 8
+  get maxSecondaries(): number { return this._maxSecondaries }
+  setMaxSecondaries(n: number): void { this._maxSecondaries = Math.max(1, n) }
+  private _idleTimeoutMs = 5 * 60 * 1000
   get idleTimeoutMs(): number { return this._idleTimeoutMs }
+  setIdleTimeout(ms: number): void {
+    this._idleTimeoutMs = Math.max(0, ms)
+  }
   private idleCheckInterval: ReturnType<typeof setInterval> | null = null
 
   async initPrimary(cwd: string, sessionPath?: string): Promise<void> {
@@ -154,13 +159,13 @@ export class WorkerManager extends EventEmitter {
     if (!state) return
 
     state.status = 'stopping'
-    this.emit('worker:status', { sessionId: state.sessionId, role: 'secondary', status: 'stopping', sessionPath })
 
     try {
       await state.bridge.stop()
     } catch {}
 
     this.secondaries.delete(sessionPath)
+    this.emit('worker:status', { sessionId: state.sessionId, role: 'secondary', status: 'none', sessionPath })
   }
 
   async disposeAllSecondaries(): Promise<void> {
@@ -218,6 +223,7 @@ export class WorkerManager extends EventEmitter {
     })
 
     bridge.on('disconnected', () => {
+      if (state.status === 'stopping') return
       state.status = 'error'
       this.emit('disconnected')
       this.emit('worker:status', { sessionId, role: state.role, status: 'error', sessionPath: state.sessionPath })
