@@ -482,6 +482,7 @@ describe('Multi-worker integration', () => {
   describe('LRU eviction under load', () => {
     it('evicts oldest non-streaming secondary at capacity', async () => {
       const mgr = new WorkerManager()
+      mgr.setMaxSecondaries(4)
       await mgr.initPrimary('/cwd')
 
       await mgr.getOrCreateSecondary('/a.jsonl', '/cwd')
@@ -503,6 +504,7 @@ describe('Multi-worker integration', () => {
 
     it('evicted worker has stop() called', async () => {
       const mgr = new WorkerManager()
+      mgr.setMaxSecondaries(4)
       await mgr.initPrimary('/cwd')
 
       await mgr.getOrCreateSecondary('/old.jsonl', '/cwd')
@@ -523,6 +525,7 @@ describe('Multi-worker integration', () => {
 
     it('skips streaming workers during eviction', async () => {
       const mgr = new WorkerManager()
+      mgr.setMaxSecondaries(4)
       await mgr.initPrimary('/cwd')
 
       await mgr.getOrCreateSecondary('/streaming.jsonl', '/cwd')

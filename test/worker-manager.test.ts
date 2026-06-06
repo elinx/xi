@@ -206,6 +206,7 @@ describe('WorkerManager', () => {
 
     it('evicts LRU secondary when maxSecondaries reached', async () => {
       const mgr = createManager()
+      mgr.setMaxSecondaries(4)
 
       const paths = ['/a.jsonl', '/b.jsonl', '/c.jsonl', '/d.jsonl']
       for (const p of paths) {
@@ -221,7 +222,7 @@ describe('WorkerManager', () => {
       expect(statuses).toContainEqual(
         expect.objectContaining({
           sessionPath: '/a.jsonl',
-          status: 'stopping',
+          status: 'none',
         }),
       )
     })
@@ -251,7 +252,7 @@ describe('WorkerManager', () => {
   })
 
   describe('disposeSecondary', () => {
-    it('sets status="stopping", calls bridge.stop(), removes from secondaries map', async () => {
+    it('emits status="none" after disposal, calls bridge.stop(), removes from secondaries map', async () => {
       const mgr = createManager()
       await mgr.getOrCreateSecondary('/dispose-me.jsonl', '/cwd')
 
@@ -262,7 +263,7 @@ describe('WorkerManager', () => {
       expect(statuses).toContainEqual(
         expect.objectContaining({
           sessionPath: '/dispose-me.jsonl',
-          status: 'stopping',
+          status: 'none',
         }),
       )
     })
@@ -293,10 +294,10 @@ describe('WorkerManager', () => {
         expect.objectContaining({ role: 'primary', status: 'stopping' }),
       )
       expect(statuses).toContainEqual(
-        expect.objectContaining({ sessionPath: '/sec1.jsonl', status: 'stopping' }),
+        expect.objectContaining({ sessionPath: '/sec1.jsonl', status: 'none' }),
       )
       expect(statuses).toContainEqual(
-        expect.objectContaining({ sessionPath: '/sec2.jsonl', status: 'stopping' }),
+        expect.objectContaining({ sessionPath: '/sec2.jsonl', status: 'none' }),
       )
     })
 
@@ -313,6 +314,7 @@ describe('WorkerManager', () => {
   describe('LRU eviction', () => {
     it('evicts the secondary with oldest lastActivityAt', async () => {
       const mgr = createManager()
+      mgr.setMaxSecondaries(4)
 
       await mgr.getOrCreateSecondary('/oldest.jsonl', '/cwd')
       vi.advanceTimersByTime(1000)
@@ -333,6 +335,7 @@ describe('WorkerManager', () => {
 
     it('skips streaming workers', async () => {
       const mgr = createManager()
+      mgr.setMaxSecondaries(4)
 
       await mgr.getOrCreateSecondary('/streaming.jsonl', '/cwd')
       vi.advanceTimersByTime(1000)
@@ -351,6 +354,7 @@ describe('WorkerManager', () => {
 
     it('does nothing if all workers are streaming', async () => {
       const mgr = createManager()
+      mgr.setMaxSecondaries(4)
 
       const paths = ['/a.jsonl', '/b.jsonl', '/c.jsonl', '/d.jsonl']
       for (const p of paths) {

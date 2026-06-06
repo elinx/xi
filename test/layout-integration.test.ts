@@ -34,6 +34,10 @@ window.api = new Proxy({}, {
       if (prop === 'workerEnsureReady') return { ok: true, status: 'connected' };
       if (prop === 'workerGetStatus') return [];
       if (prop === 'workerDispose') return { ok: true };
+      if (prop === 'workerSetIdleTimeout') return async () => ({ ok: true });
+      if (prop === 'workerGetIdleTimeout') return async () => ({ ok: true, minutes: 5 });
+      if (prop === 'workerSetMaxSecondaries') return async () => ({ ok: true });
+      if (prop === 'workerGetMaxSecondaries') return async () => ({ ok: true, maxSecondaries: 8 });
       return { ok: true, success: true, data: {} };
     };
   }
