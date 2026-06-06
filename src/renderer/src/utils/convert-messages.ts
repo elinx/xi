@@ -116,6 +116,7 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
             blocks.push({
               type: 'tool_call',
               toolName: c.name,
+              toolCallId: c.id,
               args: c.arguments,
               status: 'completed',
             })

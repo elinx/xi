@@ -272,6 +272,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               cache.currentContentBlocks.set(ame.contentIndex, {
                 type: 'tool_call',
                 toolName: '',
+                toolCallId: `pending-${ame.contentIndex}`,
                 args: {},
                 status: 'running',
               })
@@ -295,6 +296,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               cache.currentContentBlocks.set(ame.contentIndex, {
                 type: 'tool_call',
                 toolName: ame.toolCall.name,
+                toolCallId: ame.toolCall.id,
                 args: parsedArgs,
                 status: 'running',
               })
@@ -373,8 +375,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                 blocks: msg.blocks.map((block) => {
                   if (
                     block.type === 'tool_call' &&
-                    block.toolName === event.toolName &&
-                    block.status === 'pending'
+                    (block as ToolCallBlock).toolCallId === event.toolCallId
                   ) {
                     return { ...block, status: 'running' as const }
                   }
@@ -434,9 +435,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               if (msg.id !== currentAssistantId) return msg
               const updatedBlocks = [] as ContentBlock[]
               for (const block of msg.blocks) {
-                if (block.type === 'tool_call' && block.status === 'running') {
+                if (block.type === 'tool_call' && (block as ToolCallBlock).toolCallId === toolEvent.toolCallId) {
                   updatedBlocks.push({ ...block, status: 'completed' as const })
-                  if (toolResultBlock && (block as ToolCallBlock).toolName === toolEvent.toolName) {
+                  if (toolResultBlock) {
                     updatedBlocks.push(toolResultBlock)
                   }
                 } else {

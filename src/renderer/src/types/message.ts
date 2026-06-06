@@ -46,6 +46,7 @@ export interface HtmlBlock {
 export interface ToolCallBlock {
   type: 'tool_call';
   toolName: string;
+  toolCallId: string;
   args: Record<string, unknown>;
   status: 'pending' | 'running' | 'completed' | 'error';
 }
