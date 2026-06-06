@@ -783,25 +783,26 @@ function App(): React.ReactElement {
          </div>
 
          <div className="flex flex-1 overflow-hidden">
-         <LeftPanel
-           view={leftPanelView}
-           onViewChange={setLeftPanelView}
-           collapsed={leftPanelCollapsed}
-           onToggleCollapse={() => toggleLeftPanel()}
-           width={leftPanelWidth}
-           onResizeStart={handleLeftResizeStart}
-           projectName={projectName}
-           projectPath={projects[0]?.projectPath ?? undefined}
-           onOpenDirectory={handleOpenDirectory}
-           sessions={sessions}
-           currentSession={currentSession}
-           onSwitchSession={handleSwitchSession}
-           onNewSession={handleNewSession}
-           onRenameSession={renameSession}
-           onDeleteSession={deleteSession}
-           onSetSessionStatus={setSessionStatus}
-           onForkFromEnd={handleForkFromEnd}
-         />
+          <LeftPanel
+            view={leftPanelView}
+            onViewChange={setLeftPanelView}
+            collapsed={leftPanelCollapsed}
+            onToggleCollapse={() => toggleLeftPanel()}
+            width={leftPanelWidth}
+            onResizeStart={handleLeftResizeStart}
+            projectName={projectName}
+            projectPath={projects[0]?.projectPath ?? undefined}
+            onOpenDirectory={handleOpenDirectory}
+            sessions={sessions}
+            currentSession={currentSession}
+            workerStatuses={sessionCache.workerStatuses}
+            onSwitchSession={handleSwitchSession}
+            onNewSession={handleNewSession}
+            onRenameSession={renameSession}
+            onDeleteSession={deleteSession}
+            onSetSessionStatus={setSessionStatus}
+            onForkFromEnd={handleForkFromEnd}
+          />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <TabBar

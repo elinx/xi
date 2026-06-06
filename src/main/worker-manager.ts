@@ -18,6 +18,7 @@ export class WorkerManager extends EventEmitter {
   private maxSecondaries = 4
   private _idleTimeoutMs = 10 * 60 * 1000
   get idleTimeoutMs(): number { return this._idleTimeoutMs }
+  private idleCheckInterval: ReturnType<typeof setInterval> | null = null
 
   async initPrimary(cwd: string, sessionPath?: string): Promise<void> {
     if (this.primary) {
@@ -49,10 +50,56 @@ export class WorkerManager extends EventEmitter {
     }
 
     this.primary = state
+    this.startIdleChecker()
   }
 
   getPrimary(): WorkerState | null {
     return this.primary
+  }
+
+  startIdleChecker(): void {
+    if (this.idleCheckInterval) return
+    this.idleCheckInterval = setInterval(() => this.checkIdleTimeouts(), 60_000)
+  }
+
+  stopIdleChecker(): void {
+    if (this.idleCheckInterval) {
+      clearInterval(this.idleCheckInterval)
+      this.idleCheckInterval = null
+    }
+  }
+
+  private checkIdleTimeouts(): void {
+    const now = Date.now()
+    for (const [path, state] of this.secondaries) {
+      if (state.isStreaming) continue
+      if (state.status !== 'connected') continue
+      if (now - state.lastActivityAt > this._idleTimeoutMs) {
+        this.disposeSecondary(path)
+      }
+    }
+  }
+
+  private async restartPrimary(state: WorkerState): Promise<void> {
+    const cwd = process.cwd()
+    const sessionPath = state.sessionPath || undefined
+
+    // Small delay before restart
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    try {
+      await state.bridge.start(cwd, sessionPath)
+      state.status = 'connected'
+      state.lastActivityAt = Date.now()
+      this.emit('worker:status', { sessionId: state.sessionId, role: 'primary', status: 'connected', sessionPath: state.sessionPath })
+    } catch {
+      state.status = 'error'
+      this.emit('worker:status', { sessionId: state.sessionId, role: 'primary', status: 'error', sessionPath: state.sessionPath })
+      // Retry after longer delay
+      setTimeout(() => {
+        this.restartPrimary(state).catch(() => {})
+      }, 5000)
+    }
   }
 
   async getOrCreateSecondary(sessionPath: string, cwd: string): Promise<WorkerState> {
@@ -122,6 +169,7 @@ export class WorkerManager extends EventEmitter {
   }
 
   async disposeAll(): Promise<void> {
+    this.stopIdleChecker()
     await this.disposeAllSecondaries()
 
     if (this.primary) {
@@ -173,6 +221,12 @@ export class WorkerManager extends EventEmitter {
       state.status = 'error'
       this.emit('disconnected')
       this.emit('worker:status', { sessionId, role: state.role, status: 'error', sessionPath: state.sessionPath })
+
+      if (state.role === 'primary') {
+        this.restartPrimary(state).catch((err) => {
+          console.error('[WorkerManager] Primary restart failed:', err.message)
+        })
+      }
     })
 
     bridge.on('error', (err: Error) => {

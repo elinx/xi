@@ -215,6 +215,11 @@ function registerIpcHandlers(): void {
     const existing = workerManager?.get(sessionPath)
     if (existing && existing.status === 'connected') return { ok: true, status: 'connected' }
     if (existing && existing.status === 'starting') return { ok: true, status: 'starting' }
+    if (existing && existing.status === 'error') {
+      if (existing.role === 'secondary') {
+        await workerManager!.disposeSecondary(sessionPath)
+      }
+    }
 
     try {
       const state = await workerManager!.getOrCreateSecondary(sessionPath, process.cwd())
