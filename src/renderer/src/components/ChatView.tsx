@@ -92,7 +92,7 @@ function BashCopyButton({ command }: { command: string }): React.ReactElement {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); handleCopy() }}
-      className="absolute top-0.5 right-0.5 rounded p-0.5 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-200 group-hover/cmd:opacity-100"
+      className="absolute top-0.5 right-0.5 rounded bg-white/80 p-0.5 text-gray-500 backdrop-blur-sm transition-opacity hover:bg-white hover:text-gray-700 group-hover/cmd:opacity-100 opacity-0"
       title="Copy command"
     >
       {copied ? (
