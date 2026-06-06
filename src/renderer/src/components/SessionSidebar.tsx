@@ -464,6 +464,7 @@ function SessionNode({
 function SessionSidebar({
   sessions,
   currentSession,
+  workerStatuses,
   onSwitchSession,
   onNewSession,
   onRenameSession,

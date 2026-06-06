@@ -50,6 +50,8 @@ function App(): React.ReactElement {
   const displaySessionRef = useRef(displaySession)
   displaySessionRef.current = displaySession
 
+  const userSwitchingRef = useRef(false)
+
   const displayedSessionPathRef = useRef(sessionCache.displayedSessionPath)
   displayedSessionPathRef.current = sessionCache.displayedSessionPath
   const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
@@ -287,6 +289,7 @@ function App(): React.ReactElement {
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
     setQuotes([])
+    userSwitchingRef.current = sessionPath
     await displaySessionRef.current(sessionPath)
     await switchSession(sessionPath)
     const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
@@ -294,6 +297,7 @@ function App(): React.ReactElement {
       await apiWithWorker.workerEnsureReady(sessionPath)
     }
     window.api.saveLastSession(sessionPath)
+    userSwitchingRef.current = null
   }, [switchSession])
 
   const currentSessionRef = useRef(currentSession)
@@ -453,8 +457,10 @@ function App(): React.ReactElement {
   useEffect(() => {
     if (isConnected) {
       const path = currentSessionRef.current?.filePath ?? null
-      if (path) {
+      if (path && !displayedSessionPathRef.current) {
+        displayedSessionPathRef.current = path
         getOrCreateCacheRef.current(path).then(() => {
+          if (displayedSessionPathRef.current !== path) return
           displaySessionRef.current(path).then(() => {
             loadHistory(path)
             const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
@@ -463,7 +469,7 @@ function App(): React.ReactElement {
             }
           })
         })
-      } else {
+      } else if (!path) {
         loadHistory(null)
       }
     }
@@ -472,8 +478,12 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     if (!isConnected || !currentSession?.filePath) return
+    if (userSwitchingRef.current) return
     if (displayedSessionPathRef.current === currentSession.filePath) return
+    if (displayedSessionPathRef.current !== null) return
     getOrCreateCacheRef.current(currentSession.filePath).then(() => {
+      if (userSwitchingRef.current) return
+      if (displayedSessionPathRef.current !== null && displayedSessionPathRef.current !== currentSession.filePath) return
       displaySessionRef.current(currentSession.filePath).then(() => {
         loadHistory(currentSession.filePath)
         const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
@@ -494,11 +504,13 @@ function App(): React.ReactElement {
     if (startupPref !== 'last') return
     window.api.getLastSession().then(async (lastPath) => {
       if (!lastPath || currentSession.filePath === lastPath) return
+      userSwitchingRef.current = lastPath
       await displaySessionRef.current(lastPath)
       const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
       if (apiWithWorker.workerEnsureReady) {
         await apiWithWorker.workerEnsureReady(lastPath)
       }
+      userSwitchingRef.current = null
       await refresh()
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
