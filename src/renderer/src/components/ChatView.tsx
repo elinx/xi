@@ -687,7 +687,7 @@ function MergedBlocksRenderer({
     if (block.type === 'tool_call') {
       const result = allBlocks[j + 1]?.block.type === 'tool_result' ? allBlocks[j + 1].block as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${j}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${block.toolCallId}`} block={block} result={result} />
       )
       continue
     }
@@ -695,14 +695,14 @@ function MergedBlocksRenderer({
     if (block.type === 'tool_result') {
       // Orphan tool_result
       elements.push(
-        <OrphanToolResultRenderer key={`tr-${j}`} block={block} />
+        <OrphanToolResultRenderer key={`tr-${msgId}-${blockIdx}`} block={block} />
       )
       continue
     }
 
     elements.push(
       <ContentBlockRenderer
-        key={`cb-${j}`}
+        key={`cb-${msgId}-${blockIdx}`}
         block={block}
         messageId={msgId}
         blockIndex={blockIdx}
@@ -764,7 +764,7 @@ function MessageBlocksRenderer({
     if (block.type === 'tool_call') {
       const result = msg.blocks[j + 1]?.type === 'tool_result' ? msg.blocks[j + 1] as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${j}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${block.toolCallId}`} block={block} result={result} />
       )
       continue
     }
@@ -772,14 +772,14 @@ function MessageBlocksRenderer({
     if (block.type === 'tool_result') {
       // Orphan tool_result
       elements.push(
-        <OrphanToolResultRenderer key={`tr-${j}`} block={block} />
+        <OrphanToolResultRenderer key={`tr-${msg.id}-${j}`} block={block} />
       )
       continue
     }
 
     elements.push(
       <ContentBlockRenderer
-        key={`cb-${j}`}
+        key={`cb-${msg.id}-${j}`}
         block={block}
         messageId={msg.id}
         blockIndex={j}
@@ -1067,7 +1067,7 @@ function TurnCard({
                   key={msg.id}
                   data-msg-id={msg.id}
                   data-msg-role={msg.role}
-                  data-msg-blocks={JSON.stringify(msg.blocks)}
+
                   className={`group relative rounded-lg px-4 py-3 ${
                     msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
                   }`}
@@ -1232,7 +1232,7 @@ function OutlineRow({
                   key={msg.id}
                   data-msg-id={msg.id}
                   data-msg-role={msg.role}
-                  data-msg-blocks={JSON.stringify(msg.blocks)}
+
                   className={`group relative rounded-lg px-4 py-3 ${
                     msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
                   }`}
@@ -1544,7 +1544,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   key={gi}
                   data-msg-id={firstMsg.id}
                   data-msg-role={isUser ? 'user' : 'assistant'}
-                  data-msg-blocks={JSON.stringify(allBlocks)}
+
                   className={`group relative rounded-lg px-4 py-3 ${
                     isUser ? 'bg-blue-50' : 'bg-gray-50'
                   }`
