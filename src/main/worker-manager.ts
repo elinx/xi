@@ -203,16 +203,16 @@ export class WorkerManager extends EventEmitter {
   }
 
   private setupBridgeEvents(state: WorkerState): void {
-    const { bridge, sessionId } = state
+    const { bridge, sessionId, sessionPath } = state
 
     bridge.on('event', (data: unknown) => {
       state.lastActivityAt = Date.now()
-      this.emit('event', data)
+      this.emit('event', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath } : data)
     })
 
     bridge.on('response', (data: unknown) => {
       state.lastActivityAt = Date.now()
-      this.emit('response', data)
+      this.emit('response', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath } : data)
     })
 
     bridge.on('connected', (data: unknown) => {

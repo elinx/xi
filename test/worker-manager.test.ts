@@ -510,7 +510,7 @@ describe('WorkerManager', () => {
       bridge.emit('event', { type: 'tool_use', content: 'hello' })
 
       expect(events).toHaveLength(1)
-      expect(events[0]).toEqual({ type: 'tool_use', content: 'hello' })
+      expect(events[0]).toEqual({ type: 'tool_use', content: 'hello', sessionPath: '' })
     })
 
     it('forwards "response" from bridge', async () => {
@@ -523,7 +523,7 @@ describe('WorkerManager', () => {
       bridge.emit('response', { id: '1', success: true })
 
       expect(responses).toHaveLength(1)
-      expect(responses[0]).toEqual({ id: '1', success: true })
+      expect(responses[0]).toEqual({ id: '1', success: true, sessionPath: '' })
     })
 
     it('updates lastActivityAt on events', async () => {

@@ -75,13 +75,16 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const sessionIdToPathMap = useRef<Map<string, string>>(new Map())
 
   const resolveSessionPath = useCallback((event: AgentSessionEvent): string | null => {
-    const sessionId = (event as Record<string, unknown>).sessionId as string | undefined
+    const obj = event as Record<string, unknown>
+    const sessionPath = obj.sessionPath as string | undefined
+    if (sessionPath) return sessionPath
+    const sessionId = obj.sessionId as string | undefined
     if (sessionId) {
       const mapped = sessionIdToPathMap.current.get(sessionId)
       if (mapped) return mapped
     }
-    return displayedSessionPath
-  }, [displayedSessionPath])
+    return null
+  }, [])
 
   const updateContentBlock = useCallback(
     (sessionPath: string, contentIndex: number, updater: (block: ContentBlock) => ContentBlock) => {
