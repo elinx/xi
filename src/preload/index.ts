@@ -134,6 +134,18 @@ const api = {
   workerDispose: (sessionPath: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('worker:dispose', sessionPath),
 
+  workerSetIdleTimeout: (minutes: number): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('worker:setIdleTimeout', minutes),
+
+  workerGetIdleTimeout: (): Promise<{ ok: boolean; minutes: number }> =>
+    ipcRenderer.invoke('worker:getIdleTimeout'),
+
+  workerSetMaxSecondaries: (n: number): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('worker:setMaxSecondaries', n),
+
+  workerGetMaxSecondaries: (): Promise<{ ok: boolean; maxSecondaries: number }> =>
+    ipcRenderer.invoke('worker:getMaxSecondaries'),
+
   readDirectory: (dirPath: string): Promise<{ ok: boolean; entries?: Array<{ name: string; path: string; isDirectory: boolean }>; error?: string }> =>
     ipcRenderer.invoke('fs:readDirectory', dirPath),
 

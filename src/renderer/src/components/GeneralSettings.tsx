@@ -16,6 +16,12 @@ function GeneralSettings(): React.ReactElement {
   const [startupSession, setStartupSession] = useState<StartupSession>(() => {
     return (localStorage.getItem('xi-settings-startup-session') as StartupSession) || 'last'
   })
+  const [workerIdleTimeout, setWorkerIdleTimeout] = useState(() => {
+    return Number(localStorage.getItem('xi-settings-worker-idle-timeout')) || 5
+  })
+  const [workerMaxSecondaries, setWorkerMaxSecondaries] = useState(() => {
+    return Number(localStorage.getItem('xi-settings-worker-max-secondaries')) || 8
+  })
 
   useEffect(() => {
     document.documentElement.style.setProperty('--xi-font-size', `${fontSize}px`)
@@ -42,6 +48,32 @@ function GeneralSettings(): React.ReactElement {
     setStartupSession(value)
     localStorage.setItem('xi-settings-startup-session', value)
   }
+
+  const handleWorkerIdleTimeoutChange = (value: number) => {
+    const clamped = Math.min(120, Math.max(1, value))
+    setWorkerIdleTimeout(clamped)
+    localStorage.setItem('xi-settings-worker-idle-timeout', String(clamped))
+    const apiWithWorker = window.api as typeof window.api & { workerSetIdleTimeout?: (m: number) => Promise<{ ok: boolean }> }
+    apiWithWorker.workerSetIdleTimeout?.(clamped)
+  }
+
+  const handleWorkerMaxSecondariesChange = (value: number) => {
+    const clamped = Math.min(16, Math.max(1, value))
+    setWorkerMaxSecondaries(clamped)
+    localStorage.setItem('xi-settings-worker-max-secondaries', String(clamped))
+    const apiWithWorker = window.api as typeof window.api & { workerSetMaxSecondaries?: (n: number) => Promise<{ ok: boolean }> }
+    apiWithWorker.workerSetMaxSecondaries?.(clamped)
+  }
+
+  useEffect(() => {
+    const apiWithWorker = window.api as typeof window.api & {
+      workerSetIdleTimeout?: (m: number) => Promise<{ ok: boolean }>
+      workerSetMaxSecondaries?: (n: number) => Promise<{ ok: boolean }>
+    }
+    apiWithWorker.workerSetIdleTimeout?.(workerIdleTimeout)
+    apiWithWorker.workerSetMaxSecondaries?.(workerMaxSecondaries)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="flex flex-col gap-5">
@@ -83,6 +115,40 @@ function GeneralSettings(): React.ReactElement {
             <option value="last">Last Session</option>
             <option value="main">Main Session</option>
           </select>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Workers</h3>
+        <div className="flex items-center justify-between h-9">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-700">Idle Timeout</span>
+            <span className="text-[10px] text-gray-400">min</span>
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={120}
+            step={1}
+            value={workerIdleTimeout}
+            onChange={(e) => handleWorkerIdleTimeoutChange(Number(e.target.value))}
+            className="w-16 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        </div>
+        <div className="flex items-center justify-between h-9">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-700">Max Workers</span>
+            <span className="text-[10px] text-gray-400">excluding primary, ~150MB each</span>
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={16}
+            step={1}
+            value={workerMaxSecondaries}
+            onChange={(e) => handleWorkerMaxSecondariesChange(Number(e.target.value))}
+            className="w-16 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
         </div>
       </div>
 

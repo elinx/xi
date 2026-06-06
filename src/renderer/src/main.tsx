@@ -28,6 +28,10 @@ if (typeof window !== 'undefined' && !window.api) {
       if (prop === 'workerEnsureReady') return async () => ({ ok: true, status: 'connected' })
       if (prop === 'workerGetStatus') return async () => []
       if (prop === 'workerDispose') return ok
+      if (prop === 'workerSetIdleTimeout') return async () => ({ ok: true })
+      if (prop === 'workerGetIdleTimeout') return async () => ({ ok: true, minutes: 5 })
+      if (prop === 'workerSetMaxSecondaries') return async () => ({ ok: true })
+      if (prop === 'workerGetMaxSecondaries') return async () => ({ ok: true, maxSecondaries: 8 })
       if (prop === 'getLastSession' || prop === 'saveLastSession') return async () => null
       return ok
     },

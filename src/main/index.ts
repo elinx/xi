@@ -239,6 +239,28 @@ function registerIpcHandlers(): void {
     }))
   })
 
+  ipcMain.handle('worker:setIdleTimeout', (_event, minutes: number) => {
+    if (!workerManager) return { ok: false, error: 'WorkerManager not initialized' }
+    workerManager.setIdleTimeout(minutes * 60 * 1000)
+    return { ok: true }
+  })
+
+  ipcMain.handle('worker:getIdleTimeout', () => {
+    if (!workerManager) return { ok: true, minutes: 5 }
+    return { ok: true, minutes: Math.round(workerManager.idleTimeoutMs / 60 / 1000) }
+  })
+
+  ipcMain.handle('worker:setMaxSecondaries', (_event, n: number) => {
+    if (!workerManager) return { ok: false, error: 'WorkerManager not initialized' }
+    workerManager.setMaxSecondaries(n)
+    return { ok: true }
+  })
+
+  ipcMain.handle('worker:getMaxSecondaries', () => {
+    if (!workerManager) return { ok: true, maxSecondaries: 8 }
+    return { ok: true, maxSecondaries: workerManager.maxSecondaries }
+  })
+
   ipcMain.handle('worker:dispose', async (_event, sessionPath: string) => {
     const worker = workerManager?.get(sessionPath)
     if (!worker) return { ok: true }
