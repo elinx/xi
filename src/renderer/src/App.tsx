@@ -807,6 +807,7 @@ function App(): React.ReactElement {
             onOpenDirectory={handleOpenDirectory}
             sessions={sessions}
             currentSession={currentSession}
+            displayedSessionPath={sessionCache.displayedSessionPath}
             workerStatuses={sessionCache.workerStatuses}
             onSwitchSession={handleSwitchSession}
             onNewSession={handleNewSession}

@@ -16,6 +16,7 @@ interface LeftPanelProps {
   onOpenDirectory: () => void
   sessions: import('../types/session').SessionListResult | null
   currentSession: import('../types/session').SessionInfo | null
+  displayedSessionPath: string | null
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string, parentSessionPath: string) => void
@@ -69,6 +70,7 @@ export default function LeftPanel({
   onOpenDirectory,
   sessions,
   currentSession,
+  displayedSessionPath,
   workerStatuses,
   onSwitchSession,
   onNewSession,
@@ -108,6 +110,7 @@ export default function LeftPanel({
           <SessionSidebar
             sessions={sessions}
             currentSession={currentSession}
+            displayedSessionPath={displayedSessionPath}
             workerStatuses={workerStatuses}
             onSwitchSession={onSwitchSession}
             onNewSession={onNewSession}

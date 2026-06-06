@@ -5,6 +5,7 @@ import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from '.
 interface SessionSidebarProps {
   sessions: SessionListResult | null
   currentSession: SessionInfo | null
+  displayedSessionPath: string | null
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string, parentSessionPath: string) => void
@@ -464,6 +465,7 @@ function SessionNode({
 function SessionSidebar({
   sessions,
   currentSession,
+  displayedSessionPath,
   workerStatuses,
   onSwitchSession,
   onNewSession,
@@ -557,7 +559,7 @@ function SessionSidebar({
           <SessionNode
             node={root}
             ancestorLines={[]}
-            currentSessionPath={currentSession?.filePath ?? null}
+            currentSessionPath={displayedSessionPath ?? currentSession?.filePath ?? null}
             isOnActivePath={true}
             workerStatuses={workerStatuses}
             onSwitch={onSwitchSession}
