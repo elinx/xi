@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electro
 import { join, basename, extname, dirname } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { execFile } from 'child_process'
-import { simpleGit } from 'simple-git'
+import { simpleGit, type SimpleGit } from 'simple-git'
 import { watch } from 'chokidar'
 import { WorkerManager } from './worker-manager'
 import * as sessionService from './session-service'
@@ -20,6 +20,33 @@ if (process.platform === 'darwin') {
 let mainWindow: BrowserWindow | null = null
 let workerManager: WorkerManager | null = null
 let initialSessionPath: string | undefined
+
+const projectPath = process.cwd()
+
+let _git: SimpleGit | null = null
+function getGit(): SimpleGit {
+  if (!_git) {
+    _git = simpleGit(projectPath, { binary: 'git' })
+  }
+  return _git
+}
+
+async function withRetry<T>(fn: (git: SimpleGit) => Promise<T>, retries = 2, delayMs = 200): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn(getGit())
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (attempt < retries && (msg.includes('EBADF') || msg.includes('ENOENT') || msg.includes('EAGAIN'))) {
+        _git = null
+        await new Promise(r => setTimeout(r, delayMs * (attempt + 1)))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('unreachable')
+}
 
 function createWindow(): void {
   const iconPath = join(__dirname, 'icon.png')
@@ -930,11 +957,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:status', async () => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      const isRepo = await git.checkIsRepo()
+      const isRepo = await withRetry(git => git.checkIsRepo())
       if (!isRepo) return { ok: false, error: 'Not a git repository' }
-      const status = await git.status()
+      const status = await withRetry(git => git.status())
       const files: Array<{ path: string; status: string; staged: boolean }> = []
       for (const f of status.staged) {
         files.push({ path: f, status: status.files.find(s => s.path === f)?.index ?? 'M', staged: true })
@@ -973,9 +998,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:diff', async (_event, filePath: string, staged?: boolean) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      const diff = staged ? await git.diff(['--cached', filePath]) : await git.diff(['--', filePath])
+      const diff = staged
+        ? await withRetry(git => git.diff(['--cached', filePath]))
+        : await withRetry(git => git.diff(['--', filePath]))
       return { ok: true, data: diff }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -984,9 +1009,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:diffCached', async () => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      const diff = await git.diff(['--cached'])
+      const diff = await withRetry(git => git.diff(['--cached']))
       return { ok: true, data: diff }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -995,9 +1018,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:stage', async (_event, filePaths: string[]) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      await git.add(filePaths)
+      await withRetry(git => git.add(filePaths))
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1006,9 +1027,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:unstage', async (_event, filePaths: string[]) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      await git.reset(['HEAD', '--', ...filePaths])
+      await withRetry(git => git.reset(['HEAD', '--', ...filePaths]))
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1017,9 +1036,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:commit', async (_event, message: string) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      await git.commit(message)
+      await withRetry(git => git.commit(message))
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1028,9 +1045,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:discard', async (_event, filePaths: string[]) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      await git.checkout(['--', ...filePaths])
+      await withRetry(git => git.checkout(['--', ...filePaths]))
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1039,15 +1054,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:log', async (_event, options?: { maxCount?: number; skip?: number }) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      const isRepo = await git.checkIsRepo()
+      const isRepo = await withRetry(git => git.checkIsRepo())
       if (!isRepo) return { ok: false, error: 'Not a git repository' }
       const maxCount = options?.maxCount ?? 50
       const skip = options?.skip ?? 0
       const logArgs = [`--max-count=${maxCount}`]
       if (skip > 0) logArgs.push(`--skip=${skip}`)
-      const log = await git.log(logArgs)
+      const log = await withRetry(git => git.log(logArgs))
       const commits = log.all.map((entry) => ({
         hash: entry.hash,
         shortHash: entry.hash.slice(0, 7),
@@ -1066,11 +1079,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:commitDetail', async (_event, hash: string) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
       // Get commit info + stat using git show
       const formatStr = '%H%n%h%n%s%n%b%n%an%n%ae%n%aI%n%D'
-      const raw = await git.show(['--stat=4096', `--format=${formatStr}`, hash])
+      const raw = await withRetry(git => git.show(['--stat=4096', `--format=${formatStr}`, hash]))
       const lines = raw.split('\n')
       // First 8 lines are the formatted commit info
       const fullHash = lines[0] || ''
@@ -1143,7 +1154,7 @@ function registerIpcHandlers(): void {
 
       // Refine file statuses using diff-tree if available
       try {
-        const nameStatus = await git.raw(['diff-tree', '--no-commit-id', '--name-status', '-r', hash])
+        const nameStatus = await withRetry(g => g.raw(['diff-tree', '--no-commit-id', '--name-status', '-r', hash]))
         const statusMap = new Map<string, string>()
         for (const nsLine of nameStatus.split('\n')) {
           const parts = nsLine.trim().split('\t')
@@ -1185,9 +1196,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('git:commitFileDiff', async (_event, hash: string, filePath: string) => {
     try {
-      const projectPath = process.cwd()
-      const git = simpleGit(projectPath)
-      const diff = await git.show([hash, '--', filePath])
+      const diff = await withRetry(git => git.show([hash, '--', filePath]))
       return { ok: true, data: diff }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1220,7 +1229,8 @@ function registerIpcHandlers(): void {
       ignoreInitial: true,
       depth: 3,
       ignorePermissionErrors: true,
-      useFsEvents: process.platform === 'darwin',
+      usePolling: true,
+      interval: 1000,
       awaitWriteFinish: {
         stabilityThreshold: 500,
         pollInterval: 100,
