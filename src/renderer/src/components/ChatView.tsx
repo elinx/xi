@@ -667,11 +667,21 @@ function MergedBlocksRenderer({
     })
   }
 
-  // Identify paired tool_result indices (right after their tool_call)
+  const toolResultById = new Map<string, number>()
+  for (let j = 0; j < allBlocks.length; j++) {
+    if (allBlocks[j].block.type === 'tool_result') {
+      toolResultById.set((allBlocks[j].block as ToolResultBlock).toolCallId, j)
+    }
+  }
+
   const pairedResultIndices = new Set<number>()
   for (let j = 0; j < allBlocks.length; j++) {
-    if (allBlocks[j].block.type === 'tool_call' && allBlocks[j + 1]?.block.type === 'tool_result') {
-      pairedResultIndices.add(j + 1)
+    if (allBlocks[j].block.type === 'tool_call') {
+      const tcId = (allBlocks[j].block as ToolCallBlock).toolCallId
+      const resultIdx = toolResultById.get(tcId)
+      if (resultIdx !== undefined) {
+        pairedResultIndices.add(resultIdx)
+      }
     }
   }
 
@@ -685,15 +695,16 @@ function MergedBlocksRenderer({
     if (pairedResultIndices.has(j)) continue
 
     if (block.type === 'tool_call') {
-      const result = allBlocks[j + 1]?.block.type === 'tool_result' ? allBlocks[j + 1].block as ToolResultBlock : undefined
+      const tcId = (block as ToolCallBlock).toolCallId
+      const resultIdx = toolResultById.get(tcId)
+      const result = resultIdx !== undefined ? allBlocks[resultIdx].block as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${block.toolCallId}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} />
       )
       continue
     }
 
     if (block.type === 'tool_result') {
-      // Orphan tool_result
       elements.push(
         <OrphanToolResultRenderer key={`tr-${msgId}-${blockIdx}`} block={block} />
       )
@@ -744,33 +755,42 @@ function MessageBlocksRenderer({
   onSendFeedback: (description: string, imageData: string) => void
   onFileSelect?: (filePath: string) => void
 }): React.ReactElement {
-  // Identify paired tool_result indices (right after their tool_call)
-  const pairedResultIndices = new Set<number>()
+  const toolResultById = new Map<string, number>()
   for (let j = 0; j < msg.blocks.length; j++) {
-    if (msg.blocks[j].type === 'tool_call' && msg.blocks[j + 1]?.type === 'tool_result') {
-      pairedResultIndices.add(j + 1)
+    if (msg.blocks[j].type === 'tool_result') {
+      toolResultById.set((msg.blocks[j] as ToolResultBlock).toolCallId, j)
     }
   }
 
-  // Render blocks in original order
+  const pairedResultIndices = new Set<number>()
+  for (let j = 0; j < msg.blocks.length; j++) {
+    if (msg.blocks[j].type === 'tool_call') {
+      const tcId = (msg.blocks[j] as ToolCallBlock).toolCallId
+      const resultIdx = toolResultById.get(tcId)
+      if (resultIdx !== undefined) {
+        pairedResultIndices.add(resultIdx)
+      }
+    }
+  }
+
   const elements: React.ReactElement[] = []
 
   for (let j = 0; j < msg.blocks.length; j++) {
     const block = msg.blocks[j]
 
-    // Skip paired tool_result (will be rendered inside its tool_call)
     if (pairedResultIndices.has(j)) continue
 
     if (block.type === 'tool_call') {
-      const result = msg.blocks[j + 1]?.type === 'tool_result' ? msg.blocks[j + 1] as ToolResultBlock : undefined
+      const tcId = (block as ToolCallBlock).toolCallId
+      const resultIdx = toolResultById.get(tcId)
+      const result = resultIdx !== undefined ? msg.blocks[resultIdx] as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${block.toolCallId}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} />
       )
       continue
     }
 
     if (block.type === 'tool_result') {
-      // Orphan tool_result
       elements.push(
         <OrphanToolResultRenderer key={`tr-${msg.id}-${j}`} block={block} />
       )
