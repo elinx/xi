@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { usePiRpc, type UsePiRpcOptions } from './hooks/usePiRpc'
 import { useSessionManager } from './hooks/useSessionManager'
-import { useSessionCache } from './hooks/useSessionCache'
+import { useSessionCache, type WorkerStatus } from './hooks/useSessionCache'
 import { useLayoutStore } from './hooks/useLayoutStore'
 import { useTabStore, SESSION_TAB_ID, SETTINGS_TAB_ID, type TabType } from './hooks/useTabStore'
 import { useFileIndex } from './hooks/useFileIndex'
@@ -35,20 +35,12 @@ function getDisplayName(session: { name: string | null; createdAt: string }): st
 }
 
 function App(): React.ReactElement {
-  const [piConnectedPath, setPiConnectedPathState] = useState<string | null>(null)
-  const piConnectedPathRef = useRef<string | null>(null)
-
-  const setPiConnectedPath = useCallback((path: string | null) => {
-    piConnectedPathRef.current = path
-    setPiConnectedPathState(path)
-  }, [])
-
-  const [isAgentEnding, setIsAgentEnding] = useState(false)
   const sessionCache = useSessionCache()
   const {
     displaySession, getCache, clearCache, getOrCreateCache,
-    updatePiConnectedMessages, updatePiConnectedTokenUsage,
-    setPiConnectedStreaming, updatePiConnectedForkPoints,
+    updateSessionMessages, updateSessionTokenUsage,
+    setSessionStreaming, updateSessionForkPoints,
+    setWorkerStatus, getWorkerStatus,
   } = sessionCache
 
   const getCacheRef = useRef(getCache)
@@ -58,40 +50,45 @@ function App(): React.ReactElement {
   const displaySessionRef = useRef(displaySession)
   displaySessionRef.current = displaySession
 
+  const userSwitchingRef = useRef(false)
+
   const displayedSessionPathRef = useRef(sessionCache.displayedSessionPath)
   displayedSessionPathRef.current = sessionCache.displayedSessionPath
   const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
   isDisplayedStreamingRef.current = sessionCache.isDisplayedStreaming
 
   const piRpcOptions: UsePiRpcOptions = useMemo(() => ({
-    onMessagesUpdate: (updater: (prev: ChatMessage[]) => ChatMessage[]) => {
-      const path = piConnectedPathRef.current
-      if (path) updatePiConnectedMessages(path, updater)
+    onSessionMessagesUpdate: (sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+      updateSessionMessages(sessionPath, updater)
     },
-    onTokenUsageUpdate: (updater: (prev: TokenUsage) => TokenUsage) => {
-      const path = piConnectedPathRef.current
-      if (path) updatePiConnectedTokenUsage(path, updater)
+    onSessionTokenUsageUpdate: (sessionPath: string, updater: (prev: TokenUsage) => TokenUsage) => {
+      updateSessionTokenUsage(sessionPath, updater)
     },
-    onStreamingChange: (isStreaming: boolean, streamingMessageId: string | null) => {
-      const path = piConnectedPathRef.current
-      if (path) setPiConnectedStreaming(path, isStreaming, streamingMessageId)
+    onSessionStreamingChange: (sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => {
+      setSessionStreaming(sessionPath, isStreaming, streamingMessageId)
     },
-    onForkPointsUpdate: (forkPoints: ForkPoint[]) => {
-      const path = piConnectedPathRef.current
-      if (path) updatePiConnectedForkPoints(path, forkPoints)
+    onSessionForkPointsUpdate: (sessionPath: string, forkPoints: ForkPoint[]) => {
+      updateSessionForkPoints(sessionPath, forkPoints)
     },
-    piConnectedSessionPath: piConnectedPath,
-  }), [updatePiConnectedMessages, updatePiConnectedTokenUsage, setPiConnectedStreaming, updatePiConnectedForkPoints, piConnectedPath])
+    onSessionModelChange: (_sessionPath: string, _model: unknown) => {},
+    onWorkerStatusChange: (sessionPath: string, status: string) => {
+      setWorkerStatus(sessionPath, status as WorkerStatus)
+    },
+    displayedSessionPath: sessionCache.displayedSessionPath,
+    getCache,
+    updateCache: sessionCache.updateCache,
+  }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, sessionCache.updateCache])
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
-  const isLazySwitched = sessionCache.displayedSessionPath !== null && sessionCache.displayedSessionPath !== piConnectedPath
   const displayedMessages = sessionCache.displayedMessages
   const displayedTokenUsage = sessionCache.displayedTokenUsage
   const displayedForkPoints = sessionCache.displayedForkPoints
   const displayedStreaming = sessionCache.isDisplayedStreaming
   const displayedStreamingId = sessionCache.displayedStreamingMessageId
+  const activeSessionPath = sessionCache.displayedSessionPath ?? currentSession?.filePath ?? null
+  const displayedWorkerStatus = activeSessionPath ? getWorkerStatus(activeSessionPath) : 'none'
 
   const sentMessages = useMemo(() => {
     return displayedMessages
@@ -103,7 +100,7 @@ function App(): React.ReactElement {
           .join('\n')
       })
       .filter(text => text.trim().length > 0)
-      .reverse()  // newest first
+      .reverse()
   }, [displayedMessages])
 
   const [error, setError] = useState<string | null>(null)
@@ -211,20 +208,46 @@ function App(): React.ReactElement {
     return (localStorage.getItem('xi-settings-view-mode') as ViewMode) || 'normal'
   })
   const [quotes, setQuotes] = useState<QuotedMessage[]>([])
+  const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
-  const activeSessionPath = isLazySwitched ? sessionCache.displayedSessionPath : (currentSession?.filePath ?? null)
+
+  const currentForwards = activeSessionPath ? (pendingForwards.get(activeSessionPath) ?? []) : []
+  const mergedQuotes = [...quotes, ...currentForwards]
+
+  const handleRemoveQuote = useCallback((messageId: string) => {
+    setQuotes(prev => prev.filter(q => q.messageId !== messageId))
+    setPendingForwards(prev => {
+      if (!activeSessionPath) return prev
+      const existing = prev.get(activeSessionPath)
+      if (!existing) return prev
+      const filtered = existing.filter(q => q.messageId !== messageId)
+      if (filtered.length === existing.length) return prev
+      const next = new Map(prev)
+      if (filtered.length === 0) {
+        next.delete(activeSessionPath)
+      } else {
+        next.set(activeSessionPath, filtered)
+      }
+      return next
+    })
+  }, [activeSessionPath])
+
+  const handleClearQuotes = useCallback(() => {
+    setQuotes([])
+    setPendingForwards(prev => {
+      if (!activeSessionPath || !prev.has(activeSessionPath)) return prev
+      const next = new Map(prev)
+      next.delete(activeSessionPath)
+      return next
+    })
+  }, [activeSessionPath])
+
   const activeSession = activeSessionPath
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
     : currentSession
 
   const activeSessionName = activeSession ? getDisplayName(activeSession) : null
-
-  const backgroundSessionName = (() => {
-    if (!isLazySwitched || !piConnectedPath) return null
-    const bgSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === piConnectedPath)
-    return bgSession ? getDisplayName(bgSession) : null
-  })()
 
   useEffect(() => {
     const sessionTab = tabs.find(t => t.id === SESSION_TAB_ID)
@@ -246,7 +269,7 @@ function App(): React.ReactElement {
     const result = await window.api.openDirectory()
     if (!result.ok) return
     resetTabs()
-    clearMessages()
+    clearMessages(null)
     await refresh()
     refreshFileIndex(true)
     const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
@@ -259,100 +282,106 @@ function App(): React.ReactElement {
   }, [])
 
   const isPiStreaming = useCallback((): boolean => {
-    const path = piConnectedPathRef.current
+    const path = displayedSessionPathRef.current
     if (!path) return false
     return getCacheRef.current(path)?.isStreaming ?? false
   }, [])
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
-    const piStreaming = isPiStreaming() || isDisplayedStreamingRef.current
-    if (piStreaming && piConnectedPathRef.current !== sessionPath) {
-      await displaySessionRef.current(sessionPath)
-      return
+    setQuotes([])
+    userSwitchingRef.current = sessionPath
+    await displaySessionRef.current(sessionPath)
+    await switchSession(sessionPath)
+    const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+    if (apiWithWorker.workerEnsureReady) {
+      await apiWithWorker.workerEnsureReady(sessionPath)
     }
-
-    if (piConnectedPathRef.current === sessionPath) {
-      if (displayedSessionPathRef.current !== sessionPath) {
-        await displaySessionRef.current(sessionPath)
-      }
-      return
-    }
-
-    const result = await switchSession(sessionPath)
-    if (result.success) {
-      setPiConnectedPath(sessionPath)
-      await displaySessionRef.current(sessionPath)
-      clearMessages()
-      await loadHistory()
-      await loadForkPoints(sessionPath)
-      await refresh()
-      window.api.saveLastSession(sessionPath)
-    } else {
-      await displaySessionRef.current(sessionPath)
-    }
-  }, [switchSession, clearMessages, loadHistory, loadForkPoints, refresh, isPiStreaming, setPiConnectedPath])
+    window.api.saveLastSession(sessionPath)
+    userSwitchingRef.current = null
+  }, [switchSession])
 
   const currentSessionRef = useRef(currentSession)
   currentSessionRef.current = currentSession
 
   const handleNewSession = useCallback(async (name: string, parentSessionPath: string) => {
+    const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
-      await abort()
+      await abort(currentPath)
     }
-    clearMessages()
-    const result = await newSession(name, parentSessionPath)
+    clearMessages(currentPath)
+    const result = await newSession(currentPath, name, parentSessionPath)
     if (result) {
       await refresh()
-      setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
       const path = currentSessionRef.current?.filePath
-      if (path) window.api.saveLastSession(path)
+      if (path) {
+        await displaySessionRef.current(path)
+        const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+        if (apiWithWorker.workerEnsureReady) {
+          await apiWithWorker.workerEnsureReady(path)
+        }
+        window.api.saveLastSession(path)
+      }
     }
-  }, [abort, clearMessages, newSession, refresh, isPiStreaming, setPiConnectedPath])
+  }, [abort, clearMessages, newSession, refresh, isPiStreaming])
 
   const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
+    const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
-      await abort()
+      await abort(currentPath)
     }
-    clearMessages()
-    await forkAtEntry(entryId, name)
-    await loadHistory()
+    clearMessages(currentPath)
+    await forkAtEntry(currentPath, entryId, name)
+    await loadHistory(currentPath)
     await refresh()
-    setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
     const path = currentSessionRef.current?.filePath
-    if (path) window.api.saveLastSession(path)
-  }, [abort, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
+    if (path) {
+      await displaySessionRef.current(path)
+      const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+      if (apiWithWorker.workerEnsureReady) {
+        await apiWithWorker.workerEnsureReady(path)
+      }
+      window.api.saveLastSession(path)
+    }
+  }, [abort, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming])
 
   const handleForkFromEnd = useCallback(async (sessionPath: string, name: string) => {
+    const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
-      await abort()
+      await abort(currentPath)
     }
-    const msgs = await getForkMessages()
+    const msgs = await getForkMessages(currentPath)
     const lastEntry = msgs[msgs.length - 1]
     if (!lastEntry?.entryId) return
-    clearMessages()
-    await forkAtEntry(lastEntry.entryId, name)
-    await loadHistory()
+    clearMessages(currentPath)
+    await forkAtEntry(currentPath, lastEntry.entryId, name)
+    await loadHistory(currentPath)
     await refresh()
-    setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
     const path = currentSessionRef.current?.filePath
-    if (path) window.api.saveLastSession(path)
-  }, [abort, getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
+    if (path) {
+      await displaySessionRef.current(path)
+      const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+      if (apiWithWorker.workerEnsureReady) {
+        await apiWithWorker.workerEnsureReady(path)
+      }
+      window.api.saveLastSession(path)
+    }
+  }, [abort, getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming])
 
   const handleClearSession = useCallback(async () => {
+    const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
-      await abort()
+      await abort(currentPath)
     }
-    clearMessages()
-    const ok = await clearSession()
+    clearMessages(currentPath)
+    const ok = await clearSession(currentPath)
     if (ok) {
-      clearMessages()
-      await loadHistory()
+      clearMessages(currentPath)
+      await loadHistory(currentPath)
       await refresh()
-      setPiConnectedPath(currentSessionRef.current?.filePath ?? null)
       const path = currentSessionRef.current?.filePath
       if (path) window.api.saveLastSession(path)
     }
-  }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming, setPiConnectedPath])
+  }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming])
 
   const handleQuoteMessage = useCallback((messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => {
     setQuotes(prev => {
@@ -361,105 +390,87 @@ function App(): React.ReactElement {
     })
   }, [])
 
-  const handleRemoveQuote = useCallback((messageId: string) => {
-    setQuotes(prev => prev.filter(q => q.messageId !== messageId))
-  }, [])
-
-  const handleClearQuotes = useCallback(() => setQuotes([]), [])
-
-  const handleForwardMessage = useCallback(async (_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
-    const prevPath = piConnectedPathRef.current
-    if (!prevPath) return
-    if (isPiStreaming()) await abort()
-    const result = await switchSession(targetSessionPath)
-    if (result.success) {
-      setPiConnectedPath(targetSessionPath)
-      const forwardedText = `[Forwarded ${role} message]:\n${content}`
-      sendPrompt(forwardedText)
-      await abort()
-      const switchBack = await switchSession(prevPath)
-      if (switchBack.success) {
-        setPiConnectedPath(prevPath)
-        clearMessages()
-        await loadHistory()
-        await loadForkPoints(prevPath)
-      }
-      refresh()
+  const handleForwardMessage = useCallback((_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
+    const sourceSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === displayedSessionPathRef.current)
+    const sourceSessionName = sourceSession ? getDisplayName(sourceSession) : 'Unknown'
+    const truncatedContent = content.length > 200 ? content.slice(0, 200) + '…' : content
+    const forward: QuotedMessage = {
+      messageId: `fwd-${_messageId}-${Date.now()}`,
+      role,
+      content: truncatedContent,
+      timestamp: Date.now(),
+      sourceSessionPath: targetSessionPath,
+      sourceSessionName,
     }
-  }, [abort, switchSession, sendPrompt, clearMessages, loadHistory, loadForkPoints, refresh, setPiConnectedPath])
-
-  const isLazySwitchedRef = useRef(isLazySwitched)
-  isLazySwitchedRef.current = isLazySwitched
+    setPendingForwards(prev => {
+      const next = new Map(prev)
+      const existing = next.get(targetSessionPath) ?? []
+      next.set(targetSessionPath, [...existing, forward])
+      return next
+    })
+  }, [sessions])
 
   const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>, quotes?: QuotedMessage[]) => {
-    if (!isLazySwitchedRef.current && isPiStreaming()) return
+    if (isPiStreaming()) return
 
     let finalText = text
     if (quotes && quotes.length > 0) {
-      const quotedText = quotes.map(q => `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`).join('\n\n')
+      const quotedText = quotes.map(q => {
+        if (q.sourceSessionName) {
+          return `> [Forwarded ${q.role} message from "${q.sourceSessionName}"]:\n> ${q.content.replace(/\n/g, '\n> ')}`
+        }
+        return `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`
+      }).join('\n\n')
       finalText = quotedText + '\n\n' + text
     }
 
-    const doSend = () => {
-      sendPrompt(finalText, images, mentions)
+    const sessionPath = displayedSessionPathRef.current
+    const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+    if (sessionPath && apiWithWorker.workerEnsureReady) {
+      await apiWithWorker.workerEnsureReady(sessionPath)
     }
 
-    if (isLazySwitchedRef.current) {
-      const targetPath = displayedSessionPathRef.current
-      if (!targetPath) return
-      if (isPiStreaming()) await abort()
-      const result = await switchSession(targetPath)
-      if (result.success) {
-        setPiConnectedPath(targetPath)
-        clearMessages()
-        await loadHistory()
-        await loadForkPoints(targetPath)
-        await refresh()
-        doSend()
-      }
-    } else {
-      doSend()
-    }
-  }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, sendPrompt, isPiStreaming, setPiConnectedPath])
+    sendPrompt(sessionPath, finalText, images, mentions)
+    setPendingForwards(prev => {
+      const activePath = displayedSessionPathRef.current
+      if (!activePath || !prev.has(activePath)) return prev
+      const next = new Map(prev)
+      next.delete(activePath)
+      return next
+    })
+  }, [sendPrompt, isPiStreaming])
 
   const handleRequestCommitMessage = useCallback((diff: string) => {
     pendingCommitGenerationRef.current = true
     setCommitMessageFromAI(undefined)
     const prompt = `Generate a concise git commit message for the following staged diff. Only output the commit message, nothing else:\n\n${diff}`
-    sendPrompt(prompt)
+    sendPrompt(null, prompt)
   }, [sendPrompt])
 
   const handleStop = useCallback(async () => {
-    if (isLazySwitchedRef.current) {
-      await abort()
-      const targetPath = displayedSessionPathRef.current
-      if (targetPath) {
-        const result = await switchSession(targetPath)
-        if (result.success) {
-          setPiConnectedPath(targetPath)
-          clearMessages()
-          await loadHistory()
-          await loadForkPoints(targetPath)
-          await refresh()
-        }
-      }
-    } else {
-      await abort()
+    const sessionPath = displayedSessionPathRef.current
+    if (sessionPath) {
+      await abort(sessionPath)
     }
-  }, [abort, switchSession, clearMessages, loadHistory, loadForkPoints, refresh, setPiConnectedPath])
+  }, [abort])
 
   useEffect(() => {
     if (isConnected) {
       const path = currentSessionRef.current?.filePath ?? null
-      setPiConnectedPath(path)
-      if (path) {
+      if (path && !displayedSessionPathRef.current) {
+        displayedSessionPathRef.current = path
         getOrCreateCacheRef.current(path).then(() => {
+          if (displayedSessionPathRef.current !== path) return
           displaySessionRef.current(path).then(() => {
-            loadHistory()
+            loadHistory(path)
+            const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+            if (apiWithWorker.workerEnsureReady) {
+              apiWithWorker.workerEnsureReady(path)
+            }
           })
         })
-      } else {
-        loadHistory()
+      } else if (!path) {
+        loadHistory(null)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -467,11 +478,18 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     if (!isConnected || !currentSession?.filePath) return
-    if (piConnectedPathRef.current === currentSession.filePath) return
-    setPiConnectedPath(currentSession.filePath)
+    if (userSwitchingRef.current) return
+    if (displayedSessionPathRef.current === currentSession.filePath) return
+    if (displayedSessionPathRef.current !== null) return
     getOrCreateCacheRef.current(currentSession.filePath).then(() => {
+      if (userSwitchingRef.current) return
+      if (displayedSessionPathRef.current !== null && displayedSessionPathRef.current !== currentSession.filePath) return
       displaySessionRef.current(currentSession.filePath).then(() => {
-        loadHistory()
+        loadHistory(currentSession.filePath)
+        const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+        if (apiWithWorker.workerEnsureReady) {
+          apiWithWorker.workerEnsureReady(currentSession.filePath)
+        }
       })
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -486,14 +504,14 @@ function App(): React.ReactElement {
     if (startupPref !== 'last') return
     window.api.getLastSession().then(async (lastPath) => {
       if (!lastPath || currentSession.filePath === lastPath) return
-      const result = await switchSession(lastPath)
-      if (result.success) {
-        setPiConnectedPath(lastPath)
-        clearMessages()
-        await loadHistory()
-        await loadForkPoints(lastPath)
-        await refresh()
+      userSwitchingRef.current = lastPath
+      await displaySessionRef.current(lastPath)
+      const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+      if (apiWithWorker.workerEnsureReady) {
+        await apiWithWorker.workerEnsureReady(lastPath)
       }
+      userSwitchingRef.current = null
+      await refresh()
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, currentSession?.filePath])
@@ -537,32 +555,15 @@ function App(): React.ReactElement {
   useEffect(() => {
     setOnAgentEnd(() => () => {
       refresh()
-      setIsAgentEnding(true)
-      const displayed = displayedSessionPathRef.current
-      const currentPiConnected = piConnectedPathRef.current
-      if (displayed && displayed !== currentPiConnected) {
-        switchSession(displayed).then((result) => {
-          if (result.success) {
-            setPiConnectedPath(displayed)
-            clearMessages()
-            loadHistory().then(() => {
-              loadForkPoints(displayed)
-            })
-          }
-          setIsAgentEnding(false)
-        })
-      } else {
-        setIsAgentEnding(false)
-      }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setOnAgentEnd, refresh, switchSession, clearMessages, loadHistory, loadForkPoints, setPiConnectedPath])
+  }, [setOnAgentEnd, refresh])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
       if (paletteOpen) return
       if (e.key === 'Escape') {
-        if (isPiStreaming()) abort()
+        if (isPiStreaming()) abort(displayedSessionPathRef.current)
       }
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === '\\') {
@@ -645,6 +646,14 @@ function App(): React.ReactElement {
     }
   }, [addTab, tabs, setActiveTab])
 
+  const statusDotClass = displayedWorkerStatus === 'connected' && !displayedStreaming
+    ? 'bg-green-500'
+    : displayedStreaming
+      ? 'bg-blue-500 animate-pulse'
+      : displayedWorkerStatus === 'starting'
+        ? 'bg-amber-500 animate-pulse'
+        : 'bg-gray-400'
+
    return (
         <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
           <div className="flex border-b border-gray-200 bg-gray-50 h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
@@ -652,33 +661,25 @@ function App(): React.ReactElement {
              <div
                className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
                style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '0' }}
-             >
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
-              <button
-                onClick={handleOpenDirectory}
-                className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                title="Open project directory"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-                </svg>
-              </button>
-            </div>
-          )}
+               <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 truncate" title={projects[0]?.projectPath ?? undefined}>{projectName}</span>
+               <button
+                 onClick={handleOpenDirectory}
+                 className="rounded p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                 title="Open project directory"
+                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
+                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                 </svg>
+               </button>
+             </div>
+           )}
              <div className="flex items-center flex-1 px-4 min-w-0 gap-3 h-full" style={{ paddingTop: isMac ? '28px' : '0', paddingLeft: isMac && leftPanelCollapsed ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
              {activeSessionName && isSessionTabActive && (
                <>
                  <span
-                   className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
-                     isLazySwitched
-                       ? isAgentEnding
-                         ? 'bg-blue-500 animate-pulse'
-                         : 'bg-amber-500'
-                       : displayedStreaming
-                         ? 'bg-blue-500 animate-pulse'
-                         : 'bg-green-500'
-                   }`}
+                   className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${statusDotClass}`}
                  />
                  <span className="text-xs text-gray-700 font-medium truncate">
                    {activeSessionName}
@@ -687,7 +688,7 @@ function App(): React.ReactElement {
                    onClick={handleClearSession}
                    className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
                    title="Clear conversation"
-                 >
+                >
                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                    </svg>
@@ -721,7 +722,7 @@ function App(): React.ReactElement {
                      onClick={handleConnect}
                      className="rounded px-2 py-0.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-colors"
                      title="Connect to Pi"
-                   >
+                  >
                      Connect
                    </button>
                  )}
@@ -794,25 +795,27 @@ function App(): React.ReactElement {
          </div>
 
          <div className="flex flex-1 overflow-hidden">
-         <LeftPanel
-           view={leftPanelView}
-           onViewChange={setLeftPanelView}
-           collapsed={leftPanelCollapsed}
-           onToggleCollapse={() => toggleLeftPanel()}
-           width={leftPanelWidth}
-           onResizeStart={handleLeftResizeStart}
-           projectName={projectName}
-           projectPath={projects[0]?.projectPath ?? undefined}
-           onOpenDirectory={handleOpenDirectory}
-           sessions={sessions}
-           currentSession={currentSession}
-           onSwitchSession={handleSwitchSession}
-           onNewSession={handleNewSession}
-           onRenameSession={renameSession}
-           onDeleteSession={deleteSession}
-           onSetSessionStatus={setSessionStatus}
-           onForkFromEnd={handleForkFromEnd}
-         />
+          <LeftPanel
+            view={leftPanelView}
+            onViewChange={setLeftPanelView}
+            collapsed={leftPanelCollapsed}
+            onToggleCollapse={() => toggleLeftPanel()}
+            width={leftPanelWidth}
+            onResizeStart={handleLeftResizeStart}
+            projectName={projectName}
+            projectPath={projects[0]?.projectPath ?? undefined}
+            onOpenDirectory={handleOpenDirectory}
+            sessions={sessions}
+            currentSession={currentSession}
+            displayedSessionPath={sessionCache.displayedSessionPath}
+            workerStatuses={sessionCache.workerStatuses}
+            onSwitchSession={handleSwitchSession}
+            onNewSession={handleNewSession}
+            onRenameSession={renameSession}
+            onDeleteSession={deleteSession}
+            onSetSessionStatus={setSessionStatus}
+            onForkFromEnd={handleForkFromEnd}
+          />
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <TabBar
@@ -830,15 +833,16 @@ function App(): React.ReactElement {
                 isStreaming={displayedStreaming}
                 streamingMessageId={displayedStreamingId}
                 pendingUiRequests={pendingUiRequests}
-                respondToUiRequest={respondToUiRequest}
+                respondToUiRequest={(requestId, response) => respondToUiRequest(activeSessionPath, requestId, response)}
                 onSendPrompt={handleSendPrompt}
                 onForkAtEntry={handleForkAtEntry}
-                getForkMessages={getForkMessages}
+                getForkMessages={() => getForkMessages(activeSessionPath)}
                 forkPoints={displayedForkPoints}
                 viewMode={viewMode}
                 onFileSelect={(p) => handleFileSelect(p)}
                 onQuoteMessage={handleQuoteMessage}
                 onForwardMessage={handleForwardMessage}
+                currentSessionPath={activeSessionPath}
                 sessions={sessions?.projects?.flatMap(p => p.allSessions).map(s => ({ filePath: s.filePath, name: s.name, isMain: s.isMain }))}
               />
             </div>
@@ -862,7 +866,7 @@ function App(): React.ReactElement {
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
-                onAuthChange={() => { getAvailableModels() }}
+                onAuthChange={() => { getAvailableModels(null) }}
               />
             )}
           </div>
@@ -874,16 +878,13 @@ function App(): React.ReactElement {
               isConnected={isConnected}
               isStreaming={displayedStreaming}
               onStop={handleStop}
-              isLazySwitched={isLazySwitched}
-              backgroundSessionName={backgroundSessionName}
-              isBackgroundStreaming={isLazySwitched && isPiStreaming()}
-              isAgentEnding={isAgentEnding}
+              workerStatus={displayedWorkerStatus}
               currentModel={currentModel}
-              onSetModel={setModel}
-              getAvailableModels={getAvailableModels}
+              onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
+              getAvailableModels={() => getAvailableModels(activeSessionPath)}
               files={indexedFiles}
               sentMessages={sentMessages}
-              quotes={quotes}
+              quotes={mergedQuotes}
               onRemoveQuote={handleRemoveQuote}
               onClearQuotes={handleClearQuotes}
             />
@@ -914,7 +915,7 @@ function App(): React.ReactElement {
              testProvider={testProvider}
              getProviderConfig={getProviderConfig}
              onAuthChange={() => {
-              getAvailableModels()
+              getAvailableModels(null)
             }}
             onSkip={() => setShowWelcome(false)}
           />
@@ -932,7 +933,7 @@ function App(): React.ReactElement {
         }))}
         commands={commands}
         onFileSelect={(filePath) => addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })}
-        onSessionSelect={(sessionPath) => switchSession(sessionPath)}
+        onSessionSelect={(sessionPath) => handleSwitchSession(sessionPath)}
       />
     </div>
   )

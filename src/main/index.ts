@@ -4,7 +4,7 @@ import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSy
 import { execFile } from 'child_process'
 import { simpleGit } from 'simple-git'
 import { watch } from 'chokidar'
-import { PiSDKBridge } from './pi-sdk-bridge'
+import { WorkerManager } from './worker-manager'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
@@ -18,7 +18,7 @@ if (process.platform === 'darwin') {
 }
 
 let mainWindow: BrowserWindow | null = null
-let piBridge: PiSDKBridge | null = null
+let workerManager: WorkerManager | null = null
 let initialSessionPath: string | undefined
 
 function createWindow(): void {
@@ -65,12 +65,11 @@ function broadcastToRenderers(channel: string, data: unknown): void {
   })
 }
 
-function initPiBridge(sessionPath?: string): void {
-  piBridge = new PiSDKBridge()
+function initWorkerManager(sessionPath?: string): void {
+  workerManager = new WorkerManager()
   initialSessionPath = sessionPath
 
-  piBridge.on('event', (data: unknown) => {
-    // In SDK mode, extension_ui_request arrives as a regular event
+  workerManager.on('event', (data: unknown) => {
     if (typeof data === 'object' && data !== null) {
       const obj = data as Record<string, unknown>
       if (obj.type === 'extension_ui_request') {
@@ -81,76 +80,86 @@ function initPiBridge(sessionPath?: string): void {
     broadcastToRenderers('pi:event', data)
   })
 
-  piBridge.on('response', (data: unknown) => {
+  workerManager.on('response', (data: unknown) => {
     broadcastToRenderers('pi:response', data)
   })
 
-  piBridge.on('connected', () => {
+  workerManager.on('connected', () => {
     broadcastToRenderers('pi:stateChanged', { connected: true })
   })
 
-  piBridge.on('disconnected', () => {
+  workerManager.on('disconnected', () => {
     broadcastToRenderers('pi:stateChanged', { connected: false })
   })
 
-  piBridge.on('error', (err: Error) => {
-    console.error('[PiSDKBridge]', err.message)
+  workerManager.on('error', (err: Error) => {
+    console.error('[WorkerManager]', err.message)
+  })
+
+  workerManager.on('worker:status', (data: unknown) => {
+    broadcastToRenderers('worker:status', data)
   })
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle('pi:sendCommand', (_event, command: Record<string, unknown>) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
-    piBridge.sendCommand(command)
+  ipcMain.handle('pi:sendCommand', (_event, sessionPath: string | null, command: Record<string, unknown>) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    worker.bridge.sendCommand(command)
     return { ok: true }
   })
 
-  ipcMain.handle('pi:sendExtensionUIResponse', (_event, response: Record<string, unknown>) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
-    piBridge.sendExtensionUIResponse(response)
+  ipcMain.handle('pi:sendExtensionUIResponse', (_event, sessionPath: string | null, response: Record<string, unknown>) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    worker.bridge.sendExtensionUIResponse(response)
     return { ok: true }
   })
 
   ipcMain.handle('pi:getState', () => {
-    return { connected: piBridge?.isConnected ?? false }
+    return { connected: workerManager?.getPrimary()?.bridge.isConnected ?? false }
   })
 
-  ipcMain.handle('pi:getAvailableModels', async () => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:getAvailableModels', async (_event, sessionPath: string | null) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
-      const data = await piBridge.sendRpcCommand({ type: 'get_available_models' })
+      const data = await worker.bridge.sendRpcCommand({ type: 'get_available_models' })
       return { ok: true, data }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:setModel', async (_event, model: string, provider?: string) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:setModel', async (_event, sessionPath: string | null, model: string, provider?: string) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
       const command: Record<string, unknown> = { type: 'set_model', model }
       if (provider) command.provider = provider
-      const data = await piBridge.sendRpcCommand(command)
+      const data = await worker.bridge.sendRpcCommand(command)
       return { ok: true, data }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:cycleModel', async (_event, direction?: 'forward' | 'backward') => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:cycleModel', async (_event, sessionPath: string | null, direction?: 'forward' | 'backward') => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
-      const data = await piBridge.sendRpcCommand({ type: 'cycle_model', direction: direction ?? 'forward' })
+      const data = await worker.bridge.sendRpcCommand({ type: 'cycle_model', direction: direction ?? 'forward' })
       return { ok: true, data }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:getModelInfo', async () => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:getModelInfo', async (_event, sessionPath: string | null) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
-      const data = await piBridge.sendRpcCommand({ type: 'get_state' })
+      const data = await worker.bridge.sendRpcCommand({ type: 'get_state' })
       const state = data as Record<string, unknown>
       return { ok: true, data: { model: state.model ?? null, thinkingLevel: state.thinkingLevel ?? null } }
     } catch (err: unknown) {
@@ -158,40 +167,106 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('pi:getProviderAuthStatus', async () => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:getProviderAuthStatus', async (_event, _sessionPath: string | null) => {
+    const primary = workerManager?.getPrimary()
+    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
-      const data = await piBridge.sendRpcCommand({ type: 'get_provider_auth_status' })
+      const data = await primary.bridge.sendRpcCommand({ type: 'get_provider_auth_status' })
       return { ok: true, data }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:setApiKey', async (_event, provider: string, apiKey: string) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:setApiKey', async (_event, _sessionPath: string | null, provider: string, apiKey: string) => {
+    const primary = workerManager?.getPrimary()
+    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
-      await piBridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
+      await primary.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:removeAuth', async (_event, provider: string) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:removeAuth', async (_event, _sessionPath: string | null, provider: string) => {
+    const primary = workerManager?.getPrimary()
+    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
-      await piBridge.sendRpcCommand({ type: 'remove_auth', provider })
+      await primary.bridge.sendRpcCommand({ type: 'remove_auth', provider })
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('pi:registerCustomProvider', async (_event, provider: string, config: Record<string, unknown>) => {
-    if (!piBridge?.isConnected) return { ok: false, error: 'Pi not connected' }
+  ipcMain.handle('pi:registerCustomProvider', async (_event, _sessionPath: string | null, provider: string, config: Record<string, unknown>) => {
+    const primary = workerManager?.getPrimary()
+    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
-      await piBridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
+      await primary.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('worker:ensureReady', async (_event, sessionPath: string) => {
+    const existing = workerManager?.get(sessionPath)
+    if (existing && existing.status === 'connected') return { ok: true, status: 'connected' }
+    if (existing && existing.status === 'starting') return { ok: true, status: 'starting' }
+    if (existing && existing.status === 'error') {
+      if (existing.role === 'secondary') {
+        await workerManager!.disposeSecondary(sessionPath)
+      }
+    }
+
+    try {
+      const state = await workerManager!.getOrCreateSecondary(sessionPath, process.cwd())
+      return { ok: true, status: state.status }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('worker:getStatus', () => {
+    const workers = workerManager?.getAllWorkers() ?? []
+    return workers.map(w => ({
+      sessionPath: w.sessionPath,
+      role: w.role,
+      status: w.status,
+      isStreaming: w.isStreaming,
+    }))
+  })
+
+  ipcMain.handle('worker:setIdleTimeout', (_event, minutes: number) => {
+    if (!workerManager) return { ok: false, error: 'WorkerManager not initialized' }
+    workerManager.setIdleTimeout(minutes * 60 * 1000)
+    return { ok: true }
+  })
+
+  ipcMain.handle('worker:getIdleTimeout', () => {
+    if (!workerManager) return { ok: true, minutes: 5 }
+    return { ok: true, minutes: Math.round(workerManager.idleTimeoutMs / 60 / 1000) }
+  })
+
+  ipcMain.handle('worker:setMaxSecondaries', (_event, n: number) => {
+    if (!workerManager) return { ok: false, error: 'WorkerManager not initialized' }
+    workerManager.setMaxSecondaries(n)
+    return { ok: true }
+  })
+
+  ipcMain.handle('worker:getMaxSecondaries', () => {
+    if (!workerManager) return { ok: true, maxSecondaries: 8 }
+    return { ok: true, maxSecondaries: workerManager.maxSecondaries }
+  })
+
+  ipcMain.handle('worker:dispose', async (_event, sessionPath: string) => {
+    const worker = workerManager?.get(sessionPath)
+    if (!worker) return { ok: true }
+    if (worker.role === 'primary') return { ok: false, error: 'Cannot dispose primary worker' }
+    try {
+      await workerManager!.disposeSecondary(sessionPath)
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -216,7 +291,7 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('provider:test', async (_event, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => {
+  ipcMain.handle('provider:test', async (_event, _sessionPath: string | null, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => {
     try {
       const providerBaseUrls: Record<string, string> = {
         anthropic: 'https://api.anthropic.com',
@@ -263,10 +338,10 @@ function registerIpcHandlers(): void {
           apiKey = process.env[envKey]!
         }
       }
-      if (!apiKey && piBridge?.isConnected) {
+      if (!apiKey && workerManager?.getPrimary()?.bridge.isConnected) {
         try {
           const authData = await Promise.race([
-            piBridge.sendRpcCommand({ type: 'get_provider_auth_status' }),
+            workerManager.getPrimary()!.bridge.sendRpcCommand({ type: 'get_provider_auth_status' }),
             new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
           ]) as Record<string, unknown> | null
           if (authData) {
@@ -274,7 +349,7 @@ function registerIpcHandlers(): void {
             if (authStatus?.[provider]?.configured) {
               try {
                 const keyData = await Promise.race([
-                  piBridge.sendRpcCommand({ type: 'get_api_key', provider }),
+                  workerManager.getPrimary()!.bridge.sendRpcCommand({ type: 'get_api_key', provider }),
                   new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
                 ]) as Record<string, unknown> | null
                 if (keyData && typeof keyData.apiKey === 'string') apiKey = keyData.apiKey
@@ -362,23 +437,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle('app:getProjectPath', () => process.cwd())
 
   ipcMain.handle('pi:start', async () => {
-    if (!piBridge) {
+    if (!workerManager) {
       let mainSession = sessionService.findMainSession(process.cwd())
       if (mainSession && !mainSession.name) {
         sessionService.nameSession(mainSession.filePath, 'main')
         mainSession = { ...mainSession, name: 'main' }
       }
-      initPiBridge(mainSession?.filePath)
+      initWorkerManager(mainSession?.filePath)
     }
     try {
-      await piBridge!.start(process.cwd(), initialSessionPath)
+      await workerManager!.initPrimary(process.cwd(), initialSessionPath)
       const mainSession = sessionService.findMainSession(process.cwd())
       if (!mainSession || !mainSession.name) {
         try {
-          await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
+          await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'set_session_name', name: 'main' })
         } catch {}
         try {
-          await piBridge!.sendRpcCommand({ type: 'flush_session' })
+          await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'flush_session' })
         } catch {}
       }
       return { ok: true }
@@ -399,17 +474,17 @@ function registerIpcHandlers(): void {
       const newCwd = result.filePaths[0]
       process.chdir(newCwd)
       try {
-        await piBridge?.stop()
+        await workerManager?.disposeAll()
       } catch {}
-      piBridge = null
+      workerManager = null
       let mainSession = sessionService.findMainSession(newCwd)
       if (mainSession && !mainSession.name) {
         sessionService.nameSession(mainSession.filePath, 'main')
         mainSession = { ...mainSession, name: 'main' }
       }
-      initPiBridge(mainSession?.filePath)
+      initWorkerManager(mainSession?.filePath)
       try {
-        await piBridge!.start(newCwd, initialSessionPath)
+        await workerManager!.initPrimary(newCwd, initialSessionPath)
         return { ok: true }
       } catch (err: unknown) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -421,7 +496,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('pi:stop', async () => {
     try {
-      await piBridge?.stop()
+      await workerManager?.disposeAll()
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -431,17 +506,22 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:listSessions', async () => {
     let currentPath: string | undefined
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
+      const primary = workerManager?.getPrimary()
+      if (primary?.bridge.isConnected) {
+        const data = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
+      }
     } catch {
       currentPath = undefined
     }
     return sessionService.listSessions(currentPath)
   })
 
-  ipcMain.handle('session:getForkMessages', async () => {
+  ipcMain.handle('session:getForkMessages', async (_event, sessionPath: string | null) => {
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_fork_messages' })) as {
+      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      if (!worker?.bridge.isConnected) return []
+      const data = (await worker.bridge.sendRpcCommand({ type: 'get_fork_messages' })) as {
         messages?: ForkableMessage[]
       }
       return data.messages ?? []
@@ -450,22 +530,27 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:forkAtEntry', async (_event, entryId: string, name?: string) => {
+  ipcMain.handle('session:forkAtEntry', async (_event, sessionPath: string | null, entryId: string, name?: string) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) {
+      return { success: false, error: 'Worker not connected' }
+    }
+
     let parentPath: string | null = null
     try {
-      const preState = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const preState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
       parentPath = typeof preState.sessionFile === 'string' ? preState.sessionFile : null
     } catch {}
 
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
+      const data = (await worker.bridge.sendRpcCommand({ type: 'fork', entryId })) as Record<string, unknown>
 
       if (name) {
         try {
-          await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
+          await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
         } catch {}
         try {
-          await piBridge!.sendRpcCommand({ type: 'flush_session' })
+          await worker.bridge.sendRpcCommand({ type: 'flush_session' })
         } catch {}
       }
 
@@ -480,38 +565,38 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:switchSession', async (_event, sessionPath: string) => {
+    const primary = workerManager?.getPrimary()
+    if (!primary?.bridge.isConnected) {
+      return { success: false, error: 'Pi not connected' }
+    }
     try {
-      await piBridge!.sendRpcCommand({ type: 'switch_session', sessionPath })
+      await primary.bridge.sendRpcCommand({ type: 'switch_session', sessionPath })
       return { success: true }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
-  ipcMain.handle('session:newSession', async (_event, name: string, parentSessionPath?: string) => {
+  ipcMain.handle('session:newSession', async (_event, sessionPath: string | null, name: string, parentSessionPath?: string) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) {
+      return { success: false, error: 'Worker not connected' }
+    }
     try {
-      // 1. Tell Pi to create a new session (with parentSession in header)
       const command: Record<string, unknown> = { type: 'new_session' }
       if (parentSessionPath) {
         command.parentSession = parentSessionPath
       }
-      await piBridge!.sendRpcCommand(command)
+      await worker.bridge.sendRpcCommand(command)
 
-      // 2. Set the session name via Pi RPC (adds session_info entry in memory)
       if (name) {
         try {
-          await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
+          await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
         } catch {}
       }
 
-      // 3. Force-flush the session file to disk.
-      //    Pi defers file creation until the first assistant message,
-      //    but we need the file now so the sidebar displays correctly.
-      //    The flush command also sets Pi's internal 'flushed' flag so
-      //    subsequent _persist calls use appendFileSync instead of
-      //    openSync('wx') which would fail on an existing file.
       try {
-        await piBridge!.sendRpcCommand({ type: 'flush_session' })
+        await worker.bridge.sendRpcCommand({ type: 'flush_session' })
       } catch {}
 
       return { success: true }
@@ -520,25 +605,30 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:renameSession', async (_event, name: string) => {
-    try {
-      await piBridge!.sendRpcCommand({ type: 'set_session_name', name })
-    } catch {}
+  ipcMain.handle('session:renameSession', async (_event, sessionPath: string | null, name: string) => {
+    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    if (worker?.bridge.isConnected) {
+      try {
+        await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
+      } catch {}
 
-    try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const sessionPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
-      if (sessionPath) {
-        sessionService.nameSession(sessionPath, name)
-      }
-    } catch {}
+      try {
+        const data = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const currentPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
+        if (currentPath) {
+          sessionService.nameSession(currentPath, name)
+        }
+      } catch {}
+    }
 
     return { success: true }
   })
 
   ipcMain.handle('session:getCurrentSession', async () => {
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const primary = workerManager?.getPrimary()
+      if (!primary?.bridge.isConnected) return null
+      const data = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
       const sessionPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
       if (!sessionPath) return null
 
@@ -556,17 +646,22 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:refreshSessions', async () => {
     let currentPath: string | undefined
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
+      const primary = workerManager?.getPrimary()
+      if (primary?.bridge.isConnected) {
+        const data = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        if (typeof data.sessionFile === 'string') currentPath = data.sessionFile
+      }
     } catch {
       currentPath = undefined
     }
     return sessionService.listSessions(currentPath)
   })
 
-  ipcMain.handle('session:getMessages', async () => {
+  ipcMain.handle('session:getMessages', async (_event, sessionPath: string | null) => {
     try {
-      const data = (await piBridge!.sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
+      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      if (!worker?.bridge.isConnected) return []
+      const data = (await worker.bridge.sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
       return data.messages ?? []
     } catch {
       return []
@@ -574,24 +669,33 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:deleteSession', async (_event, sessionPath: string) => {
-    try {
-      const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-      const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
+    const existing = workerManager?.get(sessionPath)
+    if (existing && existing.role === 'secondary') {
+      try {
+        await workerManager!.disposeSecondary(sessionPath)
+      } catch {}
+    }
 
-      if (currentPath === sessionPath) {
-        // Deleting the active session: create a new session first, then delete the old one
-        await piBridge!.sendRpcCommand({ type: 'new_session' })
-        try {
-          await piBridge!.sendRpcCommand({ type: 'set_session_name', name: 'main' })
-        } catch {}
-        try {
-          await piBridge!.sendRpcCommand({ type: 'flush_session' })
-        } catch {}
-        sessionService.deleteSession(sessionPath)
-        return { success: true }
+    const primary = workerManager?.getPrimary()
+    if (primary?.bridge.isConnected) {
+      try {
+        const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
+
+        if (currentPath === sessionPath) {
+          await primary.bridge.sendRpcCommand({ type: 'new_session' })
+          try {
+            await primary.bridge.sendRpcCommand({ type: 'set_session_name', name: 'main' })
+          } catch {}
+          try {
+            await primary.bridge.sendRpcCommand({ type: 'flush_session' })
+          } catch {}
+          sessionService.deleteSession(sessionPath)
+          return { success: true }
+        }
+      } catch {
+        // Pi disconnected — allow delete anyway
       }
-    } catch {
-      // Pi disconnected — allow delete anyway
     }
 
     const result = sessionService.deleteSession(sessionPath)
@@ -617,9 +721,14 @@ function registerIpcHandlers(): void {
     return sessionService.parseSessionMessages(sessionPath)
   })
 
-  ipcMain.handle('session:clearSession', async () => {
+  ipcMain.handle('session:clearSession', async (_event, sessionPath: string | null) => {
     try {
-      const stateData = (await piBridge!.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      if (!worker?.bridge.isConnected) {
+        return { success: false, error: 'Worker not connected' }
+      }
+
+      const stateData = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
       const oldPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
       const sessionName = typeof stateData.sessionName === 'string' ? stateData.sessionName : null
 
@@ -627,15 +736,15 @@ function registerIpcHandlers(): void {
         return { success: false, error: 'No active session to clear' }
       }
 
-      await piBridge!.sendRpcCommand({ type: 'new_session' })
+      await worker.bridge.sendRpcCommand({ type: 'new_session' })
 
       const newName = sessionName ?? 'main'
       try {
-        await piBridge!.sendRpcCommand({ type: 'set_session_name', name: newName })
+        await worker.bridge.sendRpcCommand({ type: 'set_session_name', name: newName })
       } catch {}
 
       try {
-        await piBridge!.sendRpcCommand({ type: 'flush_session' })
+        await worker.bridge.sendRpcCommand({ type: 'flush_session' })
       } catch {}
 
       sessionService.deleteSession(oldPath)
@@ -1335,7 +1444,7 @@ app.whenReady().then(() => {
     mainSession = { ...mainSession, name: 'main' }
   }
 
-  initPiBridge(mainSession?.filePath)
+  initWorkerManager(mainSession?.filePath)
   registerIpcHandlers()
   createWindow()
 
@@ -1353,9 +1462,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  if (piBridge?.isConnected) {
+  const primary = workerManager?.getPrimary()
+  if (primary?.bridge.isConnected) {
     try {
-      const stateData = piBridge.sendRpcCommand({ type: 'get_state' }) as Promise<Record<string, unknown>>
+      const stateData = primary.bridge.sendRpcCommand({ type: 'get_state' }) as Promise<Record<string, unknown>>
       stateData.then((data) => {
         if (typeof data.sessionFile === 'string') {
           sessionService.saveLastSession(process.cwd(), data.sessionFile)
@@ -1363,7 +1473,7 @@ app.on('before-quit', () => {
       }).catch(() => {})
     } catch {}
   }
-  piBridge?.stop().catch((err: Error) => {
-    console.error('[PiSDKBridge] Error during shutdown:', err.message)
+  workerManager?.disposeAll().catch((err: Error) => {
+    console.error('[WorkerManager] Error during shutdown:', err.message)
   })
 })

@@ -12,31 +12,36 @@ import type {
 } from '../types/pi-events'
 import type { ForkPoint, PiModelInfo } from '../types/session'
 import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, type TokenUsage } from '../utils/convert-messages'
+import type { SessionCache } from './useSessionCache'
 
 export interface UsePiRpcOptions {
-  onMessagesUpdate: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void
-  onTokenUsageUpdate: (updater: (prev: TokenUsage) => TokenUsage) => void
-  onStreamingChange: (isStreaming: boolean, streamingMessageId: string | null) => void
-  onForkPointsUpdate: (forkPoints: ForkPoint[]) => void
-  piConnectedSessionPath: string | null
+  onSessionMessagesUpdate: (sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => void
+  onSessionTokenUsageUpdate: (sessionPath: string, updater: (prev: TokenUsage) => TokenUsage) => void
+  onSessionStreamingChange: (sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => void
+  onSessionForkPointsUpdate: (sessionPath: string, forkPoints: ForkPoint[]) => void
+  onSessionModelChange: (sessionPath: string, model: PiModelInfo | null) => void
+  onWorkerStatusChange: (sessionPath: string, status: string) => void
+  displayedSessionPath: string | null
+  getCache: (sessionPath: string) => SessionCache | undefined
+  updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
 }
 
 interface UsePiRpcReturn {
   isConnected: boolean
   currentModel: PiModelInfo | null
   thinkingLevel: string | null
-  sendPrompt: (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => void
-  abort: () => Promise<void>
+  sendPrompt: (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => void
+  abort: (sessionPath: string | null) => Promise<void>
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
-  respondToUiRequest: (requestId: string, response: Record<string, unknown>) => void
-  clearMessages: () => void
-  loadHistory: () => Promise<void>
+  respondToUiRequest: (sessionPath: string | null, requestId: string, response: Record<string, unknown>) => void
+  clearMessages: (sessionPath: string | null) => void
+  loadHistory: (sessionPath: string | null) => Promise<void>
   loadForkPoints: (sessionPath: string) => Promise<void>
   onAgentEnd: (() => void) | null
   setOnAgentEnd: (cb: (() => void) | null) => void
-  getAvailableModels: () => Promise<PiModelInfo[]>
-  setModel: (modelId: string, provider?: string) => Promise<boolean>
-  cycleModel: (direction?: 'forward' | 'backward') => Promise<boolean>
+  getAvailableModels: (sessionPath: string | null) => Promise<PiModelInfo[]>
+  setModel: (sessionPath: string | null, modelId: string, provider?: string) => Promise<boolean>
+  cycleModel: (sessionPath: string | null, direction?: 'forward' | 'backward') => Promise<boolean>
   getProviderAuthStatus: () => Promise<Record<string, { configured: boolean; source?: string }>>
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
@@ -54,7 +59,11 @@ function inferContextWindow(model: string): number {
 }
 
 export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
-  const { onMessagesUpdate, onTokenUsageUpdate, onStreamingChange, onForkPointsUpdate, piConnectedSessionPath } = options
+  const {
+    onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange,
+    onSessionForkPointsUpdate, onSessionModelChange, onWorkerStatusChange,
+    displayedSessionPath, getCache, updateCache,
+  } = options
 
   const [isConnected, setIsConnected] = useState(false)
   const [currentModel, setCurrentModel] = useState<PiModelInfo | null>(null)
@@ -62,78 +71,105 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
 
   const isStreamingRef = useRef(false)
-  const currentAssistantId = useRef<string | null>(null)
-  const currentContentBlocks = useRef<Map<number, ContentBlock>>(new Map())
-  const toolCallArgsBuffer = useRef<Map<number, string>>(new Map())
-  const pendingToolCallArgs = useRef<Map<string, Record<string, unknown>>>(new Map())
-  const countedResponseIds = useRef<Set<string>>(new Set())
+
+  const sessionIdToPathMap = useRef<Map<string, string>>(new Map())
+
+  const resolveSessionPath = useCallback((event: AgentSessionEvent): string | null => {
+    const obj = event as Record<string, unknown>
+    const sessionPath = obj.sessionPath as string | undefined
+    if (sessionPath) return sessionPath
+    const sessionId = obj.sessionId as string | undefined
+    if (sessionId) {
+      const mapped = sessionIdToPathMap.current.get(sessionId)
+      if (mapped) return mapped
+    }
+    return null
+  }, [])
 
   const updateContentBlock = useCallback(
-    (contentIndex: number, updater: (block: ContentBlock) => ContentBlock) => {
-      const existing = currentContentBlocks.current.get(contentIndex)
+    (sessionPath: string, contentIndex: number, updater: (block: ContentBlock) => ContentBlock) => {
+      const cache = getCache(sessionPath)
+      if (!cache) return
+      const existing = cache.currentContentBlocks.get(contentIndex)
       if (existing) {
-        currentContentBlocks.current.set(contentIndex, updater(existing))
+        cache.currentContentBlocks.set(contentIndex, updater(existing))
       }
     },
-    [],
+    [getCache],
   )
 
-  const rafIdRef = useRef<number | null>(null)
-  const syncContentBlocksToMessage = useCallback(() => {
-    if (!currentAssistantId.current) return
-    if (rafIdRef.current !== null) return
-    rafIdRef.current = requestAnimationFrame(() => {
-      rafIdRef.current = null
-      if (!currentAssistantId.current) return
-      const blocks = Array.from(currentContentBlocks.current.values())
-      const assistantId = currentAssistantId.current
-      onMessagesUpdate((prev) =>
+  const rafIdMap = useRef<Map<string, number>>(new Map())
+
+  const syncContentBlocksToMessage = useCallback((sessionPath: string) => {
+    const cache = getCache(sessionPath)
+    if (!cache || !cache.currentAssistantId) return
+    if (rafIdMap.current.has(sessionPath)) return
+    rafIdMap.current.set(sessionPath, requestAnimationFrame(() => {
+      rafIdMap.current.delete(sessionPath)
+      const c = getCache(sessionPath)
+      if (!c || !c.currentAssistantId) return
+      const blocks = Array.from(c.currentContentBlocks.values())
+      const assistantId = c.currentAssistantId
+      onSessionMessagesUpdate(sessionPath, (prev) =>
         prev.map((msg) => {
           if (msg.id !== assistantId) return msg
           return { ...msg, blocks: [...blocks] }
         }),
       )
-    })
-  }, [onMessagesUpdate])
+    }))
+  }, [getCache, onSessionMessagesUpdate])
 
-  const flushSync = useCallback(() => {
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current)
-      rafIdRef.current = null
+  const flushSync = useCallback((sessionPath: string) => {
+    const pending = rafIdMap.current.get(sessionPath)
+    if (pending !== undefined) {
+      cancelAnimationFrame(pending)
+      rafIdMap.current.delete(sessionPath)
     }
-    if (!currentAssistantId.current) return
-    const blocks = Array.from(currentContentBlocks.current.values())
-    const assistantId = currentAssistantId.current
-    onMessagesUpdate((prev) =>
+    const cache = getCache(sessionPath)
+    if (!cache || !cache.currentAssistantId) return
+    const blocks = Array.from(cache.currentContentBlocks.values())
+    const assistantId = cache.currentAssistantId
+    onSessionMessagesUpdate(sessionPath, (prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantId) return msg
         return { ...msg, blocks: [...blocks] }
       }),
     )
-  }, [onMessagesUpdate])
+  }, [getCache, onSessionMessagesUpdate])
 
-  const finalizeCurrentAssistant = useCallback(() => {
-    if (!currentAssistantId.current) return
-    flushSync()
+  const finalizeCurrentAssistant = useCallback((sessionPath: string) => {
+    flushSync(sessionPath)
   }, [flushSync])
 
   const handleEvent = useCallback(
     (event: AgentSessionEvent) => {
-      switch (event.type) {
-        case 'agent_start':
-          isStreamingRef.current = true
-          onStreamingChange(true, currentAssistantId.current)
-          break
+      const sessionPath = resolveSessionPath(event)
+      if (!sessionPath) return
 
-        case 'agent_end':
+      switch (event.type) {
+        case 'agent_start': {
+          isStreamingRef.current = true
+          const cache = getCache(sessionPath)
+          onSessionStreamingChange(sessionPath, true, cache?.currentAssistantId ?? null)
+          break
+        }
+
+        case 'agent_end': {
           isStreamingRef.current = false
-          onStreamingChange(false, null)
-          flushSync()
-          currentAssistantId.current = null
-          currentContentBlocks.current.clear()
-          toolCallArgsBuffer.current.clear()
+          onSessionStreamingChange(sessionPath, false, null)
+          flushSync(sessionPath)
+          updateCache(sessionPath, (cache) => ({
+            ...cache,
+            currentAssistantId: null,
+          }))
+          const c = getCache(sessionPath)
+          if (c) {
+            c.currentContentBlocks.clear()
+            c.toolCallArgsBuffer.clear()
+          }
           onAgentEndRef.current?.()
           break
+        }
 
         case 'message_start': {
           const msg = event.message
@@ -153,13 +189,19 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               blocks: splitUserContentIntoBlocks(userContent),
               timestamp: userMsg.timestamp,
             }
-            onMessagesUpdate((prev) => [...prev, userChatMsg])
+            onSessionMessagesUpdate(sessionPath, (prev) => [...prev, userChatMsg])
           } else if (msg.role === 'assistant') {
             const assistantMsg = msg as PiAssistantMessage
             const assistantId = crypto.randomUUID()
-            currentAssistantId.current = assistantId
-            currentContentBlocks.current.clear()
-            toolCallArgsBuffer.current.clear()
+            updateCache(sessionPath, (cache) => ({
+              ...cache,
+              currentAssistantId: assistantId,
+            }))
+            const c = getCache(sessionPath)
+            if (c) {
+              c.currentContentBlocks.clear()
+              c.toolCallArgsBuffer.clear()
+            }
 
             const chatMsg: ChatMessage = {
               id: assistantId,
@@ -167,9 +209,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               blocks: [],
               timestamp: assistantMsg.timestamp,
             }
-            onMessagesUpdate((prev) => [...prev, chatMsg])
+            onSessionMessagesUpdate(sessionPath, (prev) => [...prev, chatMsg])
             if (isStreamingRef.current) {
-              onStreamingChange(true, assistantId)
+              onSessionStreamingChange(sessionPath, true, assistantId)
             }
           }
           break
@@ -178,16 +220,16 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
         case 'message_update': {
           const updateEvent = event as MessageUpdateEvent
           const ame = updateEvent.assistantMessageEvent
-
-          if (!currentAssistantId.current) break
+          const cache = getCache(sessionPath)
+          if (!cache?.currentAssistantId) break
 
           switch (ame.type) {
             case 'text_start':
-              currentContentBlocks.current.set(ame.contentIndex, { type: 'text', content: '' })
+              cache.currentContentBlocks.set(ame.contentIndex, { type: 'text', content: '' })
               break
 
             case 'text_delta':
-              updateContentBlock(ame.contentIndex, (block) => {
+              updateContentBlock(sessionPath, ame.contentIndex, (block) => {
                 if (block.type === 'text') {
                   return { ...block, content: block.content + ame.delta }
                 }
@@ -196,7 +238,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               break
 
             case 'text_end':
-              updateContentBlock(ame.contentIndex, (block) => {
+              updateContentBlock(sessionPath, ame.contentIndex, (block) => {
                 if (block.type === 'text') {
                   return { ...block, content: ame.content }
                 }
@@ -205,11 +247,11 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               break
 
             case 'thinking_start':
-              currentContentBlocks.current.set(ame.contentIndex, { type: 'text', content: '', subtype: 'thinking' })
+              cache.currentContentBlocks.set(ame.contentIndex, { type: 'text', content: '', subtype: 'thinking' })
               break
 
             case 'thinking_delta':
-              updateContentBlock(ame.contentIndex, (block) => {
+              updateContentBlock(sessionPath, ame.contentIndex, (block) => {
                 if (block.type === 'text') {
                   return { ...block, content: block.content + ame.delta, subtype: block.subtype }
                 }
@@ -218,7 +260,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               break
 
             case 'thinking_end':
-              updateContentBlock(ame.contentIndex, (block) => {
+              updateContentBlock(sessionPath, ame.contentIndex, (block) => {
                 if (block.type === 'text') {
                   return { ...block, content: ame.content, subtype: block.subtype }
                 }
@@ -227,46 +269,46 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               break
 
             case 'toolcall_start':
-              currentContentBlocks.current.set(ame.contentIndex, {
+              cache.currentContentBlocks.set(ame.contentIndex, {
                 type: 'tool_call',
                 toolName: '',
                 args: {},
                 status: 'running',
               })
-              toolCallArgsBuffer.current.set(ame.contentIndex, '')
+              cache.toolCallArgsBuffer.set(ame.contentIndex, '')
               break
 
             case 'toolcall_delta': {
-              const existing = toolCallArgsBuffer.current.get(ame.contentIndex) ?? ''
-              toolCallArgsBuffer.current.set(ame.contentIndex, existing + ame.delta)
+              const existing = cache.toolCallArgsBuffer.get(ame.contentIndex) ?? ''
+              cache.toolCallArgsBuffer.set(ame.contentIndex, existing + ame.delta)
               break
             }
 
             case 'toolcall_end': {
-              const argsStr = toolCallArgsBuffer.current.get(ame.contentIndex) ?? '{}'
+              const argsStr = cache.toolCallArgsBuffer.get(ame.contentIndex) ?? '{}'
               let parsedArgs: Record<string, unknown>
               try {
                 parsedArgs = JSON.parse(argsStr)
               } catch {
                 parsedArgs = { _raw: argsStr }
               }
-              currentContentBlocks.current.set(ame.contentIndex, {
+              cache.currentContentBlocks.set(ame.contentIndex, {
                 type: 'tool_call',
                 toolName: ame.toolCall.name,
                 args: parsedArgs,
                 status: 'running',
               })
-              pendingToolCallArgs.current.set(ame.toolCall.id, parsedArgs)
-              toolCallArgsBuffer.current.delete(ame.contentIndex)
-              flushSync()
+              cache.pendingToolCallArgs.set(ame.toolCall.id, parsedArgs)
+              cache.toolCallArgsBuffer.delete(ame.contentIndex)
+              flushSync(sessionPath)
               break
             }
 
             case 'done': {
               const msg = ame.message
-              if (msg.usage && msg.responseId && !countedResponseIds.current.has(msg.responseId)) {
-                countedResponseIds.current.add(msg.responseId)
-                onTokenUsageUpdate((prev) => ({
+              if (msg.usage && msg.responseId && !cache.countedResponseIds.has(msg.responseId)) {
+                cache.countedResponseIds.add(msg.responseId)
+                onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                   inputTokens: prev.inputTokens + msg.usage.input,
                   outputTokens: prev.outputTokens + msg.usage.output,
                   cacheReadTokens: prev.cacheReadTokens + msg.usage.cacheRead,
@@ -276,7 +318,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                   contextWindowSize: inferContextWindow(msg.responseModel),
                 }))
               } else if (msg.usage) {
-                onTokenUsageUpdate((prev) => ({
+                onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                   ...prev,
                   contextWindowSize: inferContextWindow(msg.responseModel),
                 }))
@@ -288,7 +330,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           }
 
           if (ame.type !== 'toolcall_end') {
-            syncContentBlocksToMessage()
+            syncContentBlocksToMessage(sessionPath)
           }
           break
         }
@@ -297,9 +339,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           const msg = event.message
           if (msg.role === 'assistant') {
             const assistantMsg = msg as PiAssistantMessage
-            if (assistantMsg.usage && assistantMsg.responseId && !countedResponseIds.current.has(assistantMsg.responseId)) {
-              countedResponseIds.current.add(assistantMsg.responseId)
-              onTokenUsageUpdate((prev) => ({
+            const cache = getCache(sessionPath)
+            if (assistantMsg.usage && assistantMsg.responseId && cache && !cache.countedResponseIds.has(assistantMsg.responseId)) {
+              cache.countedResponseIds.add(assistantMsg.responseId)
+              onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                 inputTokens: prev.inputTokens + assistantMsg.usage.input,
                 outputTokens: prev.outputTokens + assistantMsg.usage.output,
                 cacheReadTokens: prev.cacheReadTokens + assistantMsg.usage.cacheRead,
@@ -309,7 +352,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                 contextWindowSize: inferContextWindow(assistantMsg.responseModel),
               }))
             } else if (assistantMsg.usage) {
-              onTokenUsageUpdate((prev) => ({
+              onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                 ...prev,
                 contextWindowSize: inferContextWindow(assistantMsg.responseModel),
               }))
@@ -318,10 +361,13 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
         }
 
-        case 'tool_execution_start':
-          onMessagesUpdate((prev) =>
+        case 'tool_execution_start': {
+          const cache = getCache(sessionPath)
+          const currentAssistantId = cache?.currentAssistantId
+          if (!currentAssistantId) break
+          onSessionMessagesUpdate(sessionPath, (prev) =>
             prev.map((msg) => {
-              if (msg.id !== currentAssistantId.current) return msg
+              if (msg.id !== currentAssistantId) return msg
               return {
                 ...msg,
                 blocks: msg.blocks.map((block) => {
@@ -338,11 +384,15 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
             }),
           )
           break
+        }
 
         case 'tool_execution_end': {
           const toolEvent = event as ToolExecutionEndEvent
-          const toolArgs = pendingToolCallArgs.current.get(toolEvent.toolCallId)
-          pendingToolCallArgs.current.delete(toolEvent.toolCallId)
+          const cache = getCache(sessionPath)
+          const currentAssistantId = cache?.currentAssistantId
+          if (!currentAssistantId) break
+          const toolArgs = cache?.pendingToolCallArgs.get(toolEvent.toolCallId)
+          cache?.pendingToolCallArgs.delete(toolEvent.toolCallId)
 
           const resultBlocks: ContentBlock[] = []
 
@@ -379,9 +429,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
             ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks }
             : null
 
-          onMessagesUpdate((prev) =>
+          onSessionMessagesUpdate(sessionPath, (prev) =>
             prev.map((msg) => {
-              if (msg.id !== currentAssistantId.current) return msg
+              if (msg.id !== currentAssistantId) return msg
               const updatedBlocks = [] as ContentBlock[]
               for (const block of msg.blocks) {
                 if (block.type === 'tool_call' && block.status === 'running') {
@@ -403,11 +453,20 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           setThinkingLevel(event.level)
           break
 
+        case 'connected': {
+          const sessionId = (event as Record<string, unknown>).sessionId as string | undefined
+          const sessionFile = (event as Record<string, unknown>).sessionFile as string | undefined
+          if (sessionId && sessionFile) {
+            sessionIdToPathMap.current.set(sessionId, sessionFile)
+          }
+          break
+        }
+
         default:
           break
       }
     },
-    [updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, onMessagesUpdate, onTokenUsageUpdate, onStreamingChange],
+    [resolveSessionPath, getCache, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange],
   )
 
   useEffect(() => {
@@ -428,8 +487,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
 
   useEffect(() => {
     if (!isConnected) return
-    type ApiWithModelInfo = typeof window.api & { getModelInfo: () => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string | null }; error?: string }> }
-    ;(window.api as ApiWithModelInfo).getModelInfo().then((result) => {
+    type ApiWithModelInfo = typeof window.api & { getModelInfo: (sessionPath: string | null) => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string | null }; error?: string }> }
+    ;(window.api as ApiWithModelInfo).getModelInfo(null).then((result) => {
       if (result.ok && result.data) {
         setCurrentModel(result.data.model)
         setThinkingLevel(result.data.thinkingLevel)
@@ -458,13 +517,24 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return cleanup
   }, [])
 
-  const respondToUiRequest = useCallback((requestId: string, response: Record<string, unknown>) => {
-    window.api.sendExtensionUIResponse({ type: 'extension_ui_response', id: requestId, ...response })
+  useEffect(() => {
+    type WorkerStatusCallback = (data: { sessionPath: string; role: string; status: string; isStreaming: boolean }) => void
+    const apiWithWorkerStatus = window.api as typeof window.api & { onWorkerStatus?: (callback: WorkerStatusCallback) => (() => void) }
+    if (apiWithWorkerStatus.onWorkerStatus) {
+      const cleanup = apiWithWorkerStatus.onWorkerStatus((data) => {
+        onWorkerStatusChange(data.sessionPath, data.status)
+      })
+      return cleanup
+    }
+  }, [onWorkerStatusChange])
+
+  const respondToUiRequest = useCallback((sessionPath: string | null, requestId: string, response: Record<string, unknown>) => {
+    window.api.sendExtensionUIResponse(sessionPath, { type: 'extension_ui_response', id: requestId, ...response })
     setPendingUiRequests(prev => prev.filter(r => r.id !== requestId))
   }, [])
 
   const sendPrompt = useCallback(
-    (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
+    (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
       const command: Record<string, unknown> = {
         type: 'prompt',
         message: text,
@@ -477,15 +547,14 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           mimeType: img.mimeType,
         }))
       }
-      // omit mentions: Pi SDK injects file content if present (bug)
       void mentions
-      window.api.sendCommand(command)
+      window.api.sendCommand(sessionPath, command)
     },
     [],
   )
 
-  const abort = useCallback((): Promise<void> => {
-    window.api.sendCommand({ type: 'abort' })
+  const abort = useCallback((sessionPath: string | null): Promise<void> => {
+    window.api.sendCommand(sessionPath, { type: 'abort' })
     return new Promise((resolve) => {
       const startTime = Date.now()
       const check = () => {
@@ -499,10 +568,11 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     })
   }, [])
 
-  const clearMessages = useCallback(() => {
-    onMessagesUpdate(() => [])
-    onForkPointsUpdate([])
-    onTokenUsageUpdate(() => ({
+  const clearMessages = useCallback((sessionPath: string | null) => {
+    if (!sessionPath) return
+    onSessionMessagesUpdate(sessionPath, () => [])
+    onSessionForkPointsUpdate(sessionPath, [])
+    onSessionTokenUsageUpdate(sessionPath, () => ({
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
@@ -511,12 +581,18 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       totalCost: 0,
       contextWindowSize: 200000,
     }))
-    currentAssistantId.current = null
-    currentContentBlocks.current.clear()
-    toolCallArgsBuffer.current.clear()
-    pendingToolCallArgs.current.clear()
-    countedResponseIds.current.clear()
-  }, [onMessagesUpdate, onForkPointsUpdate, onTokenUsageUpdate])
+    updateCache(sessionPath, (cache) => ({
+      ...cache,
+      currentAssistantId: null,
+    }))
+    const cache = getCache(sessionPath)
+    if (cache) {
+      cache.currentContentBlocks.clear()
+      cache.toolCallArgsBuffer.clear()
+      cache.pendingToolCallArgs.clear()
+      cache.countedResponseIds.clear()
+    }
+  }, [onSessionMessagesUpdate, onSessionForkPointsUpdate, onSessionTokenUsageUpdate, updateCache, getCache])
 
   const onAgentEndRef = useRef<(() => void) | null>(null)
 
@@ -529,50 +605,54 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     const apiWithFp = window.api as ExtendedApiWithForkPoints
     try {
       const points = await apiWithFp.getForkPoints(sessionPath)
-      onForkPointsUpdate(points)
+      onSessionForkPointsUpdate(sessionPath, points)
     } catch {
-      onForkPointsUpdate([])
+      onSessionForkPointsUpdate(sessionPath, [])
     }
-  }, [onForkPointsUpdate])
+  }, [onSessionForkPointsUpdate])
 
-  const loadHistory = useCallback(async () => {
-    type ExtendedApiWithMessages = typeof window.api & { getMessages: () => Promise<unknown[]> }
+  const loadHistory = useCallback(async (sessionPath: string | null) => {
+    type ExtendedApiWithMessages = typeof window.api & { getMessages: (sp: string | null) => Promise<unknown[]> }
     const api = window.api as ExtendedApiWithMessages
 
     let piMessages: unknown[]
     try {
-      piMessages = await api.getMessages()
+      piMessages = await api.getMessages(sessionPath)
     } catch {
       return
     }
 
+    if (!sessionPath) return
     if (!Array.isArray(piMessages) || piMessages.length === 0) {
-      clearMessages()
+      clearMessages(sessionPath)
       return
     }
 
     const result = convertPiMessagesToChatMessages(piMessages)
 
-    clearMessages()
-    onMessagesUpdate(() => result.messages)
-    for (const rid of result.responseIds) {
-      countedResponseIds.current.add(rid)
+    clearMessages(sessionPath)
+    onSessionMessagesUpdate(sessionPath, () => result.messages)
+    const cache = getCache(sessionPath)
+    if (cache) {
+      for (const rid of result.responseIds) {
+        cache.countedResponseIds.add(rid)
+      }
     }
     if (result.tokenUsage.totalCost > 0 || result.tokenUsage.totalTokens > 0) {
-      onTokenUsageUpdate(() => result.tokenUsage)
+      onSessionTokenUsageUpdate(sessionPath, () => result.tokenUsage)
     }
-  }, [clearMessages, onMessagesUpdate, onTokenUsageUpdate])
+  }, [clearMessages, onSessionMessagesUpdate, onSessionTokenUsageUpdate, getCache])
 
-  const getAvailableModels = useCallback(async (): Promise<PiModelInfo[]> => {
-    type ApiWithModels = typeof window.api & { getAvailableModels: () => Promise<{ ok: boolean; data?: { models: PiModelInfo[] }; error?: string }> }
-    const result = await (window.api as ApiWithModels).getAvailableModels()
+  const getAvailableModels = useCallback(async (sessionPath: string | null): Promise<PiModelInfo[]> => {
+    type ApiWithModels = typeof window.api & { getAvailableModels: (sp: string | null) => Promise<{ ok: boolean; data?: { models: PiModelInfo[] }; error?: string }> }
+    const result = await (window.api as ApiWithModels).getAvailableModels(sessionPath)
     if (result.ok && result.data?.models) return result.data.models
     return []
   }, [])
 
-  const setModel = useCallback(async (modelId: string, provider?: string): Promise<boolean> => {
-    type ApiWithSetModel = typeof window.api & { setModel: (model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
-    const result = await (window.api as ApiWithSetModel).setModel(modelId, provider)
+  const setModel = useCallback(async (sessionPath: string | null, modelId: string, provider?: string): Promise<boolean> => {
+    type ApiWithSetModel = typeof window.api & { setModel: (sp: string | null, model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
+    const result = await (window.api as ApiWithSetModel).setModel(sessionPath, modelId, provider)
     if (result.ok) {
       setCurrentModel(result.data ?? null)
       return true
@@ -580,9 +660,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return false
   }, [])
 
-  const cycleModelFn = useCallback(async (direction?: 'forward' | 'backward'): Promise<boolean> => {
-    type ApiWithCycle = typeof window.api & { cycleModel: (direction?: 'forward' | 'backward') => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string; isScoped: boolean }; error?: string }> }
-    const result = await (window.api as ApiWithCycle).cycleModel(direction)
+  const cycleModelFn = useCallback(async (sessionPath: string | null, direction?: 'forward' | 'backward'): Promise<boolean> => {
+    type ApiWithCycle = typeof window.api & { cycleModel: (sp: string | null, direction?: 'forward' | 'backward') => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string; isScoped: boolean }; error?: string }> }
+    const result = await (window.api as ApiWithCycle).cycleModel(sessionPath, direction)
     if (result.ok && result.data) {
       setCurrentModel(result.data.model)
       setThinkingLevel(result.data.thinkingLevel)
@@ -592,32 +672,32 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   }, [])
 
   const getProviderAuthStatus = useCallback(async (): Promise<Record<string, { configured: boolean; source?: string }>> => {
-    type ApiWithAuthStatus = typeof window.api & { getProviderAuthStatus: () => Promise<{ ok: boolean; data?: Record<string, { configured: boolean; source?: string }>; error?: string }> }
-    const result = await (window.api as ApiWithAuthStatus).getProviderAuthStatus()
+    type ApiWithAuthStatus = typeof window.api & { getProviderAuthStatus: (sp: string | null) => Promise<{ ok: boolean; data?: Record<string, { configured: boolean; source?: string }>; error?: string }> }
+    const result = await (window.api as ApiWithAuthStatus).getProviderAuthStatus(null)
     return result.ok && result.data ? result.data : {}
   }, [])
 
   const setApiKeyFn = useCallback(async (provider: string, apiKey: string): Promise<boolean> => {
-    type ApiWithSetApiKey = typeof window.api & { setApiKey: (provider: string, apiKey: string) => Promise<{ ok: boolean; error?: string }> }
-    const result = await (window.api as ApiWithSetApiKey).setApiKey(provider, apiKey)
+    type ApiWithSetApiKey = typeof window.api & { setApiKey: (sp: string | null, provider: string, apiKey: string) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithSetApiKey).setApiKey(null, provider, apiKey)
     return result.ok
   }, [])
 
   const removeAuthFn = useCallback(async (provider: string): Promise<boolean> => {
-    type ApiWithRemoveAuth = typeof window.api & { removeAuth: (provider: string) => Promise<{ ok: boolean; error?: string }> }
-    const result = await (window.api as ApiWithRemoveAuth).removeAuth(provider)
+    type ApiWithRemoveAuth = typeof window.api & { removeAuth: (sp: string | null, provider: string) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithRemoveAuth).removeAuth(null, provider)
     return result.ok
   }, [])
 
   const registerCustomProviderFn = useCallback(async (provider: string, config: Record<string, unknown>): Promise<boolean> => {
-    type ApiWithRegister = typeof window.api & { registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }> }
-    const result = await (window.api as ApiWithRegister).registerCustomProvider(provider, config)
+    type ApiWithRegister = typeof window.api & { registerCustomProvider: (sp: string | null, provider: string, config: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }> }
+    const result = await (window.api as ApiWithRegister).registerCustomProvider(null, provider, config)
     return result.ok
   }, [])
 
   const testProviderFn = useCallback(async (provider: string, overrides?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string; latencyMs?: number }> => {
-    type ApiWithTest = typeof window.api & { testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }> }
-    const result = await (window.api as ApiWithTest).testProvider(provider, overrides)
+    type ApiWithTest = typeof window.api & { testProvider: (sp: string | null, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }> }
+    const result = await (window.api as ApiWithTest).testProvider(null, provider, overrides)
     return result
   }, [])
 

@@ -25,6 +25,7 @@ export interface QuoteBlock {
   type: 'quote';
   role: 'user' | 'assistant';
   content: string;
+  sourceSessionName?: string;
 }
 
 export interface ImageBlock {

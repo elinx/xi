@@ -5,6 +5,8 @@ import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from '.
 interface SessionSidebarProps {
   sessions: SessionListResult | null
   currentSession: SessionInfo | null
+  displayedSessionPath: string | null
+  workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string, parentSessionPath: string) => void
   onRenameSession: (name: string) => void
@@ -58,6 +60,7 @@ function SessionNode({
   ancestorLines,
   currentSessionPath,
   isOnActivePath,
+  workerStatuses,
   onSwitch,
   onRename,
   onDelete,
@@ -74,6 +77,7 @@ function SessionNode({
   ancestorLines: { hasLine: boolean; highlight: boolean; branchActive: boolean }[]
   currentSessionPath: string | null
   isOnActivePath: boolean
+  workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitch: (path: string) => void
   onRename: (name: string) => void
   onDelete: (path: string) => Promise<boolean>
@@ -177,6 +181,15 @@ function SessionNode({
               {getDisplayName(node.session)}
             </span>
           )}
+          {node.session.isMain ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+          ) : workerStatuses.get(node.session.filePath) === 'connected' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+          ) : workerStatuses.get(node.session.filePath) === 'starting' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+          ) : workerStatuses.get(node.session.filePath) === 'error' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-red-500" />
+          ) : null}
 
           <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatRelativeTime(node.session.createdAt)}
@@ -428,6 +441,7 @@ function SessionNode({
                 ancestorLines={newAncestorLines}
                 currentSessionPath={currentSessionPath}
                 isOnActivePath={childIsActivePath}
+                workerStatuses={workerStatuses}
                 onSwitch={onSwitch}
                 onRename={onRename}
                 onDelete={onDelete}
@@ -451,6 +465,8 @@ function SessionNode({
 function SessionSidebar({
   sessions,
   currentSession,
+  displayedSessionPath,
+  workerStatuses,
   onSwitchSession,
   onNewSession,
   onRenameSession,
@@ -543,8 +559,9 @@ function SessionSidebar({
           <SessionNode
             node={root}
             ancestorLines={[]}
-            currentSessionPath={currentSession?.filePath ?? null}
+            currentSessionPath={displayedSessionPath ?? currentSession?.filePath ?? null}
             isOnActivePath={true}
+            workerStatuses={workerStatuses}
             onSwitch={onSwitchSession}
             onRename={onRenameSession}
             onDelete={onDeleteSession}
