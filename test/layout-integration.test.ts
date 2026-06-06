@@ -16,7 +16,7 @@ const MIME_TYPES: Record<string, string> = {
 const MOCK_INJECT = `<script>
 window.api = new Proxy({}, {
   get(target, prop) {
-    if (prop === 'onEvent' || prop === 'onStateChanged' || prop === 'onResponse' || prop === 'onExtensionUiRequest') return () => () => {};
+    if (prop === 'onEvent' || prop === 'onStateChanged' || prop === 'onResponse' || prop === 'onExtensionUiRequest' || prop === 'onWorkerStatus') return () => () => {};
     if (prop === 'openConfigDir') return () => {};
     return async (...args) => {
       if (prop === 'listSessions' || prop === 'refreshSessions') return { projects: [] };
@@ -31,6 +31,9 @@ window.api = new Proxy({}, {
       if (prop === 'listMcpServers') return { ok: true, data: [] };
       if (prop === 'mcpPing') return { ok: true, connected: false };
       if (prop === 'getProjectPath') return process.cwd?.() ?? '.';
+      if (prop === 'workerEnsureReady') return { ok: true, status: 'connected' };
+      if (prop === 'workerGetStatus') return [];
+      if (prop === 'workerDispose') return { ok: true };
       return { ok: true, success: true, data: {} };
     };
   }
@@ -97,8 +100,8 @@ describe.skipIf(process.env.CI)('Layout integration test', () => {
   })
 
   it('renders the InputBar', async () => {
-    const textarea = await page.$('textarea')
-    expect(textarea).not.toBeNull()
+    const inputBar = await page.$('[contenteditable]')
+    expect(inputBar).not.toBeNull()
   })
 
   it('renders header toggle buttons for left and right panels', async () => {

@@ -179,15 +179,16 @@ function SessionNode({
             <span className={`flex-1 truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
               {getDisplayName(node.session)}
             </span>
-            {(() => {
-              const ws = workerStatuses.get(node.session.filePath)
-              if (node.session.isMain) return <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
-              if (ws === 'connected') return <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
-              if (ws === 'starting') return <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-              if (ws === 'error') return <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-red-500" />
-              return null
-            })()}
           )}
+          {node.session.isMain ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+          ) : workerStatuses.get(node.session.filePath) === 'connected' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+          ) : workerStatuses.get(node.session.filePath) === 'starting' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+          ) : workerStatuses.get(node.session.filePath) === 'error' ? (
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-red-500" />
+          ) : null}
 
           <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatRelativeTime(node.session.createdAt)}
