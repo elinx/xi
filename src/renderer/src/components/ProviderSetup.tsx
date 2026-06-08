@@ -198,12 +198,6 @@ function RightPanel({
                     </svg>
                   </button>
                 </div>
-                {apiKey.trim() && (
-                  <button onClick={handleSetApiKey} disabled={saving}
-                    className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors flex-shrink-0">
-                    {saving ? '...' : isConfigured ? 'Update' : 'Save'}
-                  </button>
-                )}
               </div>
               {PROVIDER_URLS[providerId] && (
                 <a href={PROVIDER_URLS[providerId]} target="_blank" rel="noopener noreferrer"
