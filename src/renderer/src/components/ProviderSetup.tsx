@@ -121,13 +121,9 @@ function RightPanel({
   selectedModelKey,
   switchingModel,
   setApiKey,
-  removeAuth,
   testProvider,
-  getProviderConfig,
-  onSetModel,
   onAuthChange,
   onSelectModel,
-  onEditCustom,
 }: {
   providerId: string
   providerInfo: { name: string; subtitle: string; color: string; configured: boolean; source?: string }
@@ -136,30 +132,19 @@ function RightPanel({
   selectedModelKey: string | null
   switchingModel: boolean
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
-  removeAuth: (provider: string) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
-  getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
-  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
   onSelectModel: (model: ModelInfo) => void
-  onEditCustom: (providerId: string, config: Record<string, unknown>) => void
 }) {
   const [apiKey, setApiKeyInput] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [replacingKey, setReplacingKey] = useState(false)
-  const [replaceKeyValue, setReplaceKeyValue] = useState('')
-  const [replaceSaving, setReplaceSaving] = useState(false)
-  const [removing, setRemoving] = useState(false)
 
   const isConfigured = authStatus[providerId]?.configured ?? false
-  const isPopular = POPULAR_IDS.has(providerId)
 
   useEffect(() => {
     setApiKeyInput('')
     setShowApiKey(false)
-    setReplacingKey(false)
-    setReplaceKeyValue('')
   }, [providerId])
 
   const handleSetApiKey = useCallback(async () => {
@@ -172,24 +157,6 @@ function RightPanel({
       onAuthChange?.()
     }
   }, [providerId, apiKey, setApiKey, onAuthChange])
-
-  const handleReplaceKey = useCallback(async () => {
-    if (!replaceKeyValue.trim()) return
-    setReplaceSaving(true)
-    const ok = await setApiKey(providerId, replaceKeyValue.trim())
-    setReplaceSaving(false)
-    if (ok) {
-      setReplaceKeyValue('')
-      setReplacingKey(false)
-      onAuthChange?.()
-    }
-  }, [providerId, replaceKeyValue, setApiKey, onAuthChange])
-
-  const handleRemove = useCallback(async () => {
-    setRemoving(true)
-    await removeAuth(providerId)
-    setRemoving(false)
-  }, [providerId, removeAuth])
 
   return (
     <div className="flex flex-col h-full">
@@ -209,80 +176,46 @@ function RightPanel({
         <div className="px-4 py-3 space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">API Key</label>
-            {!isConfigured ? (
-              <div>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder="sk-..."
-                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
-                    />
-                    <button
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        {showApiKey
-                          ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          : <><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                {PROVIDER_URLS[providerId] && (
-                  <a href={PROVIDER_URLS[providerId]} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
+            <div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder={isConfigured ? 'sk-••••••••' : 'sk-...'}
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
+                  />
+                  <button
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
-                    Get API key from {providerInfo.name}
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      {showApiKey
+                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        : <><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}
                     </svg>
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  <span>Configured{authStatus[providerId]?.source ? ` (${authStatus[providerId].source})` : ''}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  {isPopular && !replacingKey && (
-                    <button onClick={() => setReplacingKey(true)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">Replace</button>
-                  )}
-                  {!isPopular && (
-                    <button onClick={async () => { const r = await getProviderConfig(providerId); if (r.ok && r.config) onEditCustom(providerId, r.config) }}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">Edit</button>
-                  )}
-                  <button onClick={handleRemove} disabled={removing} className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors disabled:opacity-50">
-                    {removing ? 'Removing...' : 'Remove'}
                   </button>
                 </div>
-                {isPopular && replacingKey && (
-                  <div className="flex gap-2 items-center">
-                    <div className="relative flex-1">
-                      <input type="password" value={replaceKeyValue} onChange={(e) => setReplaceKeyValue(e.target.value)} placeholder="New API key..."
-                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleReplaceKey() }} />
-                    </div>
-                    <button onClick={handleReplaceKey} disabled={!replaceKeyValue.trim() || replaceSaving}
-                      className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
-                      {replaceSaving ? '...' : 'Save'}
-                    </button>
-                    <button onClick={() => { setReplacingKey(false); setReplaceKeyValue('') }}
-                      className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                      Cancel
-                    </button>
-                  </div>
+                {apiKey.trim() && (
+                  <button onClick={handleSetApiKey} disabled={saving}
+                    className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors flex-shrink-0">
+                    {saving ? '...' : isConfigured ? 'Update' : 'Save'}
+                  </button>
                 )}
               </div>
-            )}
+              {PROVIDER_URLS[providerId] && (
+                <a href={PROVIDER_URLS[providerId]} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
+                >
+                  Get API key from {providerInfo.name}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
           </div>
 
           <div>
@@ -328,7 +261,7 @@ function RightPanel({
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Connection</label>
-            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={!isConfigured ? apiKey : replacingKey ? replaceKeyValue : undefined} />
+            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} />
           </div>
 
           <div>
@@ -723,13 +656,9 @@ function ProviderSetup({
             selectedModelKey={selectedModelKey}
             switchingModel={switchingModel}
             setApiKey={setApiKey}
-            removeAuth={handleRemoveAuth}
             testProvider={testProvider}
-            getProviderConfig={getProviderConfig}
-            onSetModel={onSetModel}
             onAuthChange={handleAuthChange}
             onSelectModel={handleSelectModel}
-            onEditCustom={handleEditCustom}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
