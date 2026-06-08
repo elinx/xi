@@ -55,6 +55,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
+  const [showSource, setShowSource] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const loadFile = useCallback(async (path: string) => {
@@ -62,6 +63,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
     setError(null)
     setFileData(null)
     setHighlightedHtml(null)
+    setShowSource(false)
     try {
       const result = await window.api.readFile(path)
       if (result.ok && result.data) {
@@ -173,11 +175,36 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
 
   return (
     <div className="flex flex-col h-full">
+      {isMarkdown && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <span className="text-xs text-gray-500">Markdown</span>
+          <button
+            onClick={() => setShowSource(!showSource)}
+            className="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title={showSource ? 'Switch to preview' : 'View raw source'}
+          >
+            {showSource ? 'Preview' : '</> Source'}
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-auto" ref={containerRef}>
         {isMarkdown ? (
-          <div className="prose prose-sm max-w-none p-4 [&_img]:max-w-full [&_img]:rounded">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{fileData.content}</ReactMarkdown>
-          </div>
+          showSource ? (
+            <pre className="text-xs leading-5 font-mono p-4 whitespace-pre overflow-x-auto">{fileData.content}</pre>
+          ) : (
+            <div className="prose prose-sm max-w-none p-4 [&_img]:max-w-full [&_img]:rounded">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={{ a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => { e.preventDefault(); if (href) window.api.openExternal(href) }}
+              >
+                {children}
+              </a>
+            ) }}>{fileData.content}</ReactMarkdown>
+            </div>
+          )
         ) : highlightedHtml ? (
           <div
             className="shiki-highlight"

@@ -178,6 +178,9 @@ const api = {
     return () => ipcRenderer.removeListener('fs:changed', handler)
   },
 
+  checkGitAvailable: (): Promise<{ available: boolean }> =>
+    ipcRenderer.invoke('git:checkAvailable'),
+
   gitStatus: (): Promise<{
     ok: boolean
     data?: { branch: string; ahead: number; behind: number; files: Array<{ path: string; status: string; staged: boolean }> }
@@ -279,6 +282,9 @@ const api = {
     ipcRenderer.on('terminal:exit', handler)
     return () => ipcRenderer.removeListener('terminal:exit', handler)
   },
+
+  openExternal: (url: string): void =>
+    ipcRenderer.send('app:openExternal', url),
 
   showItemInFolder: (fullPath: string): void =>
     ipcRenderer.send('app:showItemInFolder', fullPath),

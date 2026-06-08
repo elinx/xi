@@ -108,9 +108,21 @@ function BashCopyButton({ command }: { command: string }): React.ReactElement {
   )
 }
 
+const LinkComponent = ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    onClick={(e) => { e.preventDefault(); if (href) window.api.openExternal(href) }}
+  >
+    {children}
+  </a>
+)
+
 const mdComponentsInline = {
   p: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   li: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  a: LinkComponent,
 }
 
 function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void }): React.ReactElement {
@@ -132,7 +144,7 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
     if (segments.length === 1 && segments[0].type === 'text') {
       return (
         <div className="prose prose-sm max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent }}>{block.content}</ReactMarkdown>
         </div>
       )
     }
@@ -151,7 +163,7 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBl
 
   return (
     <div className="prose prose-sm max-w-none">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent }}>{block.content}</ReactMarkdown>
     </div>
   )
 }

@@ -55,8 +55,13 @@ export default function GitPanel({
   const [committing, setCommitting] = useState(false)
   const [staging, setStaging] = useState<string | null>(null)
   const [subTab, setSubTab] = useState<SubTab>('changes')
+  const [gitAvailable, setGitAvailable] = useState<boolean | null>(null)
 
   const [generating, setGenerating] = useState(false)
+
+  useEffect(() => {
+    window.api.checkGitAvailable().then(({ available }) => setGitAvailable(available))
+  }, [])
 
   useEffect(() => {
     if (commitMessageFromAI) {
@@ -183,6 +188,37 @@ export default function GitPanel({
   }
 
   if (error) {
+    const isNotInstalled = gitAvailable === false || error.includes('Git is not installed')
+    const isNotRepo = error.includes('Not a git repository')
+
+    if (isNotInstalled) {
+      return (
+        <div className="p-4 flex flex-col items-center justify-center h-full text-gray-400 text-xs gap-2">
+          <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span className="font-medium text-gray-500">Git is not installed</span>
+          <span className="text-center text-[11px] text-gray-400 leading-relaxed">
+            Install Git from <a href="https://git-scm.com" className="text-blue-500 hover:underline" onClick={(e) => { e.preventDefault(); window.open('https://git-scm.com', '_blank') }}>git-scm.com</a> and restart Xi.
+          </span>
+        </div>
+      )
+    }
+
+    if (isNotRepo) {
+      return (
+        <div className="p-4 flex flex-col items-center justify-center h-full text-gray-400 text-xs gap-2">
+          <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+          </svg>
+          <span className="font-medium text-gray-500">Not a git repository</span>
+          <span className="text-center text-[11px] text-gray-400 leading-relaxed">
+            Initialize a repository with <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600">git init</code> to use Git features.
+          </span>
+        </div>
+      )
+    }
+
     return (
       <div className="p-3 text-xs text-gray-400">
         {error}

@@ -24,11 +24,22 @@ let initialSessionPath: string | undefined
 const projectPath = process.cwd()
 
 let _git: SimpleGit | null = null
+let _gitAvailable: boolean | null = null
 function getGit(): SimpleGit {
   if (!_git) {
     _git = simpleGit(projectPath, { binary: 'git' })
   }
   return _git
+}
+
+async function checkGitAvailable(): Promise<boolean> {
+  if (_gitAvailable !== null) return _gitAvailable
+  return new Promise((resolve) => {
+    execFile('git', ['--version'], (err: Error | null) => {
+      _gitAvailable = !err
+      resolve(_gitAvailable)
+    })
+  })
 }
 
 async function withRetry<T>(fn: (git: SimpleGit) => Promise<T>, retries = 2, delayMs = 200): Promise<T> {
@@ -37,6 +48,9 @@ async function withRetry<T>(fn: (git: SimpleGit) => Promise<T>, retries = 2, del
       return await fn(getGit())
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('ENOENT')) {
+        _gitAvailable = false
+      }
       if (attempt < retries && (msg.includes('EBADF') || msg.includes('ENOENT') || msg.includes('EAGAIN'))) {
         _git = null
         await new Promise(r => setTimeout(r, delayMs * (attempt + 1)))
@@ -73,6 +87,13 @@ function createWindow(): void {
 
   mainWindow.webContents.on('context-menu', (event) => {
     event.preventDefault()
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow?.webContents.getURL()) {
+      event.preventDefault()
+      shell.openExternal(url)
+    }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -452,6 +473,10 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.on('app:openExternal', (_event, url: string) => {
+    shell.openExternal(url)
+  })
+
   ipcMain.on('app:showItemInFolder', (_event, fullPath: string) => {
     shell.showItemInFolder(fullPath)
   })
@@ -481,6 +506,14 @@ function registerIpcHandlers(): void {
         } catch {}
         try {
           await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'flush_session' })
+        } catch {}
+        try {
+          const state = (await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const sp = typeof state.sessionFile === 'string' ? state.sessionFile : null
+          if (sp) {
+            sessionService.nameSession(sp, 'main')
+            sessionService.flushPendingName(sp)
+          }
         } catch {}
       }
       return { ok: true }
@@ -579,6 +612,14 @@ function registerIpcHandlers(): void {
         try {
           await worker.bridge.sendRpcCommand({ type: 'flush_session' })
         } catch {}
+        try {
+          const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+          if (sp) {
+            sessionService.nameSession(sp, name)
+            sessionService.flushPendingName(sp)
+          }
+        } catch {}
       }
 
       if (parentPath) {
@@ -625,6 +666,17 @@ function registerIpcHandlers(): void {
       try {
         await worker.bridge.sendRpcCommand({ type: 'flush_session' })
       } catch {}
+
+      if (name) {
+        try {
+          const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+          if (sp) {
+            sessionService.nameSession(sp, name)
+            sessionService.flushPendingName(sp)
+          }
+        } catch {}
+      }
 
       return { success: true }
     } catch (err: unknown) {
@@ -955,8 +1007,16 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('git:checkAvailable', async () => {
+    return { available: await checkGitAvailable() }
+  })
+
   ipcMain.handle('git:status', async () => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       const isRepo = await withRetry(git => git.checkIsRepo())
       if (!isRepo) return { ok: false, error: 'Not a git repository' }
       const status = await withRetry(git => git.status())
@@ -992,68 +1052,152 @@ function registerIpcHandlers(): void {
         },
       }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:diff', async (_event, filePath: string, staged?: boolean) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       const diff = staged
         ? await withRetry(git => git.diff(['--cached', filePath]))
         : await withRetry(git => git.diff(['--', filePath]))
       return { ok: true, data: diff }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:diffCached', async () => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       const diff = await withRetry(git => git.diff(['--cached']))
       return { ok: true, data: diff }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:stage', async (_event, filePaths: string[]) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       await withRetry(git => git.add(filePaths))
       return { ok: true }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:unstage', async (_event, filePaths: string[]) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       await withRetry(git => git.reset(['HEAD', '--', ...filePaths]))
       return { ok: true }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:commit', async (_event, message: string) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       await withRetry(git => git.commit(message))
       return { ok: true }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:discard', async (_event, filePaths: string[]) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       await withRetry(git => git.checkout(['--', ...filePaths]))
       return { ok: true }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:log', async (_event, options?: { maxCount?: number; skip?: number }) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       const isRepo = await withRetry(git => git.checkIsRepo())
       if (!isRepo) return { ok: false, error: 'Not a git repository' }
       const maxCount = options?.maxCount ?? 50
@@ -1073,12 +1217,24 @@ function registerIpcHandlers(): void {
       }))
       return { ok: true, data: commits }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:commitDetail', async (_event, hash: string) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       // Get commit info + stat using git show
       const formatStr = '%H%n%h%n%s%n%b%n%an%n%ae%n%aI%n%D'
       const raw = await withRetry(git => git.show(['--stat=4096', `--format=${formatStr}`, hash]))
@@ -1190,16 +1346,36 @@ function registerIpcHandlers(): void {
         },
       }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
   ipcMain.handle('git:commitFileDiff', async (_event, hash: string, filePath: string) => {
     try {
+      const gitAvailable = await checkGitAvailable()
+      if (!gitAvailable) {
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
       const diff = await withRetry(git => git.show([hash, '--', filePath]))
       return { ok: true, data: diff }
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      if ((err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') || String(err).includes('ENOENT')) {
+        _gitAvailable = false
+        return { ok: false, error: 'Git is not installed. Please install Git and restart Xi.' }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not a git repository')) {
+        return { ok: false, error: 'Not a git repository' }
+      }
+      return { ok: false, error: msg }
     }
   })
 
@@ -1451,6 +1627,7 @@ app.whenReady().then(() => {
 
   if (mainSession && !mainSession.name) {
     sessionService.nameSession(mainSession.filePath, 'main')
+    sessionService.flushPendingName(mainSession.filePath)
     mainSession = { ...mainSession, name: 'main' }
   }
 
