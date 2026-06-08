@@ -233,15 +233,14 @@ function registerIpcHandlers(): void {
       await primary.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
       try {
         const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-        const configDir = join(homeDir, '.pi', 'agent')
-        if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true })
-        const authPath = join(configDir, 'auth.json')
+        const xiDir = join(homeDir, '.xi')
+        if (!existsSync(xiDir)) mkdirSync(xiDir, { recursive: true })
+        const authPath = join(xiDir, 'auth.json')
         let authData: Record<string, unknown> = {}
         if (existsSync(authPath)) {
           try { authData = JSON.parse(readFileSync(authPath, 'utf-8')) } catch {}
         }
-        if (!authData.providers) authData.providers = {}
-        ;(authData.providers as Record<string, unknown>)[provider] = { ...((authData.providers as Record<string, unknown>)?.[provider] as Record<string, unknown> ?? {}), apiKey }
+        authData[provider] = { type: 'api_key', key: apiKey }
         writeFileSync(authPath, JSON.stringify(authData, null, 2))
       } catch {}
       return { ok: true }
@@ -257,11 +256,11 @@ function registerIpcHandlers(): void {
       await primary.bridge.sendRpcCommand({ type: 'remove_auth', provider })
       try {
         const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-        const authPath = join(homeDir, '.pi', 'agent', 'auth.json')
+        const authPath = join(homeDir, '.xi', 'auth.json')
         if (existsSync(authPath)) {
           const authData = JSON.parse(readFileSync(authPath, 'utf-8'))
-          if (authData.providers?.[provider]) {
-            delete authData.providers[provider]
+          if (authData[provider]) {
+            delete authData[provider]
             writeFileSync(authPath, JSON.stringify(authData, null, 2))
           }
         }
@@ -427,6 +426,16 @@ function registerIpcHandlers(): void {
                 if (keyData && typeof keyData.apiKey === 'string') apiKey = keyData.apiKey
               } catch {}
             }
+          }
+        } catch {}
+      }
+      if (!apiKey) {
+        try {
+          const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? '~'
+          const xiAuthPath = join(homeDir, '.xi', 'auth.json')
+          if (existsSync(xiAuthPath)) {
+            const data = JSON.parse(readFileSync(xiAuthPath, 'utf-8'))
+            if (data[provider]?.key) apiKey = data[provider].key
           }
         } catch {}
       }

@@ -489,10 +489,22 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
 
   const refreshModelInfo = useCallback(() => {
     type ApiWithModelInfo = typeof window.api & { getModelInfo: (sessionPath: string | null) => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string | null }; error?: string }> }
+    type ApiWithModels = typeof window.api & { getAvailableModels: (sp: string | null) => Promise<{ ok: boolean; data?: { models: PiModelInfo[] }; error?: string }> }
     ;(window.api as ApiWithModelInfo).getModelInfo(null).then((result) => {
       if (result.ok && result.data) {
-        setCurrentModel(result.data.model)
-        setThinkingLevel(result.data.thinkingLevel)
+        const model = result.data.model as PiModelInfo | null
+        const thinkingLevel = result.data.thinkingLevel as string | null
+        if (model && (!model.name || model.name === 'unknown')) {
+          ;(window.api as ApiWithModels).getAvailableModels(null).then((modelsResult) => {
+            const data = modelsResult.data as { models?: PiModelInfo[] } | undefined
+            const models: PiModelInfo[] = (modelsResult.ok && data?.models) ? data.models : []
+            const match = models.find((m: PiModelInfo) => m.provider === model.provider && m.id === model.id)
+            setCurrentModel(match ? { ...model, name: match.name } : model)
+          })
+        } else {
+          setCurrentModel(model)
+        }
+        setThinkingLevel(thinkingLevel)
       }
     })
   }, [])
@@ -500,6 +512,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   useEffect(() => {
     if (!isConnected) return
     refreshModelInfo()
+    const timer = setTimeout(() => refreshModelInfo(), 2000)
+    return () => clearTimeout(timer)
   }, [isConnected, refreshModelInfo])
 
   useEffect(() => {
