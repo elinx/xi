@@ -137,7 +137,25 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
             thinkingLevel: session.thinkingLevel,
             messageCount: session.messages.length,
             model: currentModel
-              ? { provider: currentModel.provider, id: currentModel.id, name: currentModel.name }
+              ? (() => {
+                  const registry = session.modelRegistry
+                  const registryModels = registry?.getAll?.() || []
+                  const availableModels = registry?.getAvailable?.() || []
+                  const availableIds = new Set(availableModels.map((m: { provider: string; id: string }) => `${m.provider}/${m.id}`))
+                  const registryModel = registryModels.find(
+                    (m: { provider: string; id: string }) => m.provider === currentModel.provider && m.id === currentModel.id
+                  )
+                  return {
+                    provider: currentModel.provider,
+                    id: currentModel.id,
+                    name: (currentModel.name && currentModel.name !== 'unknown')
+                      ? currentModel.name
+                      : (registryModel?.name || currentModel.id),
+                    hasAuth: availableIds.has(`${currentModel.provider}/${currentModel.id}`),
+                    reasoning: registryModel?.reasoning ?? null,
+                    contextWindow: registryModel?.contextWindow ?? null,
+                  }
+                })()
               : null,
           },
         })

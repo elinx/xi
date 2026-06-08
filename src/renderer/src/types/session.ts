@@ -103,8 +103,8 @@ export interface PiModelInfo {
   id: string
   name: string
   hasAuth: boolean
-  reasoning: boolean
-  contextWindow: number
+  reasoning: boolean | null
+  contextWindow: number | null
 }
 
 /** Result from getAvailableModels IPC call. */

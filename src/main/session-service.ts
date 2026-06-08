@@ -205,14 +205,17 @@ export function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode | nul
   return root
 }
 
+/** Pending session names for files that don't exist on disk yet.
+ *  When nameSession() is called before Pi creates the file, the name
+ *  is stored here. flushPendingName() should be called once the file
+ *  exists (e.g., after flush_session), which writes the session_info
+ *  entry to the now-existing file. */
+const pendingNames = new Map<string, string>()
+
 export function nameSession(sessionPath: string, name: string, _cwd?: string, _parentSessionPath?: string): boolean {
   try {
-    // Only append session_info if the file already exists on disk.
-    // For new sessions, the Pi worker's flush_session command handles
-    // creating the file with the correct header (including parentSession).
-    // Creating the file here would break Pi's lazy-flush mechanism
-    // (Pi uses openSync with 'wx' flag which fails if file exists).
     if (!existsSync(sessionPath)) {
+      pendingNames.set(sessionPath, name)
       return true
     }
 
@@ -221,6 +224,27 @@ export function nameSession(sessionPath: string, name: string, _cwd?: string, _p
       name,
     })
     appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Flush any pending name for the given session path.
+ *  Call this after the session file has been created (e.g., after
+ *  flush_session completes) to persist the queued session_info entry. */
+export function flushPendingName(sessionPath: string): boolean {
+  const name = pendingNames.get(sessionPath)
+  if (name === undefined) return true
+
+  try {
+    if (!existsSync(sessionPath)) return false
+    const entry = JSON.stringify({
+      type: 'session_info',
+      name,
+    })
+    appendFileSync(sessionPath, entry + '\n')
+    pendingNames.delete(sessionPath)
     return true
   } catch {
     return false
