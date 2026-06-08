@@ -47,10 +47,10 @@ export class WorkerManager extends EventEmitter {
     try {
       await bridge.start(cwd, sessionPath)
       state.status = 'connected'
-      this.emit('worker:status', { sessionId, role: 'primary', status: 'connected' })
+      this.emit('worker:status', { sessionId, role: 'primary', status: 'connected', sessionPath: state.sessionPath })
     } catch (err) {
       state.status = 'error'
-      this.emit('worker:status', { sessionId, role: 'primary', status: 'error' })
+      this.emit('worker:status', { sessionId, role: 'primary', status: 'error', sessionPath: state.sessionPath })
       throw err
     }
 
@@ -203,30 +203,34 @@ export class WorkerManager extends EventEmitter {
   }
 
   private setupBridgeEvents(state: WorkerState): void {
-    const { bridge, sessionId, sessionPath } = state
+    const { bridge } = state
 
     bridge.on('event', (data: unknown) => {
       state.lastActivityAt = Date.now()
-      this.emit('event', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath } : data)
+      this.emit('event', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath: state.sessionPath } : data)
     })
 
     bridge.on('response', (data: unknown) => {
       state.lastActivityAt = Date.now()
-      this.emit('response', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath } : data)
+      this.emit('response', typeof data === 'object' && data !== null ? { ...(data as Record<string, unknown>), sessionPath: state.sessionPath } : data)
     })
 
     bridge.on('connected', (data: unknown) => {
       state.status = 'connected'
       state.lastActivityAt = Date.now()
-      this.emit('connected', data)
-      this.emit('worker:status', { sessionId, role: state.role, status: 'connected', sessionPath: state.sessionPath })
+      const sessionFile = typeof data === 'object' && data !== null ? (data as Record<string, unknown>).sessionFile as string | undefined : undefined
+      if (sessionFile && !state.sessionPath) {
+        state.sessionPath = sessionFile
+      }
+      this.emit('connected', { data, role: state.role, sessionPath: state.sessionPath })
+      this.emit('worker:status', { sessionId: state.sessionId, role: state.role, status: 'connected', sessionPath: state.sessionPath })
     })
 
     bridge.on('disconnected', () => {
       if (state.status === 'stopping') return
       state.status = 'error'
-      this.emit('disconnected')
-      this.emit('worker:status', { sessionId, role: state.role, status: 'error', sessionPath: state.sessionPath })
+      this.emit('disconnected', { role: state.role, sessionPath: state.sessionPath })
+      this.emit('worker:status', { sessionId: state.sessionId, role: state.role, status: 'error', sessionPath: state.sessionPath })
 
       if (state.role === 'primary') {
         this.restartPrimary(state).catch((err) => {

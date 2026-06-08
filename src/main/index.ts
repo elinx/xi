@@ -143,12 +143,18 @@ function initWorkerManager(sessionPath?: string): void {
     broadcastToRenderers('pi:response', data)
   })
 
-  workerManager.on('connected', () => {
-    broadcastToRenderers('pi:stateChanged', { connected: true })
+  workerManager.on('connected', (info: unknown) => {
+    const { role } = info as { role: string; sessionPath: string }
+    if (role === 'primary') {
+      broadcastToRenderers('pi:stateChanged', { connected: true })
+    }
   })
 
-  workerManager.on('disconnected', () => {
-    broadcastToRenderers('pi:stateChanged', { connected: false })
+  workerManager.on('disconnected', (info: unknown) => {
+    const { role } = info as { role: string; sessionPath: string }
+    if (role === 'primary') {
+      broadcastToRenderers('pi:stateChanged', { connected: false })
+    }
   })
 
   workerManager.on('error', (err: Error) => {
@@ -312,6 +318,11 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('worker:ensureReady', async (_event, sessionPath: string) => {
+    const primary = workerManager?.getPrimary()
+    if (primary && primary.sessionPath === sessionPath && primary.status === 'connected') {
+      return { ok: true, status: 'connected' }
+    }
+
     const existing = workerManager?.get(sessionPath)
     if (existing && existing.status === 'connected') return { ok: true, status: 'connected' }
     if (existing && existing.status === 'starting') return { ok: true, status: 'starting' }
@@ -676,13 +687,24 @@ function registerIpcHandlers(): void {
         try {
           await worker.bridge.sendRpcCommand({ type: 'flush_session' })
         } catch {}
-        try {
-          const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-          if (sp) {
+      }
+
+      let forkSessionPath: string | null = null
+      try {
+        const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+        if (sp) {
+          forkSessionPath = sp
+          if (name) {
             sessionService.nameSession(sp, name)
             sessionService.flushPendingName(sp)
           }
+        }
+      } catch {}
+
+      if (worker.sessionPath && forkSessionPath !== worker.sessionPath) {
+        try {
+          await worker.bridge.sendRpcCommand({ type: 'switch_session', sessionPath: worker.sessionPath })
         } catch {}
       }
 
@@ -690,7 +712,7 @@ function registerIpcHandlers(): void {
         sessionService.addForkPoint(parentPath, entryId, name ?? '')
       }
 
-      return { success: true, text: typeof data.text === 'string' ? data.text : undefined }
+      return { success: true, text: typeof data.text === 'string' ? data.text : undefined, sessionPath: forkSessionPath }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -731,18 +753,24 @@ function registerIpcHandlers(): void {
         await worker.bridge.sendRpcCommand({ type: 'flush_session' })
       } catch {}
 
-      if (name) {
+      let newSessionPath: string | null = null
+      try {
+        const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+        if (sp) {
+          newSessionPath = sp
+          sessionService.nameSession(sp, name ?? 'session')
+          sessionService.flushPendingName(sp)
+        }
+      } catch {}
+
+      if (worker.sessionPath && newSessionPath && newSessionPath !== worker.sessionPath) {
         try {
-          const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-          if (sp) {
-            sessionService.nameSession(sp, name)
-            sessionService.flushPendingName(sp)
-          }
+          await worker.bridge.sendRpcCommand({ type: 'switch_session', sessionPath: worker.sessionPath })
         } catch {}
       }
 
-      return { success: true }
+      return { success: true, sessionPath: newSessionPath }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -892,7 +920,22 @@ function registerIpcHandlers(): void {
 
       sessionService.deleteSession(oldPath)
 
-      return { success: true }
+      let newSessionPath: string | null = null
+      try {
+        const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
+        if (sp) {
+          newSessionPath = sp
+        }
+      } catch {}
+
+      if (worker.sessionPath) {
+        try {
+          await worker.bridge.sendRpcCommand({ type: 'switch_session', sessionPath: worker.sessionPath })
+        } catch {}
+      }
+
+      return { success: true, sessionPath: newSessionPath }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
