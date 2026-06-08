@@ -265,16 +265,10 @@ function RightPanel({
           </div>
 
           <div>
-            {!isConfigured ? (
-              <button onClick={handleSetApiKey} disabled={!apiKey.trim() || saving}
-                className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            ) : (
-              <div className="w-full rounded-md bg-green-50 dark:bg-green-900/20 py-2 text-sm font-medium text-green-600 dark:text-green-400 text-center">
-                Configured
-              </div>
-            )}
+            <button onClick={handleSetApiKey} disabled={!apiKey.trim() || saving}
+              className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+              {saving ? 'Saving...' : isConfigured ? 'Update' : 'Save'}
+            </button>
           </div>
         </div>
       </div>
