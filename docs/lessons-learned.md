@@ -22,3 +22,12 @@
 Electron 中 Worker Threads 不暴露 `node:internal/webidl`（Node 内部模块），导致 `undici@8.3.0` 的 `markAsUncloneable` 崩溃。`utilityProcess.fork()` 以独立 OS 进程运行，拥有完整 Node.js 环境，是 Electron 推荐方式（VS Code、Insomnia 等均采用）。IPC 用 `process.parentPort` 而非 `parentPort`。
 
 **不要用 `child_process.fork()` + 外部 Node 二进制**：依赖外部 Node 路径，打包后会断裂。`utilityProcess` 使用 Electron 内置 Node。
+
+## Multi-Worker Session 切换 Bug（2026-06-09）
+
+完整复盘见 [multi-worker-session-switching-bug-fix.md](./multi-worker-session-switching-bug-fix.md)
+
+核心教训：
+- Worker 的 `sessionPath` 是身份标识，不能 mutate（否则 Map key-value 失配）
+- 操作结果从操作本身返回，不要用副作用查询
+- `connected` 回调不能覆盖已设置的 `sessionPath`
