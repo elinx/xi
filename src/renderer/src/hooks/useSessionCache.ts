@@ -30,6 +30,7 @@ interface UseSessionCacheReturn {
   displayedStreamingMessageId: string | null
 
   getCache: (sessionPath: string) => SessionCache | undefined
+  ensureCache: (sessionPath: string) => SessionCache
   getOrCreateCache: (sessionPath: string) => Promise<SessionCache>
   updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
   displaySession: (sessionPath: string) => Promise<void>
@@ -110,6 +111,14 @@ export function useSessionCache(): UseSessionCacheReturn {
 
   const getCache = useCallback((sessionPath: string): SessionCache | undefined => {
     return cacheMap.current.get(sessionPath)
+  }, [])
+
+  const ensureCacheSync = useCallback((sessionPath: string): SessionCache => {
+    const existing = cacheMap.current.get(sessionPath)
+    if (existing) return existing
+    const cache = createEmptyCache(sessionPath)
+    cacheMap.current.set(sessionPath, cache)
+    return cache
   }, [])
 
   const getOrCreateCache = useCallback(async (sessionPath: string): Promise<SessionCache> => {
@@ -267,7 +276,8 @@ export function useSessionCache(): UseSessionCacheReturn {
     displayedForkPoints,
     displayedStreamingMessageId,
     getCache,
-    getOrCreateCache,
+ensureCacheSync,
+getOrCreateCache,
     updateCache,
     displaySession,
     clearCache,

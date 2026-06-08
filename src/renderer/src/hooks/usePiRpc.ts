@@ -23,6 +23,7 @@ export interface UsePiRpcOptions {
   onWorkerStatusChange: (sessionPath: string, status: string) => void
   displayedSessionPath: string | null
   getCache: (sessionPath: string) => SessionCache | undefined
+  ensureCacheSync: (sessionPath: string) => SessionCache
   updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
 }
 
@@ -63,7 +64,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const {
     onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange,
     onSessionForkPointsUpdate, onSessionModelChange, onWorkerStatusChange,
-    displayedSessionPath, getCache, updateCache,
+    displayedSessionPath, getCache, ensureCacheSync, updateCache,
   } = options
 
   const [isConnected, setIsConnected] = useState(false)
@@ -149,6 +150,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     (event: AgentSessionEvent) => {
       const sessionPath = resolveSessionPath(event)
       if (!sessionPath) return
+
+      if (!getCache(sessionPath)) {
+        ensureCacheSync(sessionPath)
+      }
 
       switch (event.type) {
         case 'agent_start': {
@@ -471,7 +476,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
       }
     },
-    [resolveSessionPath, getCache, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange],
+    [resolveSessionPath, getCache, ensureCacheSync, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange],
   )
 
   useEffect(() => {

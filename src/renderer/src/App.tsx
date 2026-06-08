@@ -28,7 +28,7 @@ import { getSessionDisplayName } from './utils/session-utils'
 function App(): React.ReactElement {
   const sessionCache = useSessionCache()
   const {
-    displaySession, getCache, clearCache, getOrCreateCache,
+    displaySession, getCache, ensureCacheSync, clearCache, getOrCreateCache,
     updateSessionMessages, updateSessionTokenUsage,
     setSessionStreaming, updateSessionForkPoints,
     setWorkerStatus, getWorkerStatus,
@@ -67,8 +67,9 @@ function App(): React.ReactElement {
     },
     displayedSessionPath: sessionCache.displayedSessionPath,
     getCache,
+    ensureCacheSync,
     updateCache: sessionCache.updateCache,
-  }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, sessionCache.updateCache])
+  }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, ensureCacheSync, sessionCache.updateCache])
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, refreshModelInfo } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
