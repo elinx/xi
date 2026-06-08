@@ -234,26 +234,24 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
 
   if (isStreaming) {
     return (
-      <div className="py-2 border-l-3 border-teal-300 pl-3">
-        <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+      <div className="py-1 border-l-3 border-violet-300 pl-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-violet-500">
           <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Thinking...
-        </div>
-        <div className="mt-1 whitespace-pre-wrap text-xs italic text-teal-500/80">
-          {content}
+          <span>Thinking...</span>
+          {content && <span className="flex-1 truncate text-violet-400 italic">{content.split('\n')[0]}</span>}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="py-2 border-l-3 border-teal-300 pl-3">
+    <div className="py-1 border-l-3 border-violet-300 pl-3">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center gap-2 text-left text-xs font-medium text-teal-600 hover:text-teal-800 transition-colors"
+        className="flex w-full items-center gap-2 text-left text-xs font-medium text-violet-500 hover:text-violet-700 transition-colors"
       >
         <svg
           className={`h-3 w-3 transition-transform ${collapsed ? '' : 'rotate-90'}`}
@@ -263,16 +261,14 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
           <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
         <span>Thinking</span>
-        <span className="text-teal-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
+        <span className="text-violet-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
+        {collapsed && firstLine && (
+          <span className="flex-1 truncate text-violet-400 italic">{firstLine}</span>
+        )}
       </button>
       {!collapsed && (
-        <div className="whitespace-pre-wrap text-xs italic text-teal-700/70 leading-relaxed">
+        <div className="whitespace-pre-wrap text-xs italic text-violet-500/70 leading-relaxed">
           {content}
-        </div>
-      )}
-      {collapsed && (
-        <div className="text-xs italic text-teal-400 truncate">
-          {firstLine}
         </div>
       )}
     </div>
