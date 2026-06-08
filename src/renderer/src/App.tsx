@@ -96,7 +96,6 @@ function App(): React.ReactElement {
 
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
-  const [shouldOpenModelSelector, setShouldOpenModelSelector] = useState(false)
   const welcomeCheckDone = useRef(false)
 
   const leftPanelView = useLayoutStore(s => s.leftPanelView)
@@ -786,24 +785,24 @@ function App(): React.ReactElement {
            </div>
          </div>
 
-         <div className="flex flex-1 overflow-hidden">
-          <LeftPanel
-            view={leftPanelView}
-            onViewChange={setLeftPanelView}
-            collapsed={leftPanelCollapsed}
-            onToggleCollapse={() => toggleLeftPanel()}
-            width={leftPanelWidth}
-            onResizeStart={handleLeftResizeStart}
-            projectName={projectName}
-            projectPath={projects[0]?.projectPath ?? undefined}
-            onOpenDirectory={handleOpenDirectory}
-            sessions={sessions}
-            currentSession={currentSession}
-            displayedSessionPath={sessionCache.displayedSessionPath}
-            workerStatuses={sessionCache.workerStatuses}
-            onSwitchSession={handleSwitchSession}
-            onNewSession={handleNewSession}
-            onRenameSession={renameSession}
+          <div className="flex flex-1 overflow-hidden">
+           <LeftPanel
+             view={leftPanelView}
+             onViewChange={setLeftPanelView}
+             collapsed={leftPanelCollapsed}
+             onToggleCollapse={() => toggleLeftPanel()}
+             width={leftPanelWidth}
+             onResizeStart={handleLeftResizeStart}
+             projectName={projectName}
+             projectPath={projects[0]?.projectPath ?? undefined}
+             onOpenDirectory={handleOpenDirectory}
+             sessions={sessions}
+             currentSession={currentSession}
+             displayedSessionPath={sessionCache.displayedSessionPath}
+             workerStatuses={sessionCache.workerStatuses}
+             onSwitchSession={handleSwitchSession}
+             onNewSession={handleNewSession}
+             onRenameSession={renameSession}
             onDeleteSession={deleteSession}
             onSetSessionStatus={setSessionStatus}
             onForkFromEnd={handleForkFromEnd}
@@ -858,7 +857,9 @@ function App(): React.ReactElement {
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
-                onAuthChange={() => { getAvailableModels(null); refreshModelInfo(); setShouldOpenModelSelector(true) }}
+                getAvailableModels={() => getAvailableModels(activeSessionPath)}
+                onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
+                onAuthChange={() => { getAvailableModels(null); refreshModelInfo() }}
               />
             )}
           </div>
@@ -872,13 +873,8 @@ function App(): React.ReactElement {
               onStop={handleStop}
               workerStatus={displayedWorkerStatus}
               currentModel={currentModel}
-              onSetModel={async (modelId, provider) => {
-                const ok = await setModel(activeSessionPath, modelId, provider)
-                if (ok) setShouldOpenModelSelector(false)
-                return ok
-              }}
+              onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
               getAvailableModels={() => getAvailableModels(activeSessionPath)}
-              autoOpenModelSelector={shouldOpenModelSelector}
               files={indexedFiles}
               sentMessages={sentMessages}
               quotes={mergedQuotes}
@@ -908,13 +904,14 @@ function App(): React.ReactElement {
             getProviderAuthStatus={getProviderAuthStatus}
             setApiKey={setApiKey}
             removeAuth={removeAuth}
-            registerCustomProvider={registerCustomProvider}
-             testProvider={testProvider}
-             getProviderConfig={getProviderConfig}
+             registerCustomProvider={registerCustomProvider}
+              testProvider={testProvider}
+              getProviderConfig={getProviderConfig}
+              getAvailableModels={() => getAvailableModels(null)}
+              onSetModel={(modelId, provider) => setModel(null, modelId, provider)}
               onAuthChange={() => {
                getAvailableModels(null)
                refreshModelInfo()
-               setShouldOpenModelSelector(true)
              }}
             onSkip={() => setShowWelcome(false)}
           />

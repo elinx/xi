@@ -10,11 +10,13 @@ interface WelcomeDialogProps {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
+  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
   onSkip: () => void
 }
 
-function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
+function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, getAvailableModels, onSetModel, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
   const [hasConfiguredProvider, setHasConfiguredProvider] = useState(false)
 
@@ -37,7 +39,7 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={(!showSetup || hasConfiguredProvider) ? onSkip : undefined}>
-      <div className="w-full max-w-md max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
         {!showSetup ? (
           <div className="px-8 py-10 text-center">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
@@ -48,16 +50,16 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
             <p className="mt-3 text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
               Xi needs an API key from an AI provider to work. Choose a provider below or add a custom one.
             </p>
-            <div className="mt-8 flex flex-col gap-2.5">
+            <div className="mt-8 flex flex-col items-center gap-2.5">
               <button
                 onClick={() => setShowSetup(true)}
-                className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+                className="rounded-lg bg-blue-600 px-8 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
               >
                 Get Started
               </button>
               <button
                 onClick={onSkip}
-                className="rounded-lg px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                className="rounded-lg px-4 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
               >
                 Skip for now
               </button>
@@ -91,6 +93,8 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
+                getAvailableModels={getAvailableModels}
+                onSetModel={onSetModel}
                 onAuthChange={handleAuthChange}
               />
             </div>

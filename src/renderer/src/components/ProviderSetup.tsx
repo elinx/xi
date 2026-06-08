@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 const PROVIDER_URLS: Record<string, string> = {
   anthropic: 'https://console.anthropic.com/settings/keys',
@@ -18,7 +18,7 @@ const POPULAR_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', subtitle: 'DeepSeek', color: '#4f46e5' },
   { id: 'openrouter', name: 'OpenRouter', subtitle: 'Multi-provider', color: '#6d28d9' },
   { id: 'groq', name: 'Groq', subtitle: 'Fast inference', color: '#f55036' },
-  { id: 'xai', name: 'xAI', subtitle: 'Grok', color: '#1d1d1f' },
+  { id: 'xAI', name: 'xAI', subtitle: 'Grok', color: '#1d1d1f' },
   { id: 'mistral', name: 'Mistral', subtitle: 'Mistral AI', color: '#f97316' },
 ]
 
@@ -28,6 +28,15 @@ const CUSTOM_COLOR = '#6b7280'
 type AuthStatusMap = Record<string, { configured: boolean; source?: string }>
 type TestResult = { ok: boolean; error?: string; latencyMs?: number }
 
+interface ModelInfo {
+  provider: string
+  id: string
+  name: string
+  hasAuth: boolean
+  reasoning: boolean | null
+  contextWindow: number | null
+}
+
 interface ProviderSetupProps {
   getProviderAuthStatus: () => Promise<AuthStatusMap>
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
@@ -35,6 +44,8 @@ interface ProviderSetupProps {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  getAvailableModels?: () => Promise<Array<ModelInfo>>
+  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
 }
 
@@ -45,31 +56,37 @@ function categorizeError(error: string): string {
   return error
 }
 
-function TestConnectionButton({ providerId, testProvider, overrides }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>; overrides?: { baseUrl?: string; apiKey?: string } }) {
+function ProviderIcon({ name, color, size = 'md' }: { name: string; color: string; size?: 'sm' | 'md' }) {
+  const dim = size === 'sm' ? 'h-5 w-5 text-[10px]' : 'h-6 w-6 text-xs'
+  return (
+    <span
+      className={`${dim} rounded-md text-white font-bold flex items-center justify-center flex-shrink-0`}
+      style={{ backgroundColor: color }}
+    >
+      {name[0]}
+    </span>
+  )
+}
+
+function TestConnectionButton({ providerId, testProvider }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult> }) {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
     setResult(null)
-    const r = await testProvider(providerId, overrides)
+    const r = await testProvider(providerId)
     setTesting(false)
     setResult(r)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setResult(null), 5000)
-  }, [providerId, testProvider, overrides])
+    setTimeout(() => setResult(null), 5000)
+  }, [providerId, testProvider])
 
   return (
     <div className="flex items-center gap-2">
       <button
         onClick={handleTest}
         disabled={testing}
-        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+        className="rounded-md bg-gray-900 dark:bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors flex items-center gap-1.5"
       >
         {testing ? (
           <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -84,7 +101,7 @@ function TestConnectionButton({ providerId, testProvider, overrides }: { provide
         Test Connection
       </button>
       {result && (
-        <span className={`text-xs font-medium ${result.ok ? 'text-green-600' : 'text-red-600'}`}>
+        <span className={`text-xs font-medium ${result.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
           {result.ok
             ? `Connected (${result.latencyMs ?? 0}ms)`
             : categorizeError(result.error ?? 'Unknown error')}
@@ -94,26 +111,316 @@ function TestConnectionButton({ providerId, testProvider, overrides }: { provide
   )
 }
 
-function ProviderSetup({
-  getProviderAuthStatus,
+function RightPanel({
+  providerId,
+  providerInfo,
+  authStatus,
+  models,
+  selectedModelKey,
+  switchingModel,
   setApiKey,
   removeAuth,
-  registerCustomProvider,
   testProvider,
   getProviderConfig,
+  onSetModel,
   onAuthChange,
-}: ProviderSetupProps): React.ReactElement {
-  const [authStatus, setAuthStatus] = useState<AuthStatusMap>({})
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+  onSelectModel,
+  onEditCustom,
+}: {
+  providerId: string
+  providerInfo: { name: string; subtitle: string; color: string; configured: boolean; source?: string }
+  authStatus: AuthStatusMap
+  models: ModelInfo[]
+  selectedModelKey: string | null
+  switchingModel: boolean
+  setApiKey: (provider: string, apiKey: string) => Promise<boolean>
+  removeAuth: (provider: string) => Promise<boolean>
+  testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
+  getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
+  onAuthChange?: () => void
+  onSelectModel: (model: ModelInfo) => void
+  onEditCustom: (providerId: string, config: Record<string, unknown>) => void
+}) {
   const [apiKey, setApiKeyInput] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [removing, setRemoving] = useState<string | null>(null)
   const [replacingKey, setReplacingKey] = useState(false)
   const [replaceKeyValue, setReplaceKeyValue] = useState('')
   const [replaceSaving, setReplaceSaving] = useState(false)
+  const [removing, setRemoving] = useState(false)
 
-  const [showCustom, setShowCustom] = useState(false)
+  const isConfigured = authStatus[providerId]?.configured ?? false
+  const isPopular = POPULAR_IDS.has(providerId)
+
+  useEffect(() => {
+    setApiKeyInput('')
+    setShowApiKey(false)
+    setReplacingKey(false)
+    setReplaceKeyValue('')
+  }, [providerId])
+
+  const handleSetApiKey = useCallback(async () => {
+    if (!apiKey.trim()) return
+    setSaving(true)
+    const ok = await setApiKey(providerId, apiKey.trim())
+    setSaving(false)
+    if (ok) {
+      setApiKeyInput('')
+      onAuthChange?.()
+    }
+  }, [providerId, apiKey, setApiKey, onAuthChange])
+
+  const handleReplaceKey = useCallback(async () => {
+    if (!replaceKeyValue.trim()) return
+    setReplaceSaving(true)
+    const ok = await setApiKey(providerId, replaceKeyValue.trim())
+    setReplaceSaving(false)
+    if (ok) {
+      setReplaceKeyValue('')
+      setReplacingKey(false)
+      onAuthChange?.()
+    }
+  }, [providerId, replaceKeyValue, setApiKey, onAuthChange])
+
+  const handleRemove = useCallback(async () => {
+    setRemoving(true)
+    await removeAuth(providerId)
+    setRemoving(false)
+  }, [providerId, removeAuth])
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <ProviderIcon name={providerInfo.name} color={providerInfo.color} size="sm" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{providerInfo.name}</div>
+          </div>
+          {isConfigured && (
+            <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded-full font-medium">OK</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-3 space-y-3">
+          {!isConfigured ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Enter your API key to enable this provider</p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
+                  />
+                  <button
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showApiKey ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSetApiKey}
+                  disabled={!apiKey.trim() || saving}
+                  className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              {PROVIDER_URLS[providerId] && (
+                <a
+                  href={PROVIDER_URLS[providerId]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
+                >
+                  Get API key from {providerInfo.name}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {authStatus[providerId]?.source && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Source: <span className="text-gray-700 dark:text-gray-300">{authStatus[providerId].source}</span>
+                </div>
+              )}
+              <TestConnectionButton providerId={providerId} testProvider={testProvider} />
+
+              {isPopular && (
+                <>
+                  {replacingKey ? (
+                    <div className="flex gap-2 items-center">
+                      <div className="relative flex-1">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={replaceKeyValue}
+                          onChange={(e) => setReplaceKeyValue(e.target.value)}
+                          placeholder="New API key..."
+                          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleReplaceKey() }}
+                        />
+                        <button
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleReplaceKey}
+                        disabled={!replaceKeyValue.trim() || replaceSaving}
+                        className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                      >
+                        {replaceSaving ? '...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => { setReplacingKey(false); setReplaceKeyValue('') }}
+                        className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setReplacingKey(true)}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                    >
+                      Replace Key
+                    </button>
+                  )}
+                </>
+              )}
+
+              {!isPopular && (
+                <button
+                  onClick={async () => {
+                    const result = await getProviderConfig(providerId)
+                    if (result.ok && result.config) {
+                      onEditCustom(providerId, result.config)
+                    }
+                  }}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Provider
+                </button>
+              )}
+
+              <button
+                onClick={handleRemove}
+                disabled={removing}
+                className="text-sm text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors flex items-center gap-1 disabled:opacity-50"
+              >
+                {removing ? (
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+                Remove
+              </button>
+            </div>
+          )}
+
+          {isConfigured && models.length > 0 && onSetModel && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Select Model</label>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="max-h-44 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+                  {models.map((model) => {
+                    const modelKey = `${model.provider}/${model.id}`
+                    const isSelected = selectedModelKey === modelKey
+                    return (
+                      <button
+                        key={modelKey}
+                        onClick={() => onSelectModel(model)}
+                        disabled={switchingModel}
+                        className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors ${
+                          isSelected
+                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        } disabled:opacity-50`}
+                      >
+                        <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                          isSelected ? 'bg-blue-600 dark:bg-blue-400' : 'border-2 border-gray-300 dark:border-gray-600'
+                        }`} />
+                        <span className="flex-1 truncate">{model.name}</span>
+                        {isSelected && (
+                          <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                        {switchingModel && isSelected && (
+                          <svg className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isConfigured && models.length > 0 && !onSetModel && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">{models.length} model(s) available</p>
+          )}
+
+          {isConfigured && models.length === 0 && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">No models available for this provider</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CustomProviderForm({
+  editingProviderId,
+  editingConfig,
+  registerCustomProvider,
+  testProvider,
+  onAuthChange,
+  onDone,
+}: {
+  editingProviderId?: string | null
+  editingConfig?: Record<string, unknown> | null
+  registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
+  onAuthChange?: () => void
+  onDone: () => void
+}) {
   const [customId, setCustomId] = useState('')
   const [customName, setCustomName] = useState('')
   const [customBaseUrl, setCustomBaseUrl] = useState('')
@@ -125,118 +432,23 @@ function ProviderSetup({
   const [customSaving, setCustomSaving] = useState(false)
   const [customTestResult, setCustomTestResult] = useState<TestResult | null>(null)
   const [customTesting, setCustomTesting] = useState(false)
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
-
-  const customFormTitle = editingProviderId ? 'Edit Provider' : 'Add Custom Provider'
-  const customFormSubmitLabel = editingProviderId ? 'Save' : 'Add Provider'
-
-  const refreshAuth = useCallback(async () => {
-    const status = await getProviderAuthStatus()
-    setAuthStatus(status)
-  }, [getProviderAuthStatus])
 
   useEffect(() => {
-    refreshAuth()
-  }, [refreshAuth])
-
-  const handleSetApiKey = useCallback(async () => {
-    if (!selectedProvider || !apiKey.trim()) return
-    setSaving(true)
-    const ok = await setApiKey(selectedProvider, apiKey.trim())
-    setSaving(false)
-    if (ok) {
-      setApiKeyInput('')
-      setSelectedProvider(null)
-      await refreshAuth()
-      onAuthChange?.()
-    }
-  }, [selectedProvider, apiKey, setApiKey, refreshAuth, onAuthChange])
-
-  const handleReplaceKey = useCallback(async () => {
-    if (!selectedProvider || !replaceKeyValue.trim()) return
-    setReplaceSaving(true)
-    const ok = await setApiKey(selectedProvider, replaceKeyValue.trim())
-    setReplaceSaving(false)
-    if (ok) {
-      setReplaceKeyValue('')
-      setReplacingKey(false)
-      await refreshAuth()
-      onAuthChange?.()
-    }
-  }, [selectedProvider, replaceKeyValue, setApiKey, refreshAuth, onAuthChange])
-
-  const handleRemoveAuth = useCallback(async (provider: string) => {
-    setRemoving(provider)
-    const ok = await removeAuth(provider)
-    setRemoving(null)
-    if (ok) {
-      if (selectedProvider === provider) {
-        setSelectedProvider(null)
-      }
-      await refreshAuth()
-      onAuthChange?.()
-    }
-  }, [removeAuth, refreshAuth, onAuthChange, selectedProvider])
-
-  const handleSelectProvider = useCallback((providerId: string) => {
-    if (selectedProvider === providerId) {
-      setSelectedProvider(null)
-      setApiKeyInput('')
-      setReplacingKey(false)
-      setReplaceKeyValue('')
-      return
-    }
-    setSelectedProvider(providerId)
-    setApiKeyInput('')
-    setReplacingKey(false)
-    setReplaceKeyValue('')
-  }, [selectedProvider])
-
-  const resetCustomForm = useCallback(() => {
-    setCustomId('')
-    setCustomName('')
-    setCustomBaseUrl('')
-    setCustomApiKey('')
-    setCustomModelId('')
-    setCustomModelName('')
-    setCustomReasoning(false)
-    setCustomContextWindow(128000)
-    setCustomTestResult(null)
-    setEditingProviderId(null)
-    setShowCustom(false)
-  }, [])
-
-  const handleStartEditCustom = useCallback(async (providerId: string) => {
-    const result = await getProviderConfig(providerId)
-    if (result.ok && result.config) {
-      const cfg = result.config as Record<string, unknown>
-      const models = cfg.models as Array<Record<string, unknown>> | undefined
+    if (editingProviderId && editingConfig) {
+      const models = editingConfig.models as Array<Record<string, unknown>> | undefined
       const firstModel = models?.[0]
-      setCustomId(providerId)
-      setCustomName((cfg.name as string) ?? '')
-      setCustomBaseUrl((cfg.baseUrl as string) ?? '')
+      setCustomId(editingProviderId)
+      setCustomName((editingConfig.name as string) ?? '')
+      setCustomBaseUrl((editingConfig.baseUrl as string) ?? '')
       setCustomApiKey('')
       setCustomModelId((firstModel?.id as string) ?? '')
       setCustomModelName((firstModel?.name as string) ?? '')
       setCustomReasoning((firstModel?.reasoning as boolean) ?? false)
       setCustomContextWindow((firstModel?.contextWindow as number) ?? 128000)
-      setEditingProviderId(providerId)
-      setCustomTestResult(null)
-      setShowCustom(true)
     }
-  }, [getProviderConfig])
+  }, [editingProviderId, editingConfig])
 
-  const handleTestCustom = useCallback(async () => {
-    const id = editingProviderId ?? customId.trim()
-    if (!id || !customBaseUrl.trim()) return
-    setCustomTesting(true)
-    setCustomTestResult(null)
-    const result = await testProvider(id, { baseUrl: customBaseUrl.trim(), apiKey: customApiKey.trim() || undefined })
-    setCustomTesting(false)
-    setCustomTestResult(result)
-  }, [editingProviderId, customId, customBaseUrl, customApiKey, testProvider])
-
-  const handleSubmitCustom = useCallback(async () => {
+  const handleSubmit = useCallback(async () => {
     const id = editingProviderId ?? customId.trim()
     if (!id || !customBaseUrl.trim() || !customModelId.trim()) return
     setCustomSaving(true)
@@ -259,307 +471,275 @@ function ProviderSetup({
     const ok = await registerCustomProvider(id, config)
     setCustomSaving(false)
     if (ok) {
-      resetCustomForm()
-      await refreshAuth()
       onAuthChange?.()
+      onDone()
     }
-  }, [editingProviderId, customId, customName, customBaseUrl, customApiKey, customModelId, customModelName, customReasoning, customContextWindow, registerCustomProvider, refreshAuth, onAuthChange, resetCustomForm])
+  }, [editingProviderId, customId, customName, customBaseUrl, customApiKey, customModelId, customModelName, customReasoning, customContextWindow, registerCustomProvider, onAuthChange, onDone])
 
-  const selectedProviderInfo = selectedProvider
-    ? POPULAR_PROVIDERS.find(p => p.id === selectedProvider)
-    : null
-
-  const customProviders = Object.entries(authStatus)
-    .filter(([id, s]) => !POPULAR_IDS.has(id) && s.configured)
-    .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source }))
+  const handleTest = useCallback(async () => {
+    const id = editingProviderId ?? customId.trim()
+    if (!id || !customBaseUrl.trim()) return
+    setCustomTesting(true)
+    setCustomTestResult(null)
+    const result = await testProvider(id, { baseUrl: customBaseUrl.trim(), apiKey: customApiKey.trim() || undefined })
+    setCustomTesting(false)
+    setCustomTestResult(result)
+  }, [editingProviderId, customId, customBaseUrl, customApiKey, testProvider])
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Providers</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {POPULAR_PROVIDERS.map((p) => {
-            const isConfigured = authStatus[p.id]?.configured
-            const isSelected = selectedProvider === p.id
+    <div className="flex flex-col h-full">
+      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <ProviderIcon name="C" color={CUSTOM_COLOR} size="sm" />
+          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {editingProviderId ? 'Edit Custom Provider' : 'Add Custom Provider'}
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Provider ID</label>
+              <input type="text" value={customId} onChange={(e) => setCustomId(e.target.value.replace(/[^a-z0-9-]/g, ''))} placeholder="my-llm" disabled={!!editingProviderId}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Display name</label>
+              <input type="text" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="My LLM Server"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
+            <input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://api.my-llm.com/v1"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              API Key {editingProviderId && <span className="text-gray-400 dark:text-gray-500 font-normal">(leave empty to keep current)</span>}
+            </label>
+            <input type="password" value={customApiKey} onChange={(e) => setCustomApiKey(e.target.value)} placeholder="sk-..."
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model ID</label>
+              <input type="text" value={customModelId} onChange={(e) => setCustomModelId(e.target.value)} placeholder="my-model-v1"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model name</label>
+              <input type="text" value={customModelName} onChange={(e) => setCustomModelName(e.target.value)} placeholder="My Model V1"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={customReasoning} onChange={(e) => setCustomReasoning(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Reasoning
+            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-700 dark:text-gray-300">Context:</label>
+              <input type="number" value={customContextWindow} onChange={(e) => setCustomContextWindow(Number(e.target.value) || 128000)}
+                className="w-24 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleSubmit}
+              disabled={!(editingProviderId ?? customId.trim()) || !customBaseUrl.trim() || !customModelId.trim() || customSaving}
+              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+            >
+              {customSaving ? (editingProviderId ? 'Saving...' : 'Adding...') : (editingProviderId ? 'Save' : 'Add Provider')}
+            </button>
+            {((editingProviderId) || (customId.trim() && customBaseUrl.trim())) && (
+              <button
+                onClick={handleTest}
+                disabled={customTesting}
+                className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              >
+                {customTesting ? 'Testing...' : 'Test'}
+              </button>
+            )}
+            {customTestResult && (
+              <span className={`text-sm font-medium ${customTestResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {customTestResult.ok ? `Connected (${customTestResult.latencyMs ?? 0}ms)` : categorizeError(customTestResult.error ?? 'Unknown error')}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
+function ProviderSetup({
+  getProviderAuthStatus,
+  setApiKey,
+  removeAuth,
+  registerCustomProvider,
+  testProvider,
+  getProviderConfig,
+  getAvailableModels,
+  onSetModel,
+  onAuthChange,
+}: ProviderSetupProps): React.ReactElement {
+  const [authStatus, setAuthStatus] = useState<AuthStatusMap>({})
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [focusedProvider, setFocusedProvider] = useState<string | null>(null)
+  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
+  const [switchingModel, setSwitchingModel] = useState(false)
+  const [editingCustom, setEditingCustom] = useState<{ providerId: string; config: Record<string, unknown> } | null>(null)
+
+  const hasModelsSupport = !!(getAvailableModels && onSetModel)
+
+  const refreshAuth = useCallback(async () => {
+    const status = await getProviderAuthStatus()
+    setAuthStatus(status)
+  }, [getProviderAuthStatus])
+
+  const refreshModels = useCallback(async () => {
+    if (!getAvailableModels) return
+    const result = await getAvailableModels()
+    setModels(result)
+  }, [getAvailableModels])
+
+  useEffect(() => {
+    refreshAuth()
+  }, [refreshAuth])
+
+  useEffect(() => {
+    if (hasModelsSupport) {
+      refreshModels()
+    }
+  }, [hasModelsSupport, refreshModels])
+
+  const customProviders = useMemo(() => {
+    return Object.entries(authStatus)
+      .filter(([id, s]) => !POPULAR_IDS.has(id) && s.configured)
+      .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source }))
+  }, [authStatus])
+
+  const handleSelectModel = useCallback(async (model: ModelInfo) => {
+    const isConfigured = authStatus[model.provider]?.configured
+    setFocusedProvider(model.provider)
+
+    if (!isConfigured) return
+    if (!onSetModel) return
+
+    const modelKey = `${model.provider}/${model.id}`
+    setSwitchingModel(true)
+    const success = await onSetModel(model.id, model.provider)
+    setSwitchingModel(false)
+    if (success) {
+      setSelectedModelKey(modelKey)
+    }
+  }, [authStatus, onSetModel])
+
+  const handleRemoveAuth = useCallback(async (provider: string): Promise<boolean> => {
+    const ok = await removeAuth(provider)
+    if (ok) {
+      if (focusedProvider === provider) {
+        setFocusedProvider(null)
+      }
+      await refreshAuth()
+      onAuthChange?.()
+      if (hasModelsSupport) {
+        refreshModels()
+      }
+    }
+    return ok
+  }, [removeAuth, focusedProvider, refreshAuth, onAuthChange, hasModelsSupport, refreshModels])
+
+  const handleAuthChange = useCallback(async () => {
+    await refreshAuth()
+    onAuthChange?.()
+    if (hasModelsSupport) {
+      refreshModels()
+    }
+  }, [refreshAuth, onAuthChange, hasModelsSupport, refreshModels])
+
+  const handleEditCustom = useCallback((providerId: string, config: Record<string, unknown>) => {
+    setEditingCustom({ providerId, config })
+    setFocusedProvider('__custom__')
+  }, [])
+
+  const allProviders = useMemo(() => {
+    return [
+      ...POPULAR_PROVIDERS.map(p => ({
+        id: p.id,
+        name: p.name,
+        subtitle: p.subtitle,
+        color: p.color,
+        configured: authStatus[p.id]?.configured ?? false,
+        source: authStatus[p.id]?.source,
+      })),
+      ...customProviders.map(p => ({
+        ...p,
+        color: CUSTOM_COLOR,
+      })),
+    ]
+  }, [authStatus, customProviders])
+
+  const focusedModels = useMemo(() => {
+    if (!focusedProvider) return []
+    return models.filter(m => m.provider === focusedProvider)
+  }, [models, focusedProvider])
+
+  const focusedProviderInfo = useMemo(() => {
+    if (!focusedProvider) return null
+    return allProviders.find(p => p.id === focusedProvider) ?? null
+  }, [allProviders, focusedProvider])
+
+  const effectiveFocusedProvider = editingCustom ? '__custom__' : focusedProvider
+
+  return (
+    <div className="flex w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      <div className="w-52 flex-shrink-0 border-r border-gray-100 dark:border-gray-700/50 flex flex-col max-h-[26rem]">
+        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Providers</span>
+        </div>
+        <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+          {allProviders.map((p) => {
+            const isFocused = effectiveFocusedProvider === p.id
             return (
-              <div key={p.id} className="contents">
-                <button
-                  onClick={() => handleSelectProvider(p.id)}
-                  className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all ${
-                    isSelected
-                      ? 'border-blue-200 bg-blue-50/40'
-                      : isConfigured
-                        ? 'border-green-200 bg-green-50/40'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <span
-                    className="h-6 w-6 rounded-md text-white text-xs font-bold flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: p.color }}
-                  >
-                    {p.name[0]}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium text-gray-900 truncate">{p.name}</div>
-                    <div className="text-[10px] text-gray-400">{p.subtitle}</div>
-                  </div>
-                  {isConfigured ? (
-                    <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <span className="h-4 w-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
-                  )}
-                </button>
-
-                {isSelected && (
-                  <div className="col-span-2 sm:col-span-3 lg:col-span-4 rounded-lg border border-blue-200 bg-blue-50/40 p-4 -mt-1">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-5 w-5 rounded text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: p.color }}
-                        >
-                          {p.name[0]}
-                        </span>
-                        <span className="text-sm font-medium text-gray-900">{p.name}</span>
-                      </div>
-                      <button
-                        onClick={() => handleSelectProvider(p.id)}
-                        className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {isConfigured ? (
-                      <div className="space-y-2.5">
-                        {authStatus[p.id]?.source && (
-                          <div className="text-xs text-gray-500">
-                            Source: <span className="text-gray-700">{authStatus[p.id].source}</span>
-                          </div>
-                        )}
-                        <TestConnectionButton providerId={p.id} testProvider={testProvider} />
-                        {replacingKey ? (
-                          <div className="flex gap-2 items-center">
-                            <div className="relative flex-1">
-                              <input
-                                type={showApiKey ? 'text' : 'password'}
-                                value={replaceKeyValue}
-                                onChange={(e) => setReplaceKeyValue(e.target.value)}
-                                placeholder="New API key..."
-                                className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 pr-8 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleReplaceKey() }}
-                              />
-                              <button
-                                onClick={() => setShowApiKey(!showApiKey)}
-                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                {showApiKey ? (
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                            <button
-                              onClick={handleReplaceKey}
-                              disabled={!replaceKeyValue.trim() || replaceSaving}
-                              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                            >
-                              {replaceSaving ? '...' : 'Save'}
-                            </button>
-                            <button
-                              onClick={() => { setReplacingKey(false); setReplaceKeyValue('') }}
-                              className="rounded-md border border-gray-300 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setReplacingKey(true)}
-                            className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                          >
-                            Replace Key
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleRemoveAuth(p.id)}
-                          disabled={removing === p.id}
-                          className="text-xs text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 disabled:opacity-50"
-                        >
-                          {removing === p.id ? (
-                            <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                          ) : (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          )}
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-xs text-gray-500">Enter your API key to enable this provider</p>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <input
-                              type={showApiKey ? 'text' : 'password'}
-                              value={apiKey}
-                              onChange={(e) => setApiKeyInput(e.target.value)}
-                              placeholder="sk-..."
-                              className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 pr-8 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
-                            />
-                            <button
-                              onClick={() => setShowApiKey(!showApiKey)}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                              {showApiKey ? (
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                </svg>
-                              ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              )}
-                            </button>
-                          </div>
-                          <button
-                            onClick={handleSetApiKey}
-                            disabled={!apiKey.trim() || saving}
-                            className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                          >
-                            {saving ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-                        {PROVIDER_URLS[selectedProvider] && (
-                          <a
-                            href={PROVIDER_URLS[selectedProvider]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                          >
-                            Get API key from {selectedProviderInfo?.name}
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {customProviders.map((p) => {
-            const isSelected = selectedProvider === p.id
-            return (
-              <div key={p.id} className="contents">
-                <button
-                  onClick={() => handleSelectProvider(p.id)}
-                  className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all border-green-200 bg-green-50/40 ${
-                    isSelected ? 'border-blue-200 bg-blue-50/40' : ''
-                  }`}
-                >
-                  <span
-                    className="h-6 w-6 rounded-md text-white text-xs font-bold flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: CUSTOM_COLOR }}
-                  >
-                    {p.name[0].toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium text-gray-900 truncate">{p.name}</div>
-                    <div className="text-[10px] text-gray-400">{p.subtitle}</div>
-                  </div>
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <button
+                key={p.id}
+                onClick={() => { setFocusedProvider(p.id); setEditingCustom(null) }}
+                className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
+                  isFocused
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                    : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <ProviderIcon name={p.name} color={p.color} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
+                </div>
+                {p.configured ? (
+                  <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                </button>
-
-                {isSelected && (
-                  <div className="col-span-2 sm:col-span-3 lg:col-span-4 rounded-lg border border-blue-200 bg-blue-50/40 p-4 -mt-1">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-5 w-5 rounded text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: CUSTOM_COLOR }}
-                        >
-                          {p.name[0].toUpperCase()}
-                        </span>
-                        <span className="text-sm font-medium text-gray-900">{p.name}</span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Custom</span>
-                      </div>
-                      <button
-                        onClick={() => handleSelectProvider(p.id)}
-                        className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="space-y-2.5">
-                      {p.source && (
-                        <div className="text-xs text-gray-500">
-                          Source: <span className="text-gray-700">{p.source}</span>
-                        </div>
-                      )}
-                      <TestConnectionButton providerId={p.id} testProvider={testProvider} />
-                      <button
-                        onClick={() => handleStartEditCustom(p.id)}
-                        className="text-xs text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
-                      >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleRemoveAuth(p.id)}
-                        disabled={removing === p.id}
-                        className="text-xs text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 disabled:opacity-50"
-                      >
-                        {removing === p.id ? (
-                          <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        )}
-                        Remove
-                      </button>
-                    </div>
-                  </div>
+                ) : isFocused ? (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex-shrink-0 flex items-center justify-center">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                  </span>
+                ) : (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
                 )}
-              </div>
+              </button>
             )
           })}
-
           <button
-            onClick={() => { resetCustomForm(); setShowCustom(true) }}
-            className="flex items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 bg-transparent px-3 py-2.5 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+            onClick={() => { setFocusedProvider('__custom__'); setEditingCustom(null) }}
+            className={`w-full flex items-center justify-center gap-1 rounded-md border-2 border-dashed px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              effectiveFocusedProvider === '__custom__' && !editingCustom
+                ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             Custom
@@ -567,143 +747,46 @@ function ProviderSetup({
         </div>
       </div>
 
-      {showCustom && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-gray-900">{customFormTitle}</h4>
-            <button
-              onClick={resetCustomForm}
-              className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Provider ID</label>
-                <input
-                  type="text"
-                  value={customId}
-                  onChange={(e) => setCustomId(e.target.value.replace(/[^a-z0-9-]/g, ''))}
-                  placeholder="my-llm"
-                  disabled={!!editingProviderId}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100 disabled:text-gray-400"
-                />
+      <div className="flex-1 flex flex-col min-w-0 max-h-[26rem]">
+        {effectiveFocusedProvider === '__custom__' ? (
+          <CustomProviderForm
+            editingProviderId={editingCustom?.providerId}
+            editingConfig={editingCustom?.config}
+            registerCustomProvider={registerCustomProvider}
+            testProvider={testProvider}
+            onAuthChange={handleAuthChange}
+            onDone={() => { setEditingCustom(null); setFocusedProvider(null) }}
+          />
+        ) : focusedProvider && focusedProviderInfo ? (
+          <RightPanel
+            providerId={focusedProvider}
+            providerInfo={focusedProviderInfo}
+            authStatus={authStatus}
+            models={focusedModels}
+            selectedModelKey={selectedModelKey}
+            switchingModel={switchingModel}
+            setApiKey={setApiKey}
+            removeAuth={handleRemoveAuth}
+            testProvider={testProvider}
+            getProviderConfig={getProviderConfig}
+            onSetModel={onSetModel}
+            onAuthChange={handleAuthChange}
+            onSelectModel={handleSelectModel}
+            onEditCustom={handleEditCustom}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                </svg>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Display name</label>
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="My LLM Server"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Base URL</label>
-              <input
-                type="text"
-                value={customBaseUrl}
-                onChange={(e) => setCustomBaseUrl(e.target.value)}
-                placeholder="https://api.my-llm.com/v1"
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">API Key {editingProviderId && <span className="text-gray-400">(leave empty to keep current)</span>}</label>
-              <input
-                type="password"
-                value={customApiKey}
-                onChange={(e) => setCustomApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Model ID</label>
-                <input
-                  type="text"
-                  value={customModelId}
-                  onChange={(e) => setCustomModelId(e.target.value)}
-                  placeholder="my-model-v1"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Model name</label>
-                <input
-                  type="text"
-                  value={customModelName}
-                  onChange={(e) => setCustomModelName(e.target.value)}
-                  placeholder="My Model V1"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={customReasoning}
-                  onChange={(e) => setCustomReasoning(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-400"
-                />
-                Reasoning support
-              </label>
-              <div className="flex items-center gap-1.5">
-                <label className="text-xs text-gray-600">Context window:</label>
-                <input
-                  type="number"
-                  value={customContextWindow}
-                  onChange={(e) => setCustomContextWindow(Number(e.target.value) || 128000)}
-                  className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSubmitCustom}
-                disabled={!customId.trim() || !customBaseUrl.trim() || !customModelId.trim() || customSaving}
-                className="rounded-md bg-gray-900 px-4 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-gray-900 transition-colors"
-              >
-                {customSaving ? (editingProviderId ? 'Saving...' : 'Adding...') : customFormSubmitLabel}
-              </button>
-              {(editingProviderId || (customId.trim() && customBaseUrl.trim())) && (
-                <button
-                  onClick={handleTestCustom}
-                  disabled={customTesting}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                >
-                  {customTesting ? (
-                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  )}
-                  Test
-                </button>
-              )}
-              {customTestResult && (
-                <span className={`text-xs font-medium ${customTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>
-                  {customTestResult.ok
-                    ? `Connected (${customTestResult.latencyMs ?? 0}ms)`
-                    : categorizeError(customTestResult.error ?? 'Unknown error')}
-                </span>
-              )}
+              <p className="text-sm text-gray-400 dark:text-gray-500">Select a provider to configure</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

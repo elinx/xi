@@ -17,7 +17,6 @@ interface InputBarProps {
   currentModel?: PiModelInfo | null
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   getAvailableModels?: () => Promise<PiModelInfo[]>
-  autoOpenModelSelector?: boolean
   files: FileEntry[]
   sentMessages: string[]
   quotes: QuotedMessage[]
@@ -25,7 +24,7 @@ interface InputBarProps {
   onClearQuotes: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, autoOpenModelSelector, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -38,12 +37,6 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
 
   const showStop = isStreaming
   const noModel = isConnected && !currentModel
-
-  useEffect(() => {
-    if (autoOpenModelSelector && isConnected && !currentModel) {
-      setShowModelSelector(true)
-    }
-  }, [autoOpenModelSelector, isConnected, currentModel])
 
   const getPlainText = useCallback((): string => {
     if (!editorRef.current) return ''
