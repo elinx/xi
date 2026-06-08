@@ -707,9 +707,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     type ApiWithSetModel = typeof window.api & { setModel: (sp: string | null, model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
     try {
       const modelsResult = await (window.api as ApiWithModels).getAvailableModels(null)
-      const models = modelsResult.ok && (modelsResult.data as { models?: PiModelInfo[] } | undefined)?.models
-      if (models && models.length > 0) {
-        const match = models.find(m => m.provider === provider) ?? models[0]
+      const data = modelsResult.data as { models?: PiModelInfo[] } | undefined
+      const models = modelsResult.ok && data?.models ? data.models : []
+      if (models.length > 0) {
+        const match = models.find((m: PiModelInfo) => m.provider === provider) ?? models[0]
         const setResult = await (window.api as ApiWithSetModel).setModel(null, match.id, match.provider)
         if (setResult.ok && setResult.data) {
           setCurrentModel(setResult.data as PiModelInfo | null)

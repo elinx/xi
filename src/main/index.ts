@@ -124,11 +124,22 @@ function initWorkerManager(sessionPath?: string): void {
         broadcastToRenderers('pi:extensionUiRequest', data)
         return
       }
+      if (!obj.sessionPath) {
+        const primary = workerManager?.getPrimary()
+        if (primary?.sessionPath) obj.sessionPath = primary.sessionPath
+      }
     }
     broadcastToRenderers('pi:event', data)
   })
 
   workerManager.on('response', (data: unknown) => {
+    if (typeof data === 'object' && data !== null) {
+      const obj = data as Record<string, unknown>
+      if (!obj.sessionPath) {
+        const primary = workerManager?.getPrimary()
+        if (primary?.sessionPath) obj.sessionPath = primary.sessionPath
+      }
+    }
     broadcastToRenderers('pi:response', data)
   })
 
@@ -550,6 +561,16 @@ function registerIpcHandlers(): void {
     }
     try {
       await workerManager!.initPrimary(process.cwd(), initialSessionPath)
+      try {
+        const state = (await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const sp = typeof state.sessionFile === 'string' ? state.sessionFile : null
+        if (sp) {
+          const primary = workerManager!.getPrimary()!
+          if (!primary.sessionPath) primary.sessionPath = sp
+          sessionService.nameSession(sp, 'main')
+          sessionService.flushPendingName(sp)
+        }
+      } catch {}
       const mainSession = sessionService.findMainSession(process.cwd())
       if (!mainSession || !mainSession.name) {
         try {
@@ -557,14 +578,6 @@ function registerIpcHandlers(): void {
         } catch {}
         try {
           await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'flush_session' })
-        } catch {}
-        try {
-          const state = (await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const sp = typeof state.sessionFile === 'string' ? state.sessionFile : null
-          if (sp) {
-            sessionService.nameSession(sp, 'main')
-            sessionService.flushPendingName(sp)
-          }
         } catch {}
       }
       return { ok: true }
