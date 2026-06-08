@@ -860,6 +860,7 @@ function App(): React.ReactElement {
                 getAvailableModels={() => getAvailableModels(activeSessionPath)}
                 onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
                 onAuthChange={() => { getAvailableModels(null); refreshModelInfo() }}
+                currentModel={currentModel}
               />
             )}
           </div>
@@ -913,7 +914,8 @@ function App(): React.ReactElement {
                getAvailableModels(null)
                refreshModelInfo()
              }}
-            onSkip={() => setShowWelcome(false)}
+             currentModel={currentModel}
+             onSkip={() => setShowWelcome(false)}
           />
        )}
 

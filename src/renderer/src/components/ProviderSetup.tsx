@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 const PROVIDER_URLS: Record<string, string> = {
   anthropic: 'https://console.anthropic.com/settings/keys',
@@ -47,6 +47,7 @@ interface ProviderSetupProps {
   getAvailableModels?: () => Promise<Array<ModelInfo>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
+  currentModel?: { provider: string; id: string } | null
 }
 
 function categorizeError(error: string): string {
@@ -68,18 +69,19 @@ function ProviderIcon({ name, color, size = 'md' }: { name: string; color: strin
   )
 }
 
-function TestConnectionButton({ providerId, testProvider }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult> }) {
+function TestConnectionButton({ providerId, testProvider, apiKeyOverride }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>; apiKeyOverride?: string }) {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
 
   const handleTest = useCallback(async () => {
     setTesting(true)
     setResult(null)
-    const r = await testProvider(providerId)
+    const overrides = apiKeyOverride?.trim() ? { apiKey: apiKeyOverride.trim() } : undefined
+    const r = await testProvider(providerId, overrides)
     setTesting(false)
     setResult(r)
     setTimeout(() => setResult(null), 5000)
-  }, [providerId, testProvider])
+  }, [providerId, testProvider, apiKeyOverride])
 
   return (
     <div className="flex items-center gap-2">
@@ -204,158 +206,90 @@ function RightPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-3 space-y-3">
-          {!isConfigured ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Enter your API key to enable this provider</p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={apiKey}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
-                  />
-                  <button
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        <div className="px-4 py-3 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">API Key</label>
+            {!isConfigured ? (
+              <div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
+                    />
+                    <button
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        {showApiKey
+                          ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          : <><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>}
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                {PROVIDER_URLS[providerId] && (
+                  <a href={PROVIDER_URLS[providerId]} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
                   >
-                    {showApiKey ? (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
+                    Get API key from {providerInfo.name}
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>Configured{authStatus[providerId]?.source ? ` (${authStatus[providerId].source})` : ''}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {isPopular && !replacingKey && (
+                    <button onClick={() => setReplacingKey(true)} className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">Replace</button>
+                  )}
+                  {!isPopular && (
+                    <button onClick={async () => { const r = await getProviderConfig(providerId); if (r.ok && r.config) onEditCustom(providerId, r.config) }}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">Edit</button>
+                  )}
+                  <button onClick={handleRemove} disabled={removing} className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors disabled:opacity-50">
+                    {removing ? 'Removing...' : 'Remove'}
                   </button>
                 </div>
-                <button
-                  onClick={handleSetApiKey}
-                  disabled={!apiKey.trim() || saving}
-                  className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {PROVIDER_URLS[providerId] && (
-                <a
-                  href={PROVIDER_URLS[providerId]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
-                >
-                  Get API key from {providerInfo.name}
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {authStatus[providerId]?.source && (
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Source: <span className="text-gray-700 dark:text-gray-300">{authStatus[providerId].source}</span>
-                </div>
-              )}
-              <TestConnectionButton providerId={providerId} testProvider={testProvider} />
-
-              {isPopular && (
-                <>
-                  {replacingKey ? (
-                    <div className="flex gap-2 items-center">
-                      <div className="relative flex-1">
-                        <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={replaceKeyValue}
-                          onChange={(e) => setReplaceKeyValue(e.target.value)}
-                          placeholder="New API key..."
-                          className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleReplaceKey() }}
-                        />
-                        <button
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleReplaceKey}
-                        disabled={!replaceKeyValue.trim() || replaceSaving}
-                        className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                      >
-                        {replaceSaving ? '...' : 'Save'}
-                      </button>
-                      <button
-                        onClick={() => { setReplacingKey(false); setReplaceKeyValue('') }}
-                        className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        Cancel
-                      </button>
+                {isPopular && replacingKey && (
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input type="password" value={replaceKeyValue} onChange={(e) => setReplaceKeyValue(e.target.value)} placeholder="New API key..."
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleReplaceKey() }} />
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setReplacingKey(true)}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-                    >
-                      Replace Key
+                    <button onClick={handleReplaceKey} disabled={!replaceKeyValue.trim() || replaceSaving}
+                      className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+                      {replaceSaving ? '...' : 'Save'}
                     </button>
-                  )}
-                </>
-              )}
-
-              {!isPopular && (
-                <button
-                  onClick={async () => {
-                    const result = await getProviderConfig(providerId)
-                    if (result.ok && result.config) {
-                      onEditCustom(providerId, result.config)
-                    }
-                  }}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit Provider
-                </button>
-              )}
-
-              <button
-                onClick={handleRemove}
-                disabled={removing}
-                className="text-sm text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors flex items-center gap-1 disabled:opacity-50"
-              >
-                {removing ? (
-                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                    <button onClick={() => { setReplacingKey(false); setReplaceKeyValue('') }}
+                      className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
                 )}
-                Remove
-              </button>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
-          {isConfigured && models.length > 0 && onSetModel && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Select Model</label>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Model</label>
+            {models.length > 0 ? (
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="max-h-44 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+                <div className="max-h-36 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
                   {models.map((model) => {
                     const modelKey = `${model.provider}/${model.id}`
                     const isSelected = selectedModelKey === modelKey
@@ -364,23 +298,20 @@ function RightPanel({
                         key={modelKey}
                         onClick={() => onSelectModel(model)}
                         disabled={switchingModel}
-                        className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors ${
+                        className={`w-full px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
                           isSelected
                             ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                         } disabled:opacity-50`}
                       >
-                        <span className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                          isSelected ? 'bg-blue-600 dark:bg-blue-400' : 'border-2 border-gray-300 dark:border-gray-600'
-                        }`} />
+                        <span className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center ${
+                          isSelected ? 'border-blue-500 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'
+                        }`}>
+                          {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400" />}
+                        </span>
                         <span className="flex-1 truncate">{model.name}</span>
-                        {isSelected && (
-                          <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
                         {switchingModel && isSelected && (
-                          <svg className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                          <svg className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                           </svg>
@@ -390,16 +321,28 @@ function RightPanel({
                   })}
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-gray-400 dark:text-gray-500">No models available</p>
+            )}
+          </div>
 
-          {isConfigured && models.length > 0 && !onSetModel && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">{models.length} model(s) available</p>
-          )}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Connection</label>
+            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={!isConfigured ? apiKey : replacingKey ? replaceKeyValue : undefined} />
+          </div>
 
-          {isConfigured && models.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">No models available for this provider</p>
-          )}
+          <div>
+            {!isConfigured ? (
+              <button onClick={handleSetApiKey} disabled={!apiKey.trim() || saving}
+                className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            ) : (
+              <div className="w-full rounded-md bg-green-50 dark:bg-green-900/20 py-2 text-sm font-medium text-green-600 dark:text-green-400 text-center">
+                Configured
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -584,13 +527,28 @@ function ProviderSetup({
   getAvailableModels,
   onSetModel,
   onAuthChange,
+  currentModel,
 }: ProviderSetupProps): React.ReactElement {
   const [authStatus, setAuthStatus] = useState<AuthStatusMap>({})
   const [models, setModels] = useState<ModelInfo[]>([])
   const [focusedProvider, setFocusedProvider] = useState<string | null>(null)
-  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
   const [switchingModel, setSwitchingModel] = useState(false)
   const [editingCustom, setEditingCustom] = useState<{ providerId: string; config: Record<string, unknown> } | null>(null)
+
+  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
+  const pendingModelKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (pendingModelKeyRef.current) {
+      if (currentModel && `${currentModel.provider}/${currentModel.id}` === pendingModelKeyRef.current) {
+        pendingModelKeyRef.current = null
+      }
+      return
+    }
+    if (currentModel) {
+      setSelectedModelKey(`${currentModel.provider}/${currentModel.id}`)
+    }
+  }, [currentModel])
 
   const hasModelsSupport = !!(getAvailableModels && onSetModel)
 
@@ -622,20 +580,19 @@ function ProviderSetup({
   }, [authStatus])
 
   const handleSelectModel = useCallback(async (model: ModelInfo) => {
-    const isConfigured = authStatus[model.provider]?.configured
-    setFocusedProvider(model.provider)
-
-    if (!isConfigured) return
-    if (!onSetModel) return
-
     const modelKey = `${model.provider}/${model.id}`
+    setSelectedModelKey(modelKey)
+    pendingModelKeyRef.current = modelKey
+    setFocusedProvider(model.provider)
     setSwitchingModel(true)
-    const success = await onSetModel(model.id, model.provider)
-    setSwitchingModel(false)
-    if (success) {
-      setSelectedModelKey(modelKey)
+    try {
+      await onSetModel?.(model.id, model.provider)
+    } catch {
+      setSelectedModelKey(null)
+      pendingModelKeyRef.current = null
     }
-  }, [authStatus, onSetModel])
+    setSwitchingModel(false)
+  }, [onSetModel])
 
   const handleRemoveAuth = useCallback(async (provider: string): Promise<boolean> => {
     const ok = await removeAuth(provider)

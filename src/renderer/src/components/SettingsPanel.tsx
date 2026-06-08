@@ -17,6 +17,7 @@ interface SettingsPanelProps {
   getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
+  currentModel?: { provider: string; id: string } | null
 }
 
 function SettingsPanel({
@@ -30,6 +31,7 @@ function SettingsPanel({
   getAvailableModels,
   onSetModel,
   onAuthChange,
+  currentModel,
 }: SettingsPanelProps): React.ReactElement {
   const [showProviderDialog, setShowProviderDialog] = useState(false)
 
@@ -88,6 +90,7 @@ function SettingsPanel({
                 getAvailableModels={getAvailableModels}
                 onSetModel={onSetModel}
                 onAuthChange={onAuthChange}
+                currentModel={currentModel}
               />
             </div>
           </div>

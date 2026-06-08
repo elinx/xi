@@ -13,10 +13,11 @@ interface WelcomeDialogProps {
   getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
+  currentModel?: { provider: string; id: string } | null
   onSkip: () => void
 }
 
-function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, getAvailableModels, onSetModel, onAuthChange, onSkip }: WelcomeDialogProps): React.ReactElement {
+function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, getAvailableModels, onSetModel, onAuthChange, currentModel, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
   const [hasConfiguredProvider, setHasConfiguredProvider] = useState(false)
 
@@ -96,6 +97,7 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 getAvailableModels={getAvailableModels}
                 onSetModel={onSetModel}
                 onAuthChange={handleAuthChange}
+                currentModel={currentModel}
               />
             </div>
             {hasConfiguredProvider && (
