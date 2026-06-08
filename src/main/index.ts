@@ -231,6 +231,19 @@ function registerIpcHandlers(): void {
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
       await primary.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
+      try {
+        const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+        const configDir = join(homeDir, '.pi', 'agent')
+        if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true })
+        const authPath = join(configDir, 'auth.json')
+        let authData: Record<string, unknown> = {}
+        if (existsSync(authPath)) {
+          try { authData = JSON.parse(readFileSync(authPath, 'utf-8')) } catch {}
+        }
+        if (!authData.providers) authData.providers = {}
+        ;(authData.providers as Record<string, unknown>)[provider] = { ...((authData.providers as Record<string, unknown>)?.[provider] as Record<string, unknown> ?? {}), apiKey }
+        writeFileSync(authPath, JSON.stringify(authData, null, 2))
+      } catch {}
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -242,6 +255,17 @@ function registerIpcHandlers(): void {
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
       await primary.bridge.sendRpcCommand({ type: 'remove_auth', provider })
+      try {
+        const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+        const authPath = join(homeDir, '.pi', 'agent', 'auth.json')
+        if (existsSync(authPath)) {
+          const authData = JSON.parse(readFileSync(authPath, 'utf-8'))
+          if (authData.providers?.[provider]) {
+            delete authData.providers[provider]
+            writeFileSync(authPath, JSON.stringify(authData, null, 2))
+          }
+        }
+      } catch {}
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
