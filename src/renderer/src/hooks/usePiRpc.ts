@@ -21,6 +21,7 @@ export interface UsePiRpcOptions {
   onSessionForkPointsUpdate: (sessionPath: string, forkPoints: ForkPoint[]) => void
   onSessionModelChange: (sessionPath: string, model: PiModelInfo | null) => void
   onWorkerStatusChange: (sessionPath: string, status: string) => void
+  onDisplaySession?: (sessionPath: string) => void
   displayedSessionPath: string | null
   getCache: (sessionPath: string) => SessionCache | undefined
   ensureCacheSync: (sessionPath: string) => SessionCache
@@ -64,6 +65,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const {
     onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange,
     onSessionForkPointsUpdate, onSessionModelChange, onWorkerStatusChange,
+    onDisplaySession,
     displayedSessionPath, getCache, ensureCacheSync, updateCache,
   } = options
 
@@ -153,6 +155,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
 
       if (!getCache(sessionPath)) {
         ensureCacheSync(sessionPath)
+      }
+
+      if (sessionPath !== displayedSessionPath && !displayedSessionPath) {
+        onDisplaySession?.(sessionPath)
       }
 
       switch (event.type) {
@@ -476,7 +482,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
       }
     },
-    [resolveSessionPath, getCache, ensureCacheSync, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange],
+    [resolveSessionPath, getCache, ensureCacheSync, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange, onDisplaySession, displayedSessionPath],
   )
 
   useEffect(() => {

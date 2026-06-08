@@ -30,7 +30,7 @@ interface UseSessionCacheReturn {
   displayedStreamingMessageId: string | null
 
   getCache: (sessionPath: string) => SessionCache | undefined
-  ensureCache: (sessionPath: string) => SessionCache
+  ensureCacheSync: (sessionPath: string) => SessionCache
   getOrCreateCache: (sessionPath: string) => Promise<SessionCache>
   updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
   displaySession: (sessionPath: string) => Promise<void>

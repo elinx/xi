@@ -65,6 +65,9 @@ function App(): React.ReactElement {
     onWorkerStatusChange: (sessionPath: string, status: string) => {
       setWorkerStatus(sessionPath, status as WorkerStatus)
     },
+    onDisplaySession: (sessionPath: string) => {
+      sessionCache.displaySession(sessionPath)
+    },
     displayedSessionPath: sessionCache.displayedSessionPath,
     getCache,
     ensureCacheSync,
