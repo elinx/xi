@@ -72,6 +72,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
 
   const isStreamingRef = useRef(false)
+  const currentModelRef = useRef<PiModelInfo | null>(null)
+
+  useEffect(() => { currentModelRef.current = currentModel }, [currentModel])
 
   const sessionIdToPathMap = useRef<Map<string, string>>(new Map())
 
@@ -494,7 +497,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       if (result.ok && result.data) {
         const model = result.data.model as PiModelInfo | null
         const thinkingLevel = result.data.thinkingLevel as string | null
-        if (model && (!model.name || model.name === 'unknown')) {
+        if (model && model.provider === 'unknown' && model.id === 'unknown') {
+          setCurrentModel(null)
+        } else if (model && (!model.name || model.name === 'unknown')) {
           ;(window.api as ApiWithModels).getAvailableModels(null).then((modelsResult) => {
             const data = modelsResult.data as { models?: PiModelInfo[] } | undefined
             const models: PiModelInfo[] = (modelsResult.ok && data?.models) ? data.models : []
@@ -697,10 +702,33 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result.ok && result.data ? result.data : {}
   }, [])
 
+  const tryAutoSelectModel = useCallback(async (provider: string) => {
+    type ApiWithModels = typeof window.api & { getAvailableModels: (sp: string | null) => Promise<{ ok: boolean; data?: { models: PiModelInfo[] }; error?: string }> }
+    type ApiWithSetModel = typeof window.api & { setModel: (sp: string | null, model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
+    try {
+      const modelsResult = await (window.api as ApiWithModels).getAvailableModels(null)
+      const models = modelsResult.ok && (modelsResult.data as { models?: PiModelInfo[] } | undefined)?.models
+      if (models && models.length > 0) {
+        const match = models.find(m => m.provider === provider) ?? models[0]
+        const setResult = await (window.api as ApiWithSetModel).setModel(null, match.id, match.provider)
+        if (setResult.ok && setResult.data) {
+          setCurrentModel(setResult.data as PiModelInfo | null)
+        } else if (setResult.ok) {
+          refreshModelInfo()
+        }
+      }
+    } catch {}
+  }, [refreshModelInfo])
+
   const setApiKeyFn = useCallback(async (provider: string, apiKey: string): Promise<boolean> => {
     type ApiWithSetApiKey = typeof window.api & { setApiKey: (sp: string | null, provider: string, apiKey: string) => Promise<{ ok: boolean; error?: string }> }
     const result = await (window.api as ApiWithSetApiKey).setApiKey(null, provider, apiKey)
-    if (result.ok) refreshModelInfo()
+    if (result.ok) {
+      refreshModelInfo()
+      if (!currentModelRef.current || (currentModelRef.current.provider === 'unknown' && currentModelRef.current.id === 'unknown')) {
+        tryAutoSelectModel(provider)
+      }
+    }
     return result.ok
   }, [refreshModelInfo])
 

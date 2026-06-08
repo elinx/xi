@@ -36,7 +36,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
   const mention = useFileMention(files)
 
   const showStop = isStreaming
-  const noModel = isConnected && !currentModel
+  const noModel = isConnected && (!currentModel || (currentModel.id === 'unknown' && currentModel.provider === 'unknown'))
 
   const getPlainText = useCallback((): string => {
     if (!editorRef.current) return ''

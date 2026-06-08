@@ -172,7 +172,25 @@ function registerIpcHandlers(): void {
     const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
-      const data = await worker.bridge.sendRpcCommand({ type: 'get_available_models' })
+      const data = await worker.bridge.sendRpcCommand({ type: 'get_available_models' }) as { models?: Array<Record<string, unknown>> }
+      if (data.models) {
+        let authStatus: Record<string, { configured: boolean; source?: string }> = {}
+        try {
+          const authData = await worker.bridge.sendRpcCommand({ type: 'get_provider_auth_status' }) as Record<string, { configured: boolean; source?: string }>
+          if (authData) authStatus = authData
+        } catch {}
+        const xiAuthPath = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi', 'auth.json')
+        let xiAuth: Record<string, unknown> = {}
+        try { if (existsSync(xiAuthPath)) xiAuth = JSON.parse(readFileSync(xiAuthPath, 'utf-8')) } catch {}
+        for (const m of data.models) {
+          const provider = m.provider as string
+          if (authStatus[provider]?.configured) {
+            m.hasAuth = true
+          } else if (xiAuth[provider]?.key) {
+            m.hasAuth = true
+          }
+        }
+      }
       return { ok: true, data }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
