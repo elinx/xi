@@ -486,8 +486,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return cleanup
   }, [])
 
-  useEffect(() => {
-    if (!isConnected) return
+  const refreshModelInfo = useCallback(() => {
     type ApiWithModelInfo = typeof window.api & { getModelInfo: (sessionPath: string | null) => Promise<{ ok: boolean; data?: { model: PiModelInfo | null; thinkingLevel: string | null }; error?: string }> }
     ;(window.api as ApiWithModelInfo).getModelInfo(null).then((result) => {
       if (result.ok && result.data) {
@@ -495,7 +494,12 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
         setThinkingLevel(result.data.thinkingLevel)
       }
     })
-  }, [isConnected])
+  }, [])
+
+  useEffect(() => {
+    if (!isConnected) return
+    refreshModelInfo()
+  }, [isConnected, refreshModelInfo])
 
   useEffect(() => {
     const cleanup = window.api.onEvent((rawEvent) => {
@@ -681,8 +685,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const setApiKeyFn = useCallback(async (provider: string, apiKey: string): Promise<boolean> => {
     type ApiWithSetApiKey = typeof window.api & { setApiKey: (sp: string | null, provider: string, apiKey: string) => Promise<{ ok: boolean; error?: string }> }
     const result = await (window.api as ApiWithSetApiKey).setApiKey(null, provider, apiKey)
+    if (result.ok) refreshModelInfo()
     return result.ok
-  }, [])
+  }, [refreshModelInfo])
 
   const removeAuthFn = useCallback(async (provider: string): Promise<boolean> => {
     type ApiWithRemoveAuth = typeof window.api & { removeAuth: (sp: string | null, provider: string) => Promise<{ ok: boolean; error?: string }> }
@@ -693,8 +698,9 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const registerCustomProviderFn = useCallback(async (provider: string, config: Record<string, unknown>): Promise<boolean> => {
     type ApiWithRegister = typeof window.api & { registerCustomProvider: (sp: string | null, provider: string, config: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }> }
     const result = await (window.api as ApiWithRegister).registerCustomProvider(null, provider, config)
+    if (result.ok) refreshModelInfo()
     return result.ok
-  }, [])
+  }, [refreshModelInfo])
 
   const testProviderFn = useCallback(async (provider: string, overrides?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string; latencyMs?: number }> => {
     type ApiWithTest = typeof window.api & { testProvider: (sp: string | null, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }> }
