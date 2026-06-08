@@ -218,7 +218,7 @@ function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 
         <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
         </svg>
-        {isForward ? `↗ "${block.sourceSessionName}" · ` : ''}{isForward ? 'Forwarded' : 'Quoted'} {block.role === 'user' ? 'You' : 'Pi'} message
+        {isForward ? `↗ "${block.sourceSessionName}" · ` : ''}{isForward ? 'Forwarded' : 'Quoted'} {block.role === 'user' ? 'You' : 'Xi'} message
       </button>
       {open && (
         <div className={`px-3 pb-2 text-xs leading-4 whitespace-pre-wrap ${isForward ? 'text-amber-700' : 'text-blue-700'}`}>{block.content}</div>
@@ -1138,7 +1138,7 @@ function TurnCard({
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-500">
-                      {msg.role === 'user' ? 'You' : 'Pi'}
+                      {msg.role === 'user' ? 'You' : 'Xi'}
                     </span>
                     <div className="relative flex items-center gap-1">
                       <CopyButton blocks={msg.blocks} />
@@ -1303,7 +1303,7 @@ function OutlineRow({
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-500">
-                      {msg.role === 'user' ? 'You' : 'Pi'}
+                      {msg.role === 'user' ? 'You' : 'Xi'}
                     </span>
                     <div className="relative flex items-center gap-1">
                       <CopyButton blocks={msg.blocks} />
@@ -1577,8 +1577,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
-            <p className="text-lg text-gray-400">Start a conversation with Pi</p>
-            <p className="mt-2 text-sm text-gray-400">Type a message below or connect to Pi first</p>
+            <p className="text-lg text-gray-400">Start a conversation with Xi</p>
+            <p className="mt-2 text-sm text-gray-400">Type a message below or connect to Xi first</p>
           </div>
         </div>
       ) : viewMode === 'normal' ? (
@@ -1616,7 +1616,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-xs font-medium text-gray-500">
-                      {isUser ? 'You' : 'Pi'}
+                      {isUser ? 'You' : 'Xi'}
                     </span>
                     <div className="relative flex items-center gap-1">
                       <CopyButton blocks={allBlocks} />

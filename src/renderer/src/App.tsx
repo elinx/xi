@@ -716,7 +716,7 @@ function App(): React.ReactElement {
                    <button
                      onClick={handleConnect}
                      className="rounded px-2 py-0.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition-colors"
-                     title="Connect to Pi"
+                     title="Connect to Xi"
                   >
                      Connect
                    </button>

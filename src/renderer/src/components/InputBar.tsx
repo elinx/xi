@@ -333,7 +333,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
 
   if (isStreaming) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-    statusText = <>Pi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
+    statusText = <>Xi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
   } else if (workerStatus === 'starting') {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
     statusText = <span className="text-amber-600">Connecting…</span>
@@ -341,19 +341,19 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
     statusText = (
       <span className="text-amber-600">
-        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors">No model configured</button>
+        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors">No model configured</button>
       </span>
     )
   } else if (isConnected && currentModel) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
     statusText = (
       <span className="text-gray-500">
-        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
+        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
       </span>
     )
   } else {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-    statusText = 'Pi Disconnected'
+    statusText = 'Xi Disconnected'
   }
 
   return (
@@ -404,7 +404,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
             onKeyDown={handleKeyDown}
             onInput={handleEditorInput}
             onPaste={handlePaste}
-            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Pi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ to mention files)'}
+            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ to mention files)'}
             className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
           />
           <FileMentionDropdown

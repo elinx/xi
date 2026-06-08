@@ -65,7 +65,7 @@ export default function QuoteCard({ quotes, onRemove, onClear }: QuoteCardProps)
               )}
               <div className="flex-1 min-w-0">
                 <span className={`text-[10px] ${isForward ? 'text-amber-500' : 'text-gray-400'}`}>
-                  {isForward ? `↗ "${q.sourceSessionName}" · ` : ''}{q.role === 'user' ? 'You' : 'Pi'} · {relativeTime(q.timestamp)}
+                  {isForward ? `↗ "${q.sourceSessionName}" · ` : ''}{q.role === 'user' ? 'You' : 'Xi'} · {relativeTime(q.timestamp)}
                 </span>
                 <p className="text-gray-600 line-clamp-2 leading-4 mt-0.5">{q.content}</p>
               </div>
