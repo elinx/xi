@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
+import { getSessionDisplayName } from '../utils/session-utils'
 
 interface SessionSidebarProps {
   sessions: SessionListResult | null
@@ -32,16 +33,6 @@ function formatRelativeTime(isoTimestamp: string): string {
   if (diffHr < 24) return `${diffHr}h ago`
   if (diffDay < 30) return `${diffDay}d ago`
   return new Date(isoTimestamp).toLocaleDateString()
-}
-
-function getDisplayName(session: SessionInfo): string {
-  if (session.name) return session.name
-  const d = new Date(session.createdAt)
-  const month = d.toLocaleString('en', { month: 'short' })
-  const day = d.getDate()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${month} ${day} ${hh}:${mm}`
 }
 
 const GRAY = '#e5e7eb'
@@ -92,7 +83,7 @@ function SessionNode({
 }): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState(getDisplayName(node.session))
+  const [renameValue, setRenameValue] = useState(getSessionDisplayName(node.session))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isForking, setIsForking] = useState(false)
   const [forkName, setForkName] = useState('')
@@ -105,7 +96,7 @@ function SessionNode({
   useEffect(() => {
     if (triggerRenamePath === node.session.filePath) {
       setIsRenaming(true)
-      setRenameValue(getDisplayName(node.session))
+      setRenameValue(getSessionDisplayName(node.session))
       onRenameTriggered()
     }
   }, [triggerRenamePath, node.session.filePath, onRenameTriggered])
@@ -120,12 +111,12 @@ function SessionNode({
 
   const handleDoubleClick = useCallback(() => {
     setIsRenaming(true)
-    setRenameValue(getDisplayName(node.session))
+    setRenameValue(getSessionDisplayName(node.session))
   }, [node.session])
 
   const handleRenameSubmit = useCallback(() => {
     const trimmed = renameValue.trim()
-    if (trimmed && trimmed !== getDisplayName(node.session)) {
+    if (trimmed && trimmed !== getSessionDisplayName(node.session)) {
       onRename(trimmed)
     }
     setIsRenaming(false)
@@ -178,7 +169,7 @@ function SessionNode({
             />
           ) : (
             <span className={`flex-1 truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
-              {getDisplayName(node.session)}
+              {getSessionDisplayName(node.session)}
             </span>
           )}
           {node.session.isMain ? (

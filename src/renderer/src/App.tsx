@@ -23,16 +23,7 @@ import type { ChatMessage, TextBlock } from './types/message'
 import type { ForkPoint } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
-
-function getDisplayName(session: { name: string | null; createdAt: string }): string {
-  if (session.name) return session.name
-  const d = new Date(session.createdAt)
-  const month = d.toLocaleString('en', { month: 'short' })
-  const day = d.getDate()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${month} ${day} ${hh}:${mm}`
-}
+import { getSessionDisplayName } from './utils/session-utils'
 
 function App(): React.ReactElement {
   const sessionCache = useSessionCache()
@@ -247,7 +238,7 @@ function App(): React.ReactElement {
     ? sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === activeSessionPath)
     : currentSession
 
-  const activeSessionName = activeSession ? getDisplayName(activeSession) : null
+  const activeSessionName = activeSession ? getSessionDisplayName(activeSession) : null
 
   useEffect(() => {
     const sessionTab = tabs.find(t => t.id === SESSION_TAB_ID)
@@ -392,7 +383,7 @@ function App(): React.ReactElement {
 
   const handleForwardMessage = useCallback((_messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => {
     const sourceSession = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.filePath === displayedSessionPathRef.current)
-    const sourceSessionName = sourceSession ? getDisplayName(sourceSession) : 'Unknown'
+    const sourceSessionName = sourceSession ? getSessionDisplayName(sourceSession) : 'Unknown'
     const truncatedContent = content.length > 200 ? content.slice(0, 200) + '…' : content
     const forward: QuotedMessage = {
       messageId: `fwd-${_messageId}-${Date.now()}`,

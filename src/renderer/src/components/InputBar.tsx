@@ -348,7 +348,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
     statusText = (
       <span className="text-gray-500">
-        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name}</button>
+        Pi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
       </span>
     )
   } else {
