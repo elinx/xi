@@ -70,7 +70,7 @@ function App(): React.ReactElement {
     updateCache: sessionCache.updateCache,
   }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, sessionCache.updateCache])
 
-  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, refreshModelInfo } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const displayedMessages = sessionCache.displayedMessages
@@ -96,6 +96,7 @@ function App(): React.ReactElement {
 
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
+  const [shouldOpenModelSelector, setShouldOpenModelSelector] = useState(false)
   const welcomeCheckDone = useRef(false)
 
   const leftPanelView = useLayoutStore(s => s.leftPanelView)
@@ -857,7 +858,7 @@ function App(): React.ReactElement {
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
-                onAuthChange={() => { getAvailableModels(null) }}
+                onAuthChange={() => { getAvailableModels(null); refreshModelInfo(); setShouldOpenModelSelector(true) }}
               />
             )}
           </div>
@@ -871,8 +872,13 @@ function App(): React.ReactElement {
               onStop={handleStop}
               workerStatus={displayedWorkerStatus}
               currentModel={currentModel}
-              onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
+              onSetModel={async (modelId, provider) => {
+                const ok = await setModel(activeSessionPath, modelId, provider)
+                if (ok) setShouldOpenModelSelector(false)
+                return ok
+              }}
               getAvailableModels={() => getAvailableModels(activeSessionPath)}
+              autoOpenModelSelector={shouldOpenModelSelector}
               files={indexedFiles}
               sentMessages={sentMessages}
               quotes={mergedQuotes}
@@ -905,9 +911,11 @@ function App(): React.ReactElement {
             registerCustomProvider={registerCustomProvider}
              testProvider={testProvider}
              getProviderConfig={getProviderConfig}
-             onAuthChange={() => {
-              getAvailableModels(null)
-            }}
+              onAuthChange={() => {
+               getAvailableModels(null)
+               refreshModelInfo()
+               setShouldOpenModelSelector(true)
+             }}
             onSkip={() => setShowWelcome(false)}
           />
        )}

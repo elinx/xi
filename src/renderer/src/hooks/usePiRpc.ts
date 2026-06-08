@@ -48,6 +48,7 @@ interface UsePiRpcReturn {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  refreshModelInfo: () => void
 }
 
 function inferContextWindow(model: string): number {
@@ -714,5 +715,5 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result
   }, [])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn }
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, refreshModelInfo }
 }
