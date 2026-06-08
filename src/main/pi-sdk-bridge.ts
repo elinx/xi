@@ -158,8 +158,7 @@ export class PiSDKBridge extends EventEmitter {
   private linkGlobalAgentConfig(localAgentDir: string): void {
     const globalAgentDir = join(
       process.env.HOME ?? process.env.USERPROFILE ?? '~',
-      '.pi',
-      'agent'
+      '.xi'
     )
 
     for (const file of LINKED_FILES) {

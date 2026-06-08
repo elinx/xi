@@ -2,7 +2,7 @@
  * Session management types for Pi session sidebar.
  *
  * Pi sessions are stored as JSONL files at:
- *   ~/.pi/agent/sessions/--<encoded-cwd>--/<timestamp>_<uuid>.jsonl
+ *   ~/.xi/sessions/--<encoded-cwd>--/<timestamp>_<uuid>.jsonl
  *
  * Each file has a tree structure (id/parentId) and a header with metadata.
  * Inter-session relationships are tracked via `parentSession` in the header.
