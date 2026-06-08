@@ -74,10 +74,11 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const [thinkingLevel, setThinkingLevel] = useState<string | null>(null)
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
 
-  const isStreamingRef = useRef(false)
   const currentModelRef = useRef<PiModelInfo | null>(null)
+  const displayedSessionPathRef = useRef<string | null>(displayedSessionPath)
 
   useEffect(() => { currentModelRef.current = currentModel }, [currentModel])
+  useEffect(() => { displayedSessionPathRef.current = displayedSessionPath }, [displayedSessionPath])
 
   const sessionIdToPathMap = useRef<Map<string, string>>(new Map())
 
@@ -157,20 +158,18 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
         ensureCacheSync(sessionPath)
       }
 
-      if (sessionPath !== displayedSessionPath && !displayedSessionPath) {
+      if (sessionPath !== displayedSessionPathRef.current && !displayedSessionPathRef.current) {
         onDisplaySession?.(sessionPath)
       }
 
       switch (event.type) {
         case 'agent_start': {
-          isStreamingRef.current = true
           const cache = getCache(sessionPath)
           onSessionStreamingChange(sessionPath, true, cache?.currentAssistantId ?? null)
           break
         }
 
         case 'agent_end': {
-          isStreamingRef.current = false
           onSessionStreamingChange(sessionPath, false, null)
           flushSync(sessionPath)
           updateCache(sessionPath, (cache) => ({
@@ -225,9 +224,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               timestamp: assistantMsg.timestamp,
             }
             onSessionMessagesUpdate(sessionPath, (prev) => [...prev, chatMsg])
-            if (isStreamingRef.current) {
-              onSessionStreamingChange(sessionPath, true, assistantId)
-            }
+            onSessionStreamingChange(sessionPath, true, assistantId)
           }
           break
         }
@@ -482,7 +479,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
       }
     },
-    [resolveSessionPath, getCache, ensureCacheSync, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange, onDisplaySession, displayedSessionPath],
+    [resolveSessionPath, getCache, ensureCacheSync, updateCache, updateContentBlock, syncContentBlocksToMessage, finalizeCurrentAssistant, flushSync, onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange, onDisplaySession],
   )
 
   useEffect(() => {
@@ -594,7 +591,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return new Promise((resolve) => {
       const startTime = Date.now()
       const check = () => {
-        if (!isStreamingRef.current || Date.now() - startTime > 5000) {
+        const stillStreaming = sessionPath ? (getCache(sessionPath)?.isStreaming ?? false) : false
+        if (!stillStreaming || Date.now() - startTime > 5000) {
           resolve()
         } else {
           setTimeout(check, 50)
@@ -602,7 +600,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       }
       setTimeout(check, 50)
     })
-  }, [])
+  }, [getCache])
 
   const clearMessages = useCallback((sessionPath: string | null) => {
     if (!sessionPath) return

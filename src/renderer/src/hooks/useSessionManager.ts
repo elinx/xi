@@ -16,16 +16,16 @@ interface UseSessionManagerReturn {
   currentSession: SessionInfo | null
   forkMessages: ForkableMessage[]
   loadSessions: () => Promise<void>
-  forkAtEntry: (sessionPath: string | null, entryId: string, name: string) => Promise<void>
+  forkAtEntry: (sessionPath: string | null, entryId: string, name: string) => Promise<string | null>
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
-  newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<boolean>
+  newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<string | null>
   renameSession: (sessionPath: string | null, name: string) => Promise<void>
   deleteSession: (sessionPath: string) => Promise<boolean>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   refresh: () => Promise<void>
   getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
-  clearSession: (sessionPath: string | null) => Promise<boolean>
+  clearSession: (sessionPath: string | null) => Promise<string | null>
 }
 
 export function useSessionManager(isConnected: boolean): UseSessionManagerReturn {
@@ -67,7 +67,9 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     if (result.success) {
       await loadSessions()
       await loadCurrentSession()
+      return result.sessionPath ?? null
     }
+    return null
   }, [loadSessions, loadCurrentSession])
 
   const switchSession = useCallback(async (sessionPath: string) => {
@@ -77,14 +79,14 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     return { success: true }
   }, [loadSessions, loadCurrentSession])
 
-  const newSession = useCallback(async (sessionPath: string | null, name: string, parentSessionPath?: string): Promise<boolean> => {
+  const newSession = useCallback(async (sessionPath: string | null, name: string, parentSessionPath?: string): Promise<string | null> => {
     const result = await api.newSession(sessionPath, name, parentSessionPath)
     if (result.success) {
       await loadSessions()
       await loadCurrentSession()
-      return true
+      return result.sessionPath ?? null
     }
-    return false
+    return null
   }, [loadSessions, loadCurrentSession])
 
   const renameSession = useCallback(async (sessionPath: string | null, name: string) => {
@@ -125,17 +127,17 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     return false
   }, [loadSessions])
 
-  const clearSession = useCallback(async (sessionPath: string | null): Promise<boolean> => {
+  const clearSession = useCallback(async (sessionPath: string | null): Promise<string | null> => {
     try {
       const result = await api.clearSession(sessionPath)
       if (result.success) {
         await loadSessions()
         await loadCurrentSession()
-        return true
+        return result.sessionPath ?? null
       }
-      return false
+      return null
     } catch {
-      return false
+      return null
     }
   }, [loadSessions, loadCurrentSession])
 

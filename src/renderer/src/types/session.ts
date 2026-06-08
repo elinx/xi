@@ -84,16 +84,16 @@ export interface ForkPoint {
 export interface SessionIpcApi {
   listSessions: () => Promise<SessionListResult>
   getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
-  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
+  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string; sessionPath?: string }>
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
-  newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
+  newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string; sessionPath?: string }>
   renameSession: (sessionPath: string | null, name: string) => Promise<{ success: boolean; error?: string }>
   getCurrentSession: () => Promise<SessionInfo | null>
   refreshSessions: () => Promise<SessionListResult>
   getMessages: (sessionPath: string | null) => Promise<unknown[]>
   deleteSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
-  clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string }>
+  clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string; sessionPath?: string }>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
 }
 

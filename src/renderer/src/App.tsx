@@ -303,41 +303,34 @@ function App(): React.ReactElement {
     if (isPiStreaming()) {
       await abort(currentPath)
     }
-    clearMessages(currentPath)
-    const result = await newSession(currentPath, name, parentSessionPath)
-    if (result) {
+    const newPath = await newSession(currentPath, name, parentSessionPath)
+    if (newPath) {
       await refresh()
-      const path = currentSessionRef.current?.filePath
-      if (path) {
-        await displaySessionRef.current(path)
-        const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
-        if (apiWithWorker.workerEnsureReady) {
-          await apiWithWorker.workerEnsureReady(path)
-        }
-        window.api.saveLastSession(path)
+      await displaySessionRef.current(newPath)
+      const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+      if (apiWithWorker.workerEnsureReady) {
+        await apiWithWorker.workerEnsureReady(newPath)
       }
+      window.api.saveLastSession(newPath)
     }
-  }, [abort, clearMessages, newSession, refresh, isPiStreaming])
+  }, [abort, newSession, refresh, isPiStreaming])
 
   const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
     const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
       await abort(currentPath)
     }
-    clearMessages(currentPath)
-    await forkAtEntry(currentPath, entryId, name)
-    await loadHistory(currentPath)
-    await refresh()
-    const path = currentSessionRef.current?.filePath
-    if (path) {
-      await displaySessionRef.current(path)
+    const newPath = await forkAtEntry(currentPath, entryId, name)
+    if (newPath) {
+      await refresh()
+      await displaySessionRef.current(newPath)
       const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
       if (apiWithWorker.workerEnsureReady) {
-        await apiWithWorker.workerEnsureReady(path)
+        await apiWithWorker.workerEnsureReady(newPath)
       }
-      window.api.saveLastSession(path)
+      window.api.saveLastSession(newPath)
     }
-  }, [abort, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming])
+  }, [abort, forkAtEntry, refresh, isPiStreaming])
 
   const handleForkFromEnd = useCallback(async (sessionPath: string, name: string) => {
     const currentPath = displayedSessionPathRef.current
@@ -346,37 +339,44 @@ function App(): React.ReactElement {
     }
     const msgs = await getForkMessages(currentPath)
     const lastEntry = msgs[msgs.length - 1]
-    if (!lastEntry?.entryId) return
-    clearMessages(currentPath)
-    await forkAtEntry(currentPath, lastEntry.entryId, name)
-    await loadHistory(currentPath)
-    await refresh()
-    const path = currentSessionRef.current?.filePath
-    if (path) {
-      await displaySessionRef.current(path)
+    if (!lastEntry?.entryId) {
+      const newPath = await newSession(currentPath, name, sessionPath)
+      if (newPath) {
+        await refresh()
+        await displaySessionRef.current(newPath)
+        const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+        if (apiWithWorker.workerEnsureReady) {
+          await apiWithWorker.workerEnsureReady(newPath)
+        }
+        window.api.saveLastSession(newPath)
+      }
+      return
+    }
+    const newPath = await forkAtEntry(currentPath, lastEntry.entryId, name)
+    if (newPath) {
+      await refresh()
+      await displaySessionRef.current(newPath)
       const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
       if (apiWithWorker.workerEnsureReady) {
-        await apiWithWorker.workerEnsureReady(path)
+        await apiWithWorker.workerEnsureReady(newPath)
       }
-      window.api.saveLastSession(path)
+      window.api.saveLastSession(newPath)
     }
-  }, [abort, getForkMessages, clearMessages, forkAtEntry, loadHistory, refresh, isPiStreaming])
+  }, [abort, getForkMessages, forkAtEntry, newSession, refresh, isPiStreaming])
 
   const handleClearSession = useCallback(async () => {
     const currentPath = displayedSessionPathRef.current
     if (isPiStreaming()) {
       await abort(currentPath)
     }
-    clearMessages(currentPath)
-    const ok = await clearSession(currentPath)
-    if (ok) {
+    const newPath = await clearSession(currentPath)
+    if (newPath) {
       clearMessages(currentPath)
-      await loadHistory(currentPath)
       await refresh()
-      const path = currentSessionRef.current?.filePath
-      if (path) window.api.saveLastSession(path)
+      await displaySessionRef.current(newPath)
+      window.api.saveLastSession(newPath)
     }
-  }, [abort, clearMessages, clearSession, loadHistory, refresh, isPiStreaming])
+  }, [abort, clearMessages, clearSession, refresh, isPiStreaming])
 
   const handleQuoteMessage = useCallback((messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => {
     setQuotes(prev => {
