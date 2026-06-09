@@ -511,7 +511,7 @@ function ProviderSetup({
     }
   }, [hasModelsSupport, refreshModels])
 
-  const customProviders = useMemo(() => {
+  const customProvidersList = useMemo(() => {
     return Object.entries(authStatus)
       .filter(([id]) => !POPULAR_IDS.has(id.toLowerCase()))
       .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source, color: stringToColor(id) }))
@@ -560,23 +560,24 @@ function ProviderSetup({
     setFocusedProvider('__custom__')
   }, [])
 
-  const allProviders = useMemo(() => {
+  const popularProvidersList = useMemo(() => {
     const authLower: Record<string, { configured: boolean; source?: string }> = {}
     for (const [k, v] of Object.entries(authStatus)) {
       authLower[k.toLowerCase()] = v
     }
-    return [
-      ...POPULAR_PROVIDERS.map(p => ({
-        id: p.id,
-        name: p.name,
-        subtitle: p.subtitle,
-        color: p.color,
-        configured: authLower[p.id.toLowerCase()]?.configured ?? false,
-        source: authLower[p.id.toLowerCase()]?.source,
-      })),
-      ...customProviders,
-    ]
-  }, [authStatus, customProviders])
+    return POPULAR_PROVIDERS.map(p => ({
+      id: p.id,
+      name: p.name,
+      subtitle: p.subtitle,
+      color: p.color,
+      configured: authLower[p.id.toLowerCase()]?.configured ?? false,
+      source: authLower[p.id.toLowerCase()]?.source,
+    }))
+  }, [authStatus])
+
+  const allProviders = useMemo(() => {
+    return [...customProvidersList, ...popularProvidersList]
+  }, [customProvidersList, popularProvidersList])
 
   const focusedModels = useMemo(() => {
     if (!focusedProvider) return []
@@ -597,27 +598,89 @@ function ProviderSetup({
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Providers</span>
         </div>
         <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-          {allProviders.map((p) => {
+          {customProvidersList.length > 0 && (
+            <>
+              <div className="px-2 pt-1 pb-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Custom</span>
+              </div>
+              {customProvidersList.map((p) => {
+                const isFocused = effectiveFocusedProvider === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setFocusedProvider(p.id)
+                      getProviderConfig(p.id).then(result => {
+                        if (result.ok && result.config) {
+                          setEditingCustom({ providerId: p.id, config: result.config })
+                        } else {
+                          setEditingCustom(null)
+                        }
+                      })
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
+                      isFocused
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                        : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    }`}
+                  >
+                    <ProviderIcon name={p.name} color={p.color} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
+                    </div>
+                    {p.configured ? (
+                      <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : isFocused ? (
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex-shrink-0 flex items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                      </span>
+                    ) : (
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                    )}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => { setFocusedProvider('__custom__'); setEditingCustom(null) }}
+                className={`w-full flex items-center justify-center gap-1 rounded-md border-2 border-dashed px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                  effectiveFocusedProvider === '__custom__' && !editingCustom
+                    ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Custom
+              </button>
+            </>
+          )}
+          {customProvidersList.length === 0 && (
+            <button
+              onClick={() => { setFocusedProvider('__custom__'); setEditingCustom(null) }}
+              className={`w-full flex items-center justify-center gap-1 rounded-md border-2 border-dashed px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                effectiveFocusedProvider === '__custom__' && !editingCustom
+                  ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Custom
+            </button>
+          )}
+          <div className="px-2 pt-2 pb-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Built-in</span>
+          </div>
+          {popularProvidersList.map((p) => {
             const isFocused = effectiveFocusedProvider === p.id
-            const isCustom = !POPULAR_IDS.has(p.id)
             return (
               <button
                 key={p.id}
-                onClick={() => {
-                  if (isCustom) {
-                    setFocusedProvider(p.id)
-                    getProviderConfig(p.id).then(result => {
-                      if (result.ok && result.config) {
-                        setEditingCustom({ providerId: p.id, config: result.config })
-                      } else {
-                        setEditingCustom(null)
-                      }
-                    })
-                  } else {
-                    setFocusedProvider(p.id)
-                    setEditingCustom(null)
-                  }
-                }}
+                onClick={() => { setFocusedProvider(p.id); setEditingCustom(null) }}
                 className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
                   isFocused
                     ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
@@ -642,19 +705,6 @@ function ProviderSetup({
               </button>
             )
           })}
-          <button
-            onClick={() => { setFocusedProvider('__custom__'); setEditingCustom(null) }}
-            className={`w-full flex items-center justify-center gap-1 rounded-md border-2 border-dashed px-2.5 py-1.5 text-sm font-medium transition-colors ${
-              effectiveFocusedProvider === '__custom__' && !editingCustom
-                ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Custom
-          </button>
         </div>
       </div>
 
