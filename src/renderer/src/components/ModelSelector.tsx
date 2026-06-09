@@ -45,13 +45,13 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
     if (success) onClose()
   }, [onSetModel, onClose])
 
-  const filtered = search
-    ? models.filter(m =>
+  const filtered = models
+    .filter(m => m.hasAuth)
+    .filter(m => !search ||
         m.name.toLowerCase().includes(search.toLowerCase()) ||
         m.id.toLowerCase().includes(search.toLowerCase()) ||
         m.provider.toLowerCase().includes(search.toLowerCase())
       )
-    : models
 
   const grouped = filtered.reduce<Record<string, PiModelInfo[]>>((acc, m) => {
     const key = m.provider
