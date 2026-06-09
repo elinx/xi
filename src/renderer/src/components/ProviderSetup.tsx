@@ -99,19 +99,9 @@ function TestConnectionButton({ providerId, testProvider, apiKeyOverride, baseUr
       <button
         onClick={handleTest}
         disabled={testing}
-        className="rounded-md bg-gray-900 dark:bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+        className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
       >
-        {testing ? (
-          <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        ) : (
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        )}
-        Test Connection
+        {testing ? 'Testing...' : 'Test'}
       </button>
       {result && (
         <span className={`text-xs font-medium ${result.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -266,16 +256,12 @@ function RightPanel({
             )}
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Connection</label>
-            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} baseUrlOverride={providerBaseUrl} />
-          </div>
-
-          <div>
+          <div className="flex items-center gap-2">
             <button onClick={handleSetApiKey} disabled={!apiKey.trim() || saving}
-              className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
               {saving ? 'Saving...' : isConfigured ? 'Update' : 'Save'}
             </button>
+            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} baseUrlOverride={providerBaseUrl} />
           </div>
         </div>
       </div>
