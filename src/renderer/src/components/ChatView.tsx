@@ -1433,6 +1433,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
   const savedScrollTopRef = useRef<number>(0)
+  const userScrolledUpRef = useRef(false)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -1521,27 +1522,47 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     savedScrollTopRef.current = el.scrollTop
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     isNearBottomRef.current = nearBottom
+    if (nearBottom) {
+      userScrolledUpRef.current = false
+    }
     setShowScrollToBottom(!nearBottom)
   }, [])
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (el) el.scrollTop = el.scrollHeight
     isNearBottomRef.current = true
+    userScrolledUpRef.current = false
     setShowScrollToBottom(false)
   }, [])
 
   const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
+    if (userScrolledUpRef.current) return
     if (!isNearBottomRef.current) return
     if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null
-      bottomRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' })
+      const el = scrollContainerRef.current
+      if (el) el.scrollTop = el.scrollHeight
     })
     return () => {
       if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
     }
   }, [messages, isStreaming])
+
+  useEffect(() => {
+    if (!isStreaming) return
+    const el = scrollContainerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        userScrolledUpRef.current = true
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [isStreaming])
 
   // Restore scroll position when the container becomes visible again
   // (covers: viewMode change, tab switch away and back, panel resize)
@@ -1554,7 +1575,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
       // Only act when transitioning from hidden → visible
       if (wasHidden && !isHidden) {
         if (isNearBottomRef.current) {
-          bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+          el.scrollTop = el.scrollHeight
         } else {
           el.scrollTop = savedScrollTopRef.current
         }
