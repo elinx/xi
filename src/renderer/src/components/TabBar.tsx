@@ -82,7 +82,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
 
   return (
     <div className="h-9 bg-gray-100 border-b border-gray-200 flex items-stretch relative">
-      <div className="flex items-stretch overflow-x-auto scrollbar-none flex-1 min-w-0">
+      <div className="flex items-stretch overflow-x-auto overflow-y-hidden scrollbar-none flex-1 min-w-0">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
           return (
@@ -96,7 +96,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
               }}
               className={`
                 group relative flex items-center gap-1.5 px-3 text-xs font-medium border-r border-gray-200
-                shrink-0 h-9 transition-colors
+                min-w-0 h-9 transition-colors
                 ${isActive
                   ? 'bg-white text-gray-900 border-b-2 border-b-blue-500 -mb-px'
                   : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
@@ -106,7 +106,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
             >
               <TabIcon type={tab.type} />
               {tab.dirty && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
-              <span className="truncate max-w-[120px]">{tab.title}</span>
+              <span className="truncate max-w-[200px]">{tab.title}</span>
               {tab.closable && (
                 <span
                   onClick={(e) => {
