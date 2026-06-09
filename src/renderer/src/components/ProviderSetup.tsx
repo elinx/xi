@@ -520,7 +520,6 @@ function ProviderSetup({
   const otherProvidersList = useMemo(() => {
     return Object.entries(authStatus)
       .filter(([id]) => !POPULAR_IDS.has(id.toLowerCase()) && !(id in customProviderBaseUrls))
-      .filter(([, s]) => s.configured)
       .map(([id, s]) => ({ id, name: id, subtitle: 'Other', configured: s.configured, source: s.source, color: stringToColor(id) }))
   }, [authStatus, customProviderBaseUrls])
 
@@ -585,16 +584,14 @@ function ProviderSetup({
     for (const [k, v] of Object.entries(authStatus)) {
       authLower[k.toLowerCase()] = v
     }
-    return POPULAR_PROVIDERS
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        subtitle: p.subtitle,
-        color: p.color,
-        configured: authLower[p.id.toLowerCase()]?.configured ?? false,
-        source: authLower[p.id.toLowerCase()]?.source,
-      }))
-      .filter(p => p.configured)
+    return POPULAR_PROVIDERS.map(p => ({
+      id: p.id,
+      name: p.name,
+      subtitle: p.subtitle,
+      color: p.color,
+      configured: authLower[p.id.toLowerCase()]?.configured ?? false,
+      source: authLower[p.id.toLowerCase()]?.source,
+    }))
   }, [authStatus])
 
   const allProviders = useMemo(() => {
