@@ -751,9 +751,14 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const registerCustomProviderFn = useCallback(async (provider: string, config: Record<string, unknown>): Promise<boolean> => {
     type ApiWithRegister = typeof window.api & { registerCustomProvider: (sp: string | null, provider: string, config: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }> }
     const result = await (window.api as ApiWithRegister).registerCustomProvider(null, provider, config)
-    if (result.ok) refreshModelInfo()
+    if (result.ok) {
+      refreshModelInfo()
+      if (!currentModelRef.current || (currentModelRef.current.provider === 'unknown' && currentModelRef.current.id === 'unknown')) {
+        tryAutoSelectModel(provider)
+      }
+    }
     return result.ok
-  }, [refreshModelInfo])
+  }, [refreshModelInfo, tryAutoSelectModel])
 
   const testProviderFn = useCallback(async (provider: string, overrides?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean; error?: string; latencyMs?: number }> => {
     type ApiWithTest = typeof window.api & { testProvider: (sp: string | null, provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }> }
