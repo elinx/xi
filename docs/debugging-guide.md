@@ -186,9 +186,49 @@ playwright-cli eval "JSON.stringify(Array.from(document.querySelectorAll('button
 
 - **GPU crash**: `--disable-gpu` 参数必须加，否则 Electron 在 headless/CI 环境会反复崩溃
 - **Pi Worker 崩溃**: GPU crash 会连带杀掉 utilityProcess，这是环境问题不是代码 bug
-- **CDP 连接失败**: 等 25 秒再连，electron-vite 构建需要时间
 - **Snapshot 没有 ref**: 用 `playwright-cli snapshot` 重新获取
 - **页面没反应**: 检查 Pi Worker 是否连接（看主进程日志有无 `[PiSDKBridge] connected`）
+
+### 5.6 CDP 连不上排查
+
+CDP 连不上是 Playwright 调试 Electron 最常见的问题，排查顺序：
+
+1. **Electron 进程是否还活着**
+   ```bash
+   ps aux | grep -i electron | grep -v grep
+   curl -s http://127.0.0.1:9222/json/version
+   ```
+   - 如果进程不在 → 被杀或崩溃了，重起
+   - 如果 curl 无响应 → 端口没监听，还在启动中
+
+2. **启动太早，构建还没完成**
+   - `electron-vite dev` 需要先构建 main + preload + renderer，然后才启动 Electron
+   - 现象：后台进程还在，但 curl 9222 端口被拒
+   - 解决：`sleep 25` 再连，或者循环检测：
+     ```bash
+     for i in $(seq 1 30); do
+       curl -s http://127.0.0.1:9222/json/version && break
+       sleep 2
+     done
+     ```
+
+3. **GPU crash 导致 Electron 退出**
+   - 现象：`ps aux` 没有 Electron 进程，主进程日志有 `gpu_process_host.cc(953)] GPU process exited unexpectedly: exit_code=15`
+   - 解决：加 `--disable-gpu` 参数
+
+4. **GPU crash 后 Electron 还活着但 Worker 死了**
+   - 现象：CDP 能连，页面能打开，但 Pi 功能不工作
+   - 原因：GPU crash 触发 utilityProcess 退出，Worker 崩溃后不会自动重启
+   - 解决：重启整个 app
+
+5. **端口冲突**
+   - 现象：`9222` 端口被之前没杀干净的进程占着
+   - 解决：先 `pkill -f electron; pkill -f electron-vite; pkill -f vite; sleep 3`
+
+6. **Playwright 连上后立即断开**
+   - 现象：`playwright-cli attach` 成功但马上断开
+   - 原因：Electron 窗口还没完全初始化就崩溃了
+   - 解决：等久一点再 attach
 
 ---
 
