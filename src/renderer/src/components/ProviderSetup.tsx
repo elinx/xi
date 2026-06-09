@@ -303,6 +303,7 @@ function CustomProviderForm({
   const [customSaving, setCustomSaving] = useState(false)
   const [customTestResult, setCustomTestResult] = useState<TestResult | null>(null)
   const [customTesting, setCustomTesting] = useState(false)
+  const [registeredProviderId, setRegisteredProviderId] = useState<string | null>(null)
 
   useEffect(() => {
     if (editingProviderId && editingConfig) {
@@ -344,6 +345,7 @@ function CustomProviderForm({
     const ok = await registerCustomProvider(id, config)
     setCustomSaving(false)
     if (ok) {
+      setRegisteredProviderId(id)
       await onAuthChange?.()
       onSuccess(id, config)
     }
@@ -374,7 +376,7 @@ function CustomProviderForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Provider ID</label>
-              <input type="text" value={customId} onChange={(e) => setCustomId(e.target.value.replace(/[^a-z0-9-]/g, ''))} placeholder="my-llm" disabled={!!editingProviderId}
+              <input type="text" value={customId} onChange={(e) => setCustomId(e.target.value.replace(/[^a-z0-9-]/g, ''))} placeholder="my-llm" disabled={!!(editingProviderId ?? registeredProviderId)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-500" />
             </div>
             <div>
@@ -400,7 +402,7 @@ function CustomProviderForm({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              API Key {editingProviderId && <span className="text-gray-400 dark:text-gray-500 font-normal">(leave empty to keep current)</span>}
+              API Key {(editingProviderId ?? registeredProviderId) && <span className="text-gray-400 dark:text-gray-500 font-normal">(leave empty to keep current)</span>}
             </label>
             <input type="password" value={customApiKey} onChange={(e) => setCustomApiKey(e.target.value)} placeholder="sk-..."
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -431,12 +433,12 @@ function CustomProviderForm({
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={handleSubmit}
-              disabled={!(editingProviderId ?? customId.trim()) || !customBaseUrl.trim() || !customModelId.trim() || customSaving}
+              disabled={!(editingProviderId ?? registeredProviderId ?? customId.trim()) || !customBaseUrl.trim() || !customModelId.trim() || customSaving}
               className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
             >
-              {customSaving ? (editingProviderId ? 'Saving...' : 'Adding...') : (editingProviderId ? 'Save' : 'Add Provider')}
+              {customSaving ? ((editingProviderId ?? registeredProviderId) ? 'Updating...' : 'Adding...') : ((editingProviderId ?? registeredProviderId) ? 'Update' : 'Add Provider')}
             </button>
-            {((editingProviderId) || (customId.trim() && customBaseUrl.trim())) && (
+            {((editingProviderId ?? registeredProviderId) || (customId.trim() && customBaseUrl.trim())) && (
               <button
                 onClick={handleTest}
                 disabled={customTesting}
@@ -601,10 +603,25 @@ function ProviderSetup({
         <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
           {allProviders.map((p) => {
             const isFocused = effectiveFocusedProvider === p.id
+            const isCustom = !POPULAR_IDS.has(p.id)
             return (
               <button
                 key={p.id}
-                onClick={() => { setFocusedProvider(p.id); setEditingCustom(null) }}
+                onClick={() => {
+                  if (isCustom) {
+                    setFocusedProvider(p.id)
+                    getProviderConfig(p.id).then(result => {
+                      if (result.ok && result.config) {
+                        setEditingCustom({ providerId: p.id, config: result.config })
+                      } else {
+                        setEditingCustom(null)
+                      }
+                    })
+                  } else {
+                    setFocusedProvider(p.id)
+                    setEditingCustom(null)
+                  }
+                }}
                 className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
                   isFocused
                     ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
@@ -646,7 +663,7 @@ function ProviderSetup({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 max-h-[26rem]">
-        {effectiveFocusedProvider === '__custom__' ? (
+        {effectiveFocusedProvider === '__custom__' || editingCustom ? (
           <CustomProviderForm
             editingProviderId={editingCustom?.providerId}
             editingConfig={editingCustom?.config}
@@ -654,7 +671,7 @@ function ProviderSetup({
             testProvider={testProvider}
             onAuthChange={handleAuthChange}
             onDone={() => { setEditingCustom(null); setFocusedProvider(null) }}
-            onSuccess={(providerId, config) => { setEditingCustom(null); setFocusedProvider(providerId); setCustomProviderBaseUrls(prev => ({ ...prev, [providerId]: (config.baseUrl as string) ?? '' })) }}
+            onSuccess={(providerId, config) => { setCustomProviderBaseUrls(prev => ({ ...prev, [providerId]: (config.baseUrl as string) ?? '' })) }}
           />
         ) : focusedProvider && focusedProviderInfo ? (
           <RightPanel
