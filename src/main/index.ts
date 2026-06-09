@@ -187,9 +187,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('pi:getAvailableModels', async (_event, sessionPath: string | null) => {
     const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    if (!worker?.bridge.isConnected) {
+      console.log('[getAvailableModels] No worker connected, sessionPath:', sessionPath, 'primary:', workerManager?.getPrimary()?.sessionPath, 'primaryConnected:', workerManager?.getPrimary()?.bridge.isConnected)
+      return { ok: false, error: 'Worker not connected' }
+    }
     try {
       const data = await worker.bridge.sendRpcCommand({ type: 'get_available_models' }) as { models?: Array<Record<string, unknown>> }
+      console.log('[getAvailableModels] Got', data.models?.length ?? 0, 'models, sessionPath:', sessionPath, 'workerSessionPath:', worker.sessionPath, 'isPrimary:', worker.role)
       if (data.models) {
         let authStatus: Record<string, { configured: boolean; source?: string }> = {}
         try {
@@ -310,9 +314,12 @@ function registerIpcHandlers(): void {
     const primary = workerManager?.getPrimary()
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
+      console.log('[registerCustomProvider] provider:', provider, 'hasApiKey:', !!config.apiKey, 'hasModels:', !!(config.models as unknown[])?.length, 'primarySessionPath:', primary.sessionPath)
       await primary.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
+      console.log('[registerCustomProvider] SUCCESS for', provider)
       return { ok: true }
     } catch (err: unknown) {
+      console.log('[registerCustomProvider] FAILED for', provider, ':', err instanceof Error ? err.message : String(err))
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
