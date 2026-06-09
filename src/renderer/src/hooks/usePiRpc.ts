@@ -11,7 +11,7 @@ import type {
   PiContentBlock,
 } from '../types/pi-events'
 import type { ForkPoint, PiModelInfo } from '../types/session'
-import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, type TokenUsage } from '../utils/convert-messages'
+import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, inferContextWindow, type TokenUsage } from '../utils/convert-messages'
 import type { MentionItem } from './useFileMention'
 import type { SessionCache } from './useSessionCache'
 
@@ -82,6 +82,16 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const displayedSessionPathRef = useRef<string | null>(displayedSessionPath)
 
   useEffect(() => { currentModelRef.current = currentModel }, [currentModel])
+  useEffect(() => {
+    if (!currentModel) return
+    const sessionPath = displayedSessionPath
+    if (!sessionPath) return
+    const contextWindow = currentModel.contextWindow ?? inferContextWindow(currentModel.id)
+    onSessionTokenUsageUpdate(sessionPath, (prev) => ({
+      ...prev,
+      contextWindowSize: contextWindow,
+    }))
+  }, [currentModel, displayedSessionPath, onSessionTokenUsageUpdate])
   useEffect(() => { displayedSessionPathRef.current = displayedSessionPath }, [displayedSessionPath])
 
   const sessionIdToPathMap = useRef<Map<string, string>>(new Map())

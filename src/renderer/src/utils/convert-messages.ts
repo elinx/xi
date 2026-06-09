@@ -24,7 +24,7 @@ export interface TokenUsage {
   contextWindowSize: number
 }
 
-function inferContextWindow(model: string): number {
+export function inferContextWindow(model: string): number {
   if (!model) return 200000
   const m = model.toLowerCase()
   if (m.includes('gpt-4o') || m.includes('gpt-4-turbo')) return 128000
