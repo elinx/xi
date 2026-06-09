@@ -79,10 +79,9 @@ Pi SDK (node_modules/@earendil-works/pi-coding-agent/)
    - 其他 IPC handler 用 `(workerManager.get(sessionPath) ?? workerManager.getPrimary())` 作为 fallback
    - 原因：`activeSessionPath` 可能不等于 primary 的 `sessionPath`（两个不同的 session 文件）
 
-3. **Pi SDK Worker 崩溃 (exit code 15)**
-   - 通常由 GPU crash 引起（headless 环境）
-   - 启动参数加 `--disable-gpu` 可缓解
-   - Worker 崩溃后 `bridge._isConnected = false`，所有 pending command 会 reject
+3. **Worker 崩溃处理**
+    - Worker 崩溃后 `bridge._isConnected = false`，所有 pending command 会 reject
+    - WorkerManager 会 emit `disconnected` 事件，主进程广播到 Renderer
 
 ---
 
@@ -123,7 +122,7 @@ Pi SDK 是 ESM-only，且需要 Node 22+（undici 版本问题）。不能在项
 ### 5.1 启动 Electron with CDP
 
 ```bash
-npx electron-vite dev -- --disable-gpu --no-sandbox --remote-debugging-port=9222 > /dev/null 2>&1 &
+npx electron-vite dev -- --remote-debugging-port=9222 &
 sleep 25  # 等待构建和启动
 curl -s http://127.0.0.1:9222/json/version  # 验证 CDP 可用
 ```
@@ -171,7 +170,7 @@ cat .xi/models.json
 cat .xi/auth.json
 
 # 重启
-npx electron-vite dev -- --disable-gpu --no-sandbox --remote-debugging-port=9222 > /dev/null 2>&1 &
+npx electron-vite dev -- --remote-debugging-port=9222 &
 sleep 25
 playwright-cli attach --cdp=http://localhost:9222
 
@@ -181,10 +180,9 @@ playwright-cli eval "JSON.stringify(Array.from(document.querySelectorAll('button
 
 ### 5.5 常见问题
 
-- **GPU crash**: `--disable-gpu` 参数必须加，否则 Electron 在 headless 环境会反复崩溃
 - **CDP 连接失败**: 等 25 秒再连，electron-vite 构建需要时间
-- **Pi Worker 崩溃**: GPU crash 会连带杀掉 utilityProcess，这是环境问题不是代码 bug
 - **Snapshot 没有 ref**: 用 `playwright-cli snapshot` 重新获取
+- **页面没反应**: 检查 Pi Worker 是否连接（看主进程日志有无 `[PiSDKBridge] connected`）
 
 ---
 
