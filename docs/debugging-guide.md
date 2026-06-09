@@ -62,6 +62,74 @@ Pi SDK (node_modules/@earendil-works/pi-coding-agent/)
 | 重启后模型列表为空 | models.json 缺少 apiKey | models.json 必须包含 apiKey（Pi SDK validateConfig 要求） |
 | 侧边栏 custom 显示为 Other | customProviderBaseUrls 未在启动时从 models.json 加载 | 调用 `listCustomProviders` IPC |
 | `provider:getConfig` 找不到配置 | 搜索路径不对 | 检查是否同时搜索了 `PI_CODING_AGENT_DIR` 和 `~/.pi/agent/` |
+| 主页面模型选择器显示"没有模型" | ModelSelector 过滤 `models.filter(m => m.hasAuth)` | 模型必须有认证配置才显示，检查 auth.json |
+| 注册 custom provider 后模型选择器仍显示"No model configured" | tryAutoSelectModel 未触发 | 检查 handleCustomProviderSuccess 是否调用了 onSetModel |
+
+### Welcome 弹窗触发链路
+
+```
+App.tsx useEffect:
+  isConnected && !welcomeCheckDone.current
+    → getProviderAuthStatus()
+      → IPC pi:getProviderAuthStatus
+        → Worker: registry.getAll() + registry.getProviderAuthStatus(provider)
+          → 遍历所有 provider，返回 { configured, source }
+    → Object.values(status).some(s => s.configured)
+    → 如果没有任何 configured === true → setShowWelcome(true)
+```
+
+**关键点**：`getProviderAuthStatus` 是 Worker 端 Pi SDK 的 `ModelRegistry` 计算的，不是读 auth.json 文件。即使 auth.json 有内容，如果 ModelRegistry 没加载到对应的 provider（比如 models.json 验证失败导致 provider 被跳过），`configured` 仍然是 false。
+
+### ModelSelector hasAuth 过滤
+
+`ModelSelector.tsx` 只显示 `models.filter(m => m.hasAuth)` 的模型。`hasAuth` 来自 Pi SDK 的 `getAvailableModels`，由 `ModelRegistry` 计算。
+
+如果模型在 `getAll()` 里但 `hasAuth === false`（authStorage 里没有对应认证），就不会出现在选择器里。
+
+### Pi SDK 认证解析优先级
+
+`ModelRegistry.getApiKeyAndHeaders()` 查找 apiKey 的顺序：
+
+```
+1. authStorage (auth.json) — 优先
+2. providerRequestConfigs (models.json 的 apiKey 字段) — fallback
+3. 环境变量 (如 ANTHROPIC_API_KEY) — 最后
+```
+
+**注意**：`validateConfig` 只检查 models.json 里有没有 `apiKey` 字段（是否为 truthy），不检查 authStorage。所以即使 auth.json 里有 key，models.json 也必须有 apiKey 才能通过验证。这是两套独立的机制。
+
+### linkGlobalAgentConfig symlink 机制
+
+`pi-sdk-bridge.ts` 的 `linkGlobalAgentConfig()` 在 Worker 启动时执行：
+
+```
+条件: ~/.xi/auth.json 存在 且 <project>/.xi/auth.json 不存在
+动作: symlinkSync(~/.xi/auth.json, <project>/.xi/auth.json)
+```
+
+**问题**：如果项目 `.xi/auth.json` 已经存在（Worker 先写入了），symlink 不会创建，全局和项目配置分家。这会导致：
+- `setApiKey` 通过 Worker 写入项目 `.xi/auth.json`
+- 全局 `~/.xi/auth.json` 没有对应条目
+- 其他项目看不到这个 provider 的认证
+
+### tryAutoSelectModel 流程
+
+注册 custom provider 后需要自动选模型，否则用户看到 "No model configured"：
+
+```
+ProviderSetup.handleCustomProviderSuccess(providerId, config)
+  → 更新 customProviderBaseUrls
+  → 如果 currentModel 为空或是 unknown:
+    → getAvailableModels()
+    → 找到 provider === providerId 的模型
+    → onSetModel(model.id, model.provider)
+
+usePiRpc.registerCustomProviderFn(provider, config)
+  → IPC pi:registerCustomProvider
+  → 相同的 tryAutoSelectModel 逻辑（双保险）
+```
+
+两处都调用是因为 ProviderSetup 在 WelcomeDialog 和 SettingsPanel 里都会渲染。
 
 ---
 
