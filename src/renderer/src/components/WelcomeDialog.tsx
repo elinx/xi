@@ -10,6 +10,7 @@ interface WelcomeDialogProps {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
   getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
@@ -17,7 +18,7 @@ interface WelcomeDialogProps {
   onSkip: () => void
 }
 
-function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, getAvailableModels, onSetModel, onAuthChange, currentModel, onSkip }: WelcomeDialogProps): React.ReactElement {
+function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, listCustomProviders, getAvailableModels, onSetModel, onAuthChange, currentModel, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
   const [hasConfiguredProvider, setHasConfiguredProvider] = useState(false)
 
@@ -94,6 +95,7 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
+                listCustomProviders={listCustomProviders}
                 getAvailableModels={getAvailableModels}
                 onSetModel={onSetModel}
                 onAuthChange={handleAuthChange}

@@ -122,6 +122,9 @@ const api = {
   getProviderConfig: (provider: string): Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }> =>
     ipcRenderer.invoke('provider:getConfig', provider),
 
+  listCustomProviders: (): Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }> =>
+    ipcRenderer.invoke('provider:listCustomProviders'),
+
   openConfigDir: (): void =>
     ipcRenderer.send('app:openConfigDir'),
 

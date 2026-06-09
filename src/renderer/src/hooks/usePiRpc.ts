@@ -772,5 +772,11 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result
   }, [])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, refreshModelInfo }
+  const listCustomProvidersFn = useCallback(async (): Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }> => {
+    type ApiWithList = typeof window.api & { listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }> }
+    const result = await (window.api as ApiWithList).listCustomProviders()
+    return result
+  }, [])
+
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, listCustomProviders: listCustomProvidersFn, refreshModelInfo }
 }

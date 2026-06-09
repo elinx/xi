@@ -53,6 +53,7 @@ interface ProviderSetupProps {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
   getAvailableModels?: () => Promise<Array<ModelInfo>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
@@ -461,6 +462,7 @@ function ProviderSetup({
   registerCustomProvider,
   testProvider,
   getProviderConfig,
+  listCustomProviders,
   getAvailableModels,
   onSetModel,
   onAuthChange,
@@ -504,6 +506,14 @@ function ProviderSetup({
   useEffect(() => {
     refreshAuth()
   }, [refreshAuth])
+
+  useEffect(() => {
+    listCustomProviders().then(result => {
+      if (result.ok && Object.keys(result.providers).length > 0) {
+        setCustomProviderBaseUrls(result.providers)
+      }
+    })
+  }, [listCustomProviders])
 
   useEffect(() => {
     if (hasModelsSupport) {

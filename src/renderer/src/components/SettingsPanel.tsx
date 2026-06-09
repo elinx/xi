@@ -14,6 +14,7 @@ interface SettingsPanelProps {
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
+  listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
   getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   onAuthChange?: () => void
@@ -28,6 +29,7 @@ function SettingsPanel({
   registerCustomProvider,
   testProvider,
   getProviderConfig,
+  listCustomProviders,
   getAvailableModels,
   onSetModel,
   onAuthChange,
@@ -87,6 +89,7 @@ function SettingsPanel({
                 registerCustomProvider={registerCustomProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
+                listCustomProviders={listCustomProviders}
                 getAvailableModels={getAvailableModels}
                 onSetModel={onSetModel}
                 onAuthChange={onAuthChange}

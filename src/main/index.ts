@@ -267,18 +267,6 @@ function registerIpcHandlers(): void {
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
       await primary.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
-      try {
-        const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-        const xiDir = join(homeDir, '.xi')
-        if (!existsSync(xiDir)) mkdirSync(xiDir, { recursive: true })
-        const authPath = join(xiDir, 'auth.json')
-        let authData: Record<string, unknown> = {}
-        if (existsSync(authPath)) {
-          try { authData = JSON.parse(readFileSync(authPath, 'utf-8')) } catch {}
-        }
-        authData[provider] = { type: 'api_key', key: apiKey }
-        writeFileSync(authPath, JSON.stringify(authData, null, 2))
-      } catch {}
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -290,17 +278,6 @@ function registerIpcHandlers(): void {
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
       await primary.bridge.sendRpcCommand({ type: 'remove_auth', provider })
-      try {
-        const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-        const authPath = join(homeDir, '.xi', 'auth.json')
-        if (existsSync(authPath)) {
-          const authData = JSON.parse(readFileSync(authPath, 'utf-8'))
-          if (authData[provider]) {
-            delete authData[provider]
-            writeFileSync(authPath, JSON.stringify(authData, null, 2))
-          }
-        }
-      } catch {}
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -316,6 +293,7 @@ function registerIpcHandlers(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
     // registerProvider is memory-only; write models.json so Pi SDK reloads on restart
+    // Pi SDK validateConfig requires apiKey for non-built-in providers with custom models
     try {
       const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
       if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true })
@@ -325,8 +303,7 @@ function registerIpcHandlers(): void {
         try { existing = JSON.parse(readFileSync(modelsPath, 'utf-8')) } catch {}
       }
       const providers = (existing.providers ?? {}) as Record<string, Record<string, unknown>>
-      const { apiKey, ...persistConfig } = config
-      providers[provider] = persistConfig
+      providers[provider] = config
       existing.providers = providers
       writeFileSync(modelsPath, JSON.stringify(existing, null, 2))
     } catch {}
@@ -400,16 +377,39 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('provider:listCustomProviders', async () => {
+    try {
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
+      const modelsPath = join(agentDir, 'models.json')
+      if (!existsSync(modelsPath)) return { ok: true, providers: {} }
+      const data = JSON.parse(readFileSync(modelsPath, 'utf-8'))
+      const providers: Record<string, { baseUrl: string; name?: string }> = {}
+      if (data.providers) {
+        for (const [id, config] of Object.entries(data.providers as Record<string, Record<string, unknown>>)) {
+          if (config.baseUrl) {
+            providers[id] = { baseUrl: config.baseUrl as string, name: config.name as string | undefined }
+          }
+        }
+      }
+      return { ok: true, providers }
+    } catch {
+      return { ok: true, providers: {} }
+    }
+  })
+
   ipcMain.handle('provider:getConfig', async (_event, provider: string) => {
     try {
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-      const configDir = join(homeDir, '.pi', 'agent')
-      for (const configFile of ['models.json', 'settings.json']) {
-        const configPath = join(configDir, configFile)
-        if (existsSync(configPath)) {
-          const data = JSON.parse(readFileSync(configPath, 'utf-8'))
-          const providerData = data.providers?.[provider]
-          if (providerData) return { ok: true, config: providerData }
+      const configDirs = [agentDir, join(homeDir, '.pi', 'agent')]
+      for (const configDir of configDirs) {
+        for (const configFile of ['models.json', 'settings.json']) {
+          const configPath = join(configDir, configFile)
+          if (existsSync(configPath)) {
+            const data = JSON.parse(readFileSync(configPath, 'utf-8'))
+            const providerData = data.providers?.[provider]
+            if (providerData) return { ok: true, config: providerData }
+          }
         }
       }
       return { ok: false, error: 'Provider not found' }
