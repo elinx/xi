@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
-import { join, basename, extname, dirname } from 'path'
+import { join, basename, extname, dirname, resolve } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { execFile } from 'child_process'
 import { simpleGit, type SimpleGit } from 'simple-git'
@@ -1752,6 +1752,18 @@ function registerIpcHandlers(): void {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'light'
+
+  // Restore last project cwd if available and current cwd doesn't match
+  try {
+    const lastProjectFile = join(app.getPath('userData'), 'last-project.json')
+    if (existsSync(lastProjectFile)) {
+      const { cwd: savedCwd } = JSON.parse(readFileSync(lastProjectFile, 'utf-8')) as { cwd: string; updatedAt: string }
+      if (savedCwd && existsSync(savedCwd) && resolve(savedCwd) !== resolve(process.cwd())) {
+        process.chdir(savedCwd)
+      }
+    }
+  } catch {}
+
   let mainSession = sessionService.findMainSession(process.cwd())
 
   if (mainSession && !mainSession.name) {
@@ -1789,6 +1801,10 @@ app.on('before-quit', () => {
       }).catch(() => {})
     } catch {}
   }
+  try {
+    const lastProjectDir = join(app.getPath('userData'), 'last-project.json')
+    writeFileSync(lastProjectDir, JSON.stringify({ cwd: process.cwd(), updatedAt: new Date().toISOString() }, null, 2))
+  } catch {}
   workerManager?.disposeAll().catch((err: Error) => {
     console.error('[WorkerManager] Error during shutdown:', err.message)
   })
