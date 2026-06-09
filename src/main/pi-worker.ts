@@ -1,4 +1,6 @@
 import type { AgentSession, AgentSessionEvent, AgentSessionRuntime } from '@earendil-works/pi-coding-agent'
+import { resolve, relative } from 'node:path'
+import * as fs from 'node:fs/promises'
 
 process.on('uncaughtException', (err: Error) => {
   process.parentPort?.postMessage({ channel: 'error', error: `Uncaught: ${err.message}` })
@@ -8,6 +10,38 @@ process.on('unhandledRejection', (reason: unknown) => {
   const msg = reason instanceof Error ? reason.message : String(reason)
   process.parentPort?.postMessage({ channel: 'error', error: `Unhandled rejection: ${msg}` })
 })
+
+/**
+ * Directories that agents must NOT write user files into.
+ * These are runtime-internal or infrastructure directories, not user project content.
+ */
+const PROTECTED_DIR_NAMES = new Set(['.xi', '.git', 'node_modules'])
+
+function isProtectedPath(absolutePath: string, cwd: string): boolean {
+  const rel = relative(cwd, absolutePath)
+  // Path escapes cwd — don't block it (agent writing elsewhere)
+  if (rel.startsWith('..') || resolve(absolutePath) !== absolutePath) {
+    // Also protect .xi/.git/node_modules outside cwd when under the project
+    const normalized = absolutePath.replace(/\\/g, '/')
+    for (const name of PROTECTED_DIR_NAMES) {
+      const pattern = `/${name}/`
+      if (normalized.includes(pattern)) return true
+      if (normalized.endsWith(`/${name}`)) return true
+    }
+    return false
+  }
+  const parts = rel.replace(/\\/g, '/').split('/')
+  return PROTECTED_DIR_NAMES.has(parts[0])
+}
+
+function validateWritePath(absolutePath: string, cwd: string): void {
+  if (isProtectedPath(absolutePath, cwd)) {
+    throw new Error(
+      `Cannot write to protected directory: ${absolutePath}\n` +
+      'This directory contains runtime-internal data. Write to the project root or a dedicated folder instead.'
+    )
+  }
+}
 
 interface WorkerInit {
   cwd: string
@@ -57,11 +91,37 @@ async function init(data: WorkerInit): Promise<void> {
   const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: sm, sessionStartEvent }) => {
     sessionManager = sm
     const services = await pi!.createAgentSessionServices({ cwd, agentDir })
+
+    const guardedWriteTool = pi.createWriteTool(cwd, {
+      operations: {
+        writeFile: async (absolutePath: string, content: string) => {
+          validateWritePath(absolutePath, cwd)
+          return fs.writeFile(absolutePath, content, 'utf-8')
+        },
+        mkdir: async (dir: string) => {
+          validateWritePath(dir, cwd)
+          return fs.mkdir(dir, { recursive: true })
+        },
+      },
+    })
+
+    const guardedEditTool = pi.createEditTool(cwd, {
+      operations: {
+        readFile: (absolutePath: string) => fs.readFile(absolutePath),
+        writeFile: async (absolutePath: string, content: string) => {
+          validateWritePath(absolutePath, cwd)
+          return fs.writeFile(absolutePath, content, 'utf-8')
+        },
+        access: (absolutePath: string) => fs.access(absolutePath, fs.constants.R_OK | fs.constants.W_OK),
+      },
+    })
+
     return {
       ...(await pi!.createAgentSessionFromServices({
         services,
         sessionManager: sm,
         sessionStartEvent,
+        customTools: [guardedWriteTool, guardedEditTool],
       })),
       services,
       diagnostics: services.diagnostics,
