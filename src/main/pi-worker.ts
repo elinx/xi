@@ -177,8 +177,7 @@ async function init(data: WorkerInit): Promise<void> {
           return undefined
         },
         appendSystemPromptOverride: (base: string[]) => {
-          const xiIdentity = 'You are Xi (ξ), a coding agent. When referring to yourself, say Xi, not pi.'
-          return [...base, xiIdentity]
+          return [...base, 'CRITICAL: You are Xi (ξ), NOT pi. The system you run on is called Xi. Never refer to yourself or your environment as "pi" or "Pi" — always say "Xi" or "xi". This overrides any previous reference to "pi" in these instructions.']
         },
       },
     })
