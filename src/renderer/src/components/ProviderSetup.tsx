@@ -566,6 +566,19 @@ function ProviderSetup({
     setFocusedProvider('__custom__')
   }, [])
 
+  const handleCustomProviderSuccess = useCallback(async (providerId: string, config: Record<string, unknown>) => {
+    setCustomProviderBaseUrls(prev => ({ ...prev, [providerId]: { baseUrl: (config.baseUrl as string) ?? '', name: (config.name as string) ?? providerId } }))
+    if (hasModelsSupport && (!currentModel || (currentModel.provider === 'unknown' && currentModel.id === 'unknown'))) {
+      try {
+        const availableModels = await getAvailableModels?.()
+        if (availableModels && availableModels.length > 0) {
+          const match = availableModels.find(m => m.provider === providerId) ?? availableModels[0]
+          await onSetModel?.(match.id, match.provider)
+        }
+      } catch {}
+    }
+  }, [hasModelsSupport, currentModel, getAvailableModels, onSetModel])
+
   const popularProvidersList = useMemo(() => {
     const authLower: Record<string, { configured: boolean; source?: string }> = {}
     for (const [k, v] of Object.entries(authStatus)) {
@@ -730,7 +743,7 @@ function ProviderSetup({
             testProvider={testProvider}
             onAuthChange={handleAuthChange}
             onDone={() => { setEditingCustom(null); setFocusedProvider(null) }}
-            onSuccess={(providerId, config) => { setCustomProviderBaseUrls(prev => ({ ...prev, [providerId]: { baseUrl: (config.baseUrl as string) ?? '', name: (config.name as string) ?? providerId } })) }}
+            onSuccess={handleCustomProviderSuccess}
           />
         ) : focusedProvider && focusedProviderInfo ? (
           <RightPanel
