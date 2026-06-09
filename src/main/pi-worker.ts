@@ -172,7 +172,14 @@ async function init(data: WorkerInit): Promise<void> {
       cwd,
       agentDir,
       resourceLoaderOptions: {
-        systemPromptOverride: (base: string) => base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi'),
+        systemPromptOverride: (base: string | undefined) => {
+          if (base) return base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi')
+          return undefined
+        },
+        appendSystemPromptOverride: (base: string | undefined) => {
+          const xiIdentity = 'You are Xi (ξ), a coding agent. When referring to yourself, say Xi, not pi.'
+          return base ? `${base}\n\n${xiIdentity}` : xiIdentity
+        },
       },
     })
 
