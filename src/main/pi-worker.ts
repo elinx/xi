@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent, AgentSessionRuntime } from '@earendil-works/pi-coding-agent'
-import { resolve, relative } from 'node:path'
+import { resolve, relative, join } from 'node:path'
 import * as fs from 'node:fs/promises'
+import * as fsSync from 'node:fs'
 
 process.on('uncaughtException', (err: Error) => {
   process.parentPort?.postMessage({ channel: 'error', error: `Uncaught: ${err.message}` })
@@ -40,6 +41,80 @@ function validateWritePath(absolutePath: string, cwd: string): void {
       `Cannot write to protected directory: ${absolutePath}\n` +
       'This directory contains runtime-internal data. Write to the project root or a dedicated folder instead.'
     )
+  }
+}
+
+function createSearchSessionsTool(cwd: string) {
+  const { Type } = require('@sinclair/typebox')
+  const schema = Type.Object({
+    query: Type.String({ description: 'Search query — matches against session names and message content' }),
+    limit: Type.Optional(Type.Number({ description: 'Max results to return (default 10)', default: 10 })),
+  })
+  return {
+    name: 'searchSessions',
+    label: 'searchSessions',
+    description:
+      'Search sessions in the current project by name or content. ' +
+      'Returns matching session names, file paths, and relevant message excerpts. ' +
+      'Use this to find information from past conversations across sessions.',
+    parameters: schema,
+    execute: async (_toolCallId: string, params: { query: string; limit?: number }, _signal: AbortSignal | undefined) => {
+      const limit = params.limit ?? 10
+      const query = params.query.toLowerCase()
+      const sessionsDir = join(cwd, '.xi', 'sessions')
+      if (!fsSync.existsSync(sessionsDir)) {
+        return { content: [{ type: 'text' as const, text: 'No sessions directory found.' }] }
+      }
+      let files: string[]
+      try {
+        files = fsSync.readdirSync(sessionsDir).filter(f => f.endsWith('.jsonl')).map(f => join(sessionsDir, f))
+      } catch {
+        return { content: [{ type: 'text' as const, text: 'Could not read sessions directory.' }] }
+      }
+      const results: Array<{ name: string; path: string; matches: string[] }> = []
+      for (const filePath of files) {
+        if (results.length >= limit) break
+        try {
+          const content = fsSync.readFileSync(filePath, 'utf-8')
+          const lines = content.split('\n')
+          const matches: string[] = []
+          let sessionName = ''
+          for (const line of lines) {
+            if (!line.trim()) continue
+            try {
+              const entry = JSON.parse(line)
+              if (entry.type === 'session' && entry.name) sessionName = entry.name
+              if (entry.type === 'message' && entry.message?.content) {
+                const msgContent = typeof entry.message.content === 'string'
+                  ? entry.message.content
+                  : JSON.stringify(entry.message.content)
+                if (msgContent.toLowerCase().includes(query)) {
+                  const excerpt = msgContent.length > 200 ? msgContent.substring(0, 200) + '...' : msgContent
+                  matches.push(excerpt)
+                  if (matches.length >= 3) break
+                }
+              }
+            } catch { continue }
+          }
+          if (matches.length > 0 || sessionName.toLowerCase().includes(query)) {
+            results.push({
+              name: sessionName || filePath.split('/').pop() || filePath,
+              path: filePath,
+              matches,
+            })
+          }
+        } catch { continue }
+      }
+      if (results.length === 0) {
+        return { content: [{ type: 'text' as const, text: `No sessions found matching "${params.query}".` }] }
+      }
+      const output = results.map(r => {
+        const header = `## ${r.name}\nPath: ${r.path}`
+        const body = r.matches.length > 0 ? r.matches.map((m, i) => `  ${i + 1}. "${m}"`).join('\n') : '  (name match only)'
+        return header + '\n' + body
+      }).join('\n\n')
+      return { content: [{ type: 'text' as const, text: output }] }
+    },
   }
 }
 
@@ -121,7 +196,7 @@ async function init(data: WorkerInit): Promise<void> {
         services,
         sessionManager: sm,
         sessionStartEvent,
-        customTools: [guardedWriteTool, guardedEditTool],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd)],
       })),
       services,
       diagnostics: services.diagnostics,
