@@ -298,6 +298,12 @@ const api = {
   getProjectPath: (): Promise<string> =>
     ipcRenderer.invoke('app:getProjectPath'),
 
+  getRecentProjects: (): Promise<Array<{ path: string; name: string; lastOpened: string }>> =>
+    ipcRenderer.invoke('app:getRecentProjects'),
+
+  clearRecentProjects: (): Promise<void> =>
+    ipcRenderer.invoke('app:clearRecentProjects'),
+
   getLastSession: (): Promise<string | null> =>
     ipcRenderer.invoke('session:getLastSession'),
 

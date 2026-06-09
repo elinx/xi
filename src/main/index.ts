@@ -583,6 +583,22 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('app:getProjectPath', () => process.cwd())
 
+  ipcMain.handle('app:getRecentProjects', () => {
+    try {
+      const recentProjectsFile = join(app.getPath('userData'), 'recent-projects.json')
+      if (!existsSync(recentProjectsFile)) return []
+      const data = JSON.parse(readFileSync(recentProjectsFile, 'utf-8')) as { recentProjects: Array<{ path: string; name: string; lastOpened: string }> }
+      return (data.recentProjects ?? []).filter(p => existsSync(p.path))
+    } catch { return [] }
+  })
+
+  ipcMain.handle('app:clearRecentProjects', () => {
+    try {
+      const recentProjectsFile = join(app.getPath('userData'), 'recent-projects.json')
+      if (existsSync(recentProjectsFile)) writeFileSync(recentProjectsFile, JSON.stringify({ recentProjects: [] }, null, 2))
+    } catch {}
+  })
+
   ipcMain.handle('pi:start', async () => {
     if (!workerManager) {
       let mainSession = sessionService.findMainSession(process.cwd())
@@ -1755,11 +1771,14 @@ app.whenReady().then(() => {
 
   // Restore last project cwd if available and current cwd doesn't match
   try {
-    const lastProjectFile = join(app.getPath('userData'), 'last-project.json')
-    if (existsSync(lastProjectFile)) {
-      const { cwd: savedCwd } = JSON.parse(readFileSync(lastProjectFile, 'utf-8')) as { cwd: string; updatedAt: string }
-      if (savedCwd && existsSync(savedCwd) && resolve(savedCwd) !== resolve(process.cwd())) {
-        process.chdir(savedCwd)
+    const recentProjectsFile = join(app.getPath('userData'), 'recent-projects.json')
+    if (existsSync(recentProjectsFile)) {
+      const data = JSON.parse(readFileSync(recentProjectsFile, 'utf-8')) as { recentProjects: Array<{ path: string; name: string; lastOpened: string }> }
+      if (data.recentProjects?.length > 0) {
+        const savedCwd = data.recentProjects[0].path
+        if (savedCwd && existsSync(savedCwd) && resolve(savedCwd) !== resolve(process.cwd())) {
+          process.chdir(savedCwd)
+        }
       }
     }
   } catch {}
@@ -1802,8 +1821,20 @@ app.on('before-quit', () => {
     } catch {}
   }
   try {
-    const lastProjectDir = join(app.getPath('userData'), 'last-project.json')
-    writeFileSync(lastProjectDir, JSON.stringify({ cwd: process.cwd(), updatedAt: new Date().toISOString() }, null, 2))
+    const recentProjectsFile = join(app.getPath('userData'), 'recent-projects.json')
+    const currentCwd = process.cwd()
+    const projectName = basename(currentCwd)
+    let projects: Array<{ path: string; name: string; lastOpened: string }> = []
+    try {
+      if (existsSync(recentProjectsFile)) {
+        const data = JSON.parse(readFileSync(recentProjectsFile, 'utf-8')) as { recentProjects: Array<{ path: string; name: string; lastOpened: string }> }
+        projects = data.recentProjects ?? []
+      }
+    } catch {}
+    projects = projects.filter(p => p.path !== currentCwd)
+    projects.unshift({ path: currentCwd, name: projectName, lastOpened: new Date().toISOString() })
+    projects = projects.slice(0, 15)
+    writeFileSync(recentProjectsFile, JSON.stringify({ recentProjects: projects }, null, 2))
   } catch {}
   workerManager?.disposeAll().catch((err: Error) => {
     console.error('[WorkerManager] Error during shutdown:', err.message)
