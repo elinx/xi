@@ -12,6 +12,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 interface WorkerInit {
   cwd: string
   sessionPath?: string
+  sessionDir?: string
 }
 
 interface WorkerCommand {
@@ -69,9 +70,9 @@ async function init(data: WorkerInit): Promise<void> {
 
   let sm: pi.SessionManager
   if (data.sessionPath) {
-    sm = pi.SessionManager.open(data.sessionPath)
+    sm = pi.SessionManager.open(data.sessionPath, data.sessionDir)
   } else {
-    sm = pi.SessionManager.continueRecent(data.cwd)
+    sm = pi.SessionManager.continueRecent(data.cwd, data.sessionDir)
   }
 
   runtime = await pi.createAgentSessionRuntime(createRuntime, {

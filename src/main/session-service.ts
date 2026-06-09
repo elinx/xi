@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync, statSync, renameSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import type {
   SessionInfo,
@@ -9,15 +9,62 @@ import type {
   ForkPoint
 } from '../renderer/src/types/session'
 
+/**
+ * Migrate session files from legacy encoded subdirectory to flat sessions directory.
+ * Old path: {project}/.xi/sessions/--Users-foo-project--/xxx.jsonl
+ * New path: {project}/.xi/sessions/xxx.jsonl
+ */
+function migrateLegacySessionDir(projectRoot: string, sessionDir: string): void {
+  const xiDir = join(projectRoot, '.xi')
+  const oldSessionsParent = join(xiDir, 'sessions')
+  if (!existsSync(oldSessionsParent)) return
+
+  // Look for encoded subdirectories (--xxx--)
+  let entries: string[]
+  try {
+    entries = readdirSync(oldSessionsParent)
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (!entry.startsWith('--') || !entry.endsWith('--')) continue
+    const encodedDir = join(oldSessionsParent, entry)
+    let stat
+    try { stat = statSync(encodedDir) } catch { continue }
+    if (!stat.isDirectory()) continue
+
+    // Move all .jsonl and .json files from encoded dir to flat sessions dir
+    let files: string[]
+    try { files = readdirSync(encodedDir) } catch { continue }
+    for (const file of files) {
+      const source = join(encodedDir, file)
+      const target = join(sessionDir, file)
+      if (!existsSync(target)) {
+        try {
+          renameSync(source, target)
+        } catch {}
+      }
+    }
+
+    // Remove encoded dir if empty
+    try {
+      const remaining = readdirSync(encodedDir)
+      if (remaining.length === 0) {
+        rmSync(encodedDir, { recursive: true })
+      }
+    } catch {}
+  }
+}
+
 export function getSessionDir(cwd?: string): string {
   const projectRoot = cwd ?? process.cwd()
   const resolvedCwd = resolve(projectRoot)
-  const agentDir = cwd ? join(resolvedCwd, '.xi') : (process.env.PI_CODING_AGENT_DIR || join(resolvedCwd, '.xi'))
-  const safePath = `--${resolvedCwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
-  const sessionDir = join(agentDir, 'sessions', safePath)
+  const sessionDir = join(resolvedCwd, '.xi', 'sessions')
   if (!existsSync(sessionDir)) {
     mkdirSync(sessionDir, { recursive: true })
   }
+  migrateLegacySessionDir(resolvedCwd, sessionDir)
   return sessionDir
 }
 

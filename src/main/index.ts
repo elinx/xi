@@ -295,7 +295,7 @@ function registerIpcHandlers(): void {
     // registerProvider is memory-only; write models.json so Pi SDK reloads on restart
     // Pi SDK validateConfig requires apiKey for non-built-in providers with custom models
     try {
-      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
       if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true })
       const modelsPath = join(agentDir, 'models.json')
       let existing: Record<string, unknown> = {}
@@ -379,7 +379,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('provider:listCustomProviders', async () => {
     try {
-      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
       const modelsPath = join(agentDir, 'models.json')
       if (!existsSync(modelsPath)) return { ok: true, providers: {} }
       const data = JSON.parse(readFileSync(modelsPath, 'utf-8'))
@@ -399,7 +399,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('provider:getConfig', async (_event, provider: string) => {
     try {
-      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
       const configDirs = [agentDir, join(homeDir, '.pi', 'agent')]
       for (const configDir of configDirs) {
@@ -556,7 +556,10 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.on('app:openConfigDir', () => {
-    const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
+    const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true })
+    }
     const authPath = join(configDir, 'auth.json')
     if (existsSync(authPath)) {
       shell.showItemInFolder(authPath)

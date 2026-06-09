@@ -1,12 +1,26 @@
 import { utilityProcess } from 'electron'
 import workerPath from './pi-worker?modulePath'
 import { resolve, join } from 'path'
-import { existsSync, mkdirSync, symlinkSync, lstatSync } from 'fs'
+import { existsSync, mkdirSync, copyFileSync, lstatSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { EventEmitter } from 'events'
 
-const LINKED_FILES = ['auth.json', 'models.json', 'settings.json']
-const LINKED_DIRS = ['tools', 'prompts', 'themes', 'extensions']
+const MIGRATABLE_CONFIG_FILES = ['auth.json', 'models.json', 'settings.json']
+
+function migrateProjectConfig(projectDir: string, globalAgentDir: string): void {
+  const localDir = join(projectDir, '.xi')
+  if (!existsSync(localDir)) return
+  for (const file of MIGRATABLE_CONFIG_FILES) {
+    const source = join(localDir, file)
+    const target = join(globalAgentDir, file)
+    if (existsSync(source) && !lstatSync(source).isSymbolicLink() && !existsSync(target)) {
+      try {
+        copyFileSync(source, target)
+        console.log(`[PiSDKBridge] Migrated ${file} from project to global config`)
+      } catch {}
+    }
+  }
+}
 
 interface PendingCommand {
   resolve: (value: unknown) => void
@@ -66,12 +80,22 @@ export class PiSDKBridge extends EventEmitter {
     }
 
     const resolvedCwd = resolve(cwd)
-    const localAgentDir = join(resolvedCwd, '.xi')
-    if (!existsSync(localAgentDir)) {
-      mkdirSync(localAgentDir, { recursive: true })
+    const globalAgentDir = join(
+      process.env.HOME ?? process.env.USERPROFILE ?? '~',
+      '.xi'
+    )
+    if (!existsSync(globalAgentDir)) {
+      mkdirSync(globalAgentDir, { recursive: true })
     }
-    process.env.PI_CODING_AGENT_DIR = localAgentDir
-    this.linkGlobalAgentConfig(localAgentDir)
+    process.env.PI_CODING_AGENT_DIR = globalAgentDir
+
+    const sessionDir = join(resolvedCwd, '.xi', 'sessions')
+    if (!existsSync(sessionDir)) {
+      mkdirSync(sessionDir, { recursive: true })
+    }
+    process.env.PI_CODING_AGENT_SESSION_DIR = sessionDir
+
+    migrateProjectConfig(resolvedCwd, globalAgentDir)
 
     const child = utilityProcess.fork(workerPath, [], {
       serviceName: `pi-sdk-${this.sessionId}`,
@@ -93,7 +117,7 @@ export class PiSDKBridge extends EventEmitter {
       this.emit('disconnected')
     })
 
-    child.postMessage({ type: 'init', data: { cwd, sessionPath } })
+    child.postMessage({ type: 'init', data: { cwd, sessionPath, sessionDir } })
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -153,29 +177,6 @@ export class PiSDKBridge extends EventEmitter {
     this.child.kill()
     this.child = null
     this._isConnected = false
-  }
-
-  private linkGlobalAgentConfig(localAgentDir: string): void {
-    const globalAgentDir = join(
-      process.env.HOME ?? process.env.USERPROFILE ?? '~',
-      '.xi'
-    )
-
-    for (const file of LINKED_FILES) {
-      const source = join(globalAgentDir, file)
-      const target = join(localAgentDir, file)
-      if (existsSync(source) && !existsSync(target)) {
-        try { symlinkSync(source, target) } catch {}
-      }
-    }
-
-    for (const dir of LINKED_DIRS) {
-      const source = join(globalAgentDir, dir)
-      const target = join(localAgentDir, dir)
-      if (existsSync(source) && !lstatSync(source).isSymbolicLink() && !existsSync(target)) {
-        try { symlinkSync(source, target) } catch {}
-      }
-    }
   }
 
   private handleChildMessage(msg: Record<string, unknown>): void {
