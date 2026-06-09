@@ -312,10 +312,25 @@ function registerIpcHandlers(): void {
     if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
     try {
       await primary.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
-      return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+    // registerProvider is memory-only; write models.json so Pi SDK reloads on restart
+    try {
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.cwd(), '.xi')
+      if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true })
+      const modelsPath = join(agentDir, 'models.json')
+      let existing: Record<string, unknown> = {}
+      if (existsSync(modelsPath)) {
+        try { existing = JSON.parse(readFileSync(modelsPath, 'utf-8')) } catch {}
+      }
+      const providers = (existing.providers ?? {}) as Record<string, Record<string, unknown>>
+      const { apiKey, ...persistConfig } = config
+      providers[provider] = persistConfig
+      existing.providers = providers
+      writeFileSync(modelsPath, JSON.stringify(existing, null, 2))
+    } catch {}
+    return { ok: true }
   })
 
   ipcMain.handle('worker:ensureReady', async (_event, sessionPath: string) => {
