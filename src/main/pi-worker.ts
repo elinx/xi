@@ -168,7 +168,13 @@ async function init(data: WorkerInit): Promise<void> {
 
   const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: sm, sessionStartEvent }) => {
     sessionManager = sm
-    const services = await pi!.createAgentSessionServices({ cwd, agentDir })
+    const services = await pi!.createAgentSessionServices({
+      cwd,
+      agentDir,
+      resourceLoaderOptions: {
+        systemPromptOverride: (base: string) => base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi'),
+      },
+    })
 
     const guardedWriteTool = pi.createWriteToolDefinition(cwd, {
       operations: {
