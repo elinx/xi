@@ -1,0 +1,1 @@
+rm -rf ~/.xi .xi && npm run dev

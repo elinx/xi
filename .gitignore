@@ -12,8 +12,6 @@
 .sisyphus/
 .vscode/
 .xi/
-.xi-backup/
-clean-start.sh
 *.html
 *.log
 *.swo
