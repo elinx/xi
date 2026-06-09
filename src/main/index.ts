@@ -415,13 +415,14 @@ function registerIpcHandlers(): void {
         mistral: 'https://api.mistral.ai',
       }
 
+      const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? '~'
+
       let baseUrl = overrides?.baseUrl ?? providerBaseUrls[provider]
       if (!baseUrl) {
         try {
-          const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-          const configDir = join(homeDir, '.pi', 'agent')
           for (const configFile of ['models.json', 'settings.json']) {
-            const configPath = join(configDir, configFile)
+            const configPath = join(agentDir, configFile)
             if (existsSync(configPath)) {
               const data = JSON.parse(readFileSync(configPath, 'utf-8'))
               const custom = data.providers?.[provider]
@@ -471,17 +472,18 @@ function registerIpcHandlers(): void {
       }
       if (!apiKey) {
         try {
-          const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? '~'
-          const xiAuthPath = join(homeDir, '.xi', 'auth.json')
-          if (existsSync(xiAuthPath)) {
-            const data = JSON.parse(readFileSync(xiAuthPath, 'utf-8'))
-            if (data[provider]?.key) apiKey = data[provider].key
+          for (const dir of [agentDir, join(homeDir, '.xi')]) {
+            const authPath = join(dir, 'auth.json')
+            if (existsSync(authPath)) {
+              const data = JSON.parse(readFileSync(authPath, 'utf-8'))
+              if (data[provider]?.key) { apiKey = data[provider].key; break }
+            }
           }
         } catch {}
       }
       if (!apiKey) {
         try {
-          const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.pi', 'agent')
+          const configDir = join(homeDir, '.pi', 'agent')
           for (const configFile of ['auth.json', 'models.json']) {
             const configPath = join(configDir, configFile)
             if (existsSync(configPath)) {
@@ -500,15 +502,16 @@ function registerIpcHandlers(): void {
 
       let url: string
       let headers: Record<string, string>
+      const base = baseUrl.endsWith('/v1') || baseUrl.endsWith('/v1/') ? baseUrl.replace(/\/v1\/?$/, '') : baseUrl
       if (provider === 'anthropic') {
-        url = `${baseUrl}/v1/models`
+        url = `${base}/v1/models`
         headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
       } else if (provider === 'google') {
-        url = `${baseUrl}/v1beta/models?key=${apiKey}`
+        url = `${base}/v1beta/models?key=${apiKey}`
         headers = {}
       } else {
-        url = `${baseUrl}/v1/models`
         headers = { 'Authorization': `Bearer ${apiKey}` }
+        url = `${base}/v1/models`
       }
 
       const start = Date.now()

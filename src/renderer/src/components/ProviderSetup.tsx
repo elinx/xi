@@ -69,19 +69,21 @@ function ProviderIcon({ name, color, size = 'md' }: { name: string; color: strin
   )
 }
 
-function TestConnectionButton({ providerId, testProvider, apiKeyOverride }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>; apiKeyOverride?: string }) {
+function TestConnectionButton({ providerId, testProvider, apiKeyOverride, baseUrlOverride }: { providerId: string; testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>; apiKeyOverride?: string; baseUrlOverride?: string }) {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
 
   const handleTest = useCallback(async () => {
     setTesting(true)
     setResult(null)
-    const overrides = apiKeyOverride?.trim() ? { apiKey: apiKeyOverride.trim() } : undefined
-    const r = await testProvider(providerId, overrides)
+    const overrides: { baseUrl?: string; apiKey?: string } = {}
+    if (apiKeyOverride?.trim()) overrides.apiKey = apiKeyOverride.trim()
+    if (baseUrlOverride?.trim()) overrides.baseUrl = baseUrlOverride.trim()
+    const r = await testProvider(providerId, Object.keys(overrides).length > 0 ? overrides : undefined)
     setTesting(false)
     setResult(r)
     setTimeout(() => setResult(null), 5000)
-  }, [providerId, testProvider, apiKeyOverride])
+  }, [providerId, testProvider, apiKeyOverride, baseUrlOverride])
 
   return (
     <div className="flex items-center gap-2">
@@ -124,6 +126,7 @@ function RightPanel({
   testProvider,
   onAuthChange,
   onSelectModel,
+  providerBaseUrl,
 }: {
   providerId: string
   providerInfo: { name: string; subtitle: string; color: string; configured: boolean; source?: string }
@@ -135,6 +138,7 @@ function RightPanel({
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   onAuthChange?: () => void
   onSelectModel: (model: ModelInfo) => void
+  providerBaseUrl?: string
 }) {
   const [apiKey, setApiKeyInput] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -255,7 +259,7 @@ function RightPanel({
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Connection</label>
-            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} />
+            <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} baseUrlOverride={providerBaseUrl} />
           </div>
 
           <div>
@@ -277,6 +281,7 @@ function CustomProviderForm({
   testProvider,
   onAuthChange,
   onDone,
+  onSuccess,
 }: {
   editingProviderId?: string | null
   editingConfig?: Record<string, unknown> | null
@@ -284,6 +289,7 @@ function CustomProviderForm({
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   onAuthChange?: () => void
   onDone: () => void
+  onSuccess: (providerId: string, config: Record<string, unknown>) => void
 }) {
   const [customId, setCustomId] = useState('')
   const [customName, setCustomName] = useState('')
@@ -293,6 +299,7 @@ function CustomProviderForm({
   const [customModelName, setCustomModelName] = useState('')
   const [customReasoning, setCustomReasoning] = useState(false)
   const [customContextWindow, setCustomContextWindow] = useState(128000)
+  const [customApi, setCustomApi] = useState('openai-completions')
   const [customSaving, setCustomSaving] = useState(false)
   const [customTestResult, setCustomTestResult] = useState<TestResult | null>(null)
   const [customTesting, setCustomTesting] = useState(false)
@@ -304,6 +311,7 @@ function CustomProviderForm({
       setCustomId(editingProviderId)
       setCustomName((editingConfig.name as string) ?? '')
       setCustomBaseUrl((editingConfig.baseUrl as string) ?? '')
+      setCustomApi((editingConfig.api as string) ?? 'openai-completions')
       setCustomApiKey('')
       setCustomModelId((firstModel?.id as string) ?? '')
       setCustomModelName((firstModel?.name as string) ?? '')
@@ -319,6 +327,7 @@ function CustomProviderForm({
     const config: Record<string, unknown> = {
       name: customName.trim() || id,
       baseUrl: customBaseUrl.trim(),
+      api: customApi.trim(),
       models: [{
         id: customModelId.trim(),
         name: customModelName.trim() || customModelId.trim(),
@@ -335,10 +344,10 @@ function CustomProviderForm({
     const ok = await registerCustomProvider(id, config)
     setCustomSaving(false)
     if (ok) {
-      onAuthChange?.()
-      onDone()
+      await onAuthChange?.()
+      onSuccess(id, config)
     }
-  }, [editingProviderId, customId, customName, customBaseUrl, customApiKey, customModelId, customModelName, customReasoning, customContextWindow, registerCustomProvider, onAuthChange, onDone])
+  }, [editingProviderId, customId, customName, customBaseUrl, customApiKey, customModelId, customModelName, customReasoning, customContextWindow, registerCustomProvider, onAuthChange, onSuccess])
 
   const handleTest = useCallback(async () => {
     const id = editingProviderId ?? customId.trim()
@@ -378,6 +387,16 @@ function CustomProviderForm({
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
             <input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://api.my-llm.com/v1"
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Type</label>
+            <select value={customApi} onChange={(e) => setCustomApi(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="openai-completions">OpenAI Compatible (chat/completions)</option>
+              <option value="openai-responses">OpenAI Responses</option>
+              <option value="anthropic-messages">Anthropic Messages</option>
+              <option value="google-generative-ai">Google Generative AI</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -455,6 +474,7 @@ function ProviderSetup({
   const [focusedProvider, setFocusedProvider] = useState<string | null>(null)
   const [switchingModel, setSwitchingModel] = useState(false)
   const [editingCustom, setEditingCustom] = useState<{ providerId: string; config: Record<string, unknown> } | null>(null)
+  const [customProviderBaseUrls, setCustomProviderBaseUrls] = useState<Record<string, string>>({})
 
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
   const pendingModelKeyRef = useRef<string | null>(null)
@@ -496,7 +516,7 @@ function ProviderSetup({
 
   const customProviders = useMemo(() => {
     return Object.entries(authStatus)
-      .filter(([id, s]) => !POPULAR_IDS.has(id) && s.configured)
+      .filter(([id]) => !POPULAR_IDS.has(id))
       .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source }))
   }, [authStatus])
 
@@ -567,10 +587,10 @@ function ProviderSetup({
 
   const focusedProviderInfo = useMemo(() => {
     if (!focusedProvider) return null
-    return allProviders.find(p => p.id === focusedProvider) ?? null
+    return allProviders.find(p => p.id === focusedProvider) ?? { id: focusedProvider, name: focusedProvider, subtitle: 'Custom', color: CUSTOM_COLOR, configured: false }
   }, [allProviders, focusedProvider])
 
-  const effectiveFocusedProvider = editingCustom ? '__custom__' : focusedProvider
+  const effectiveFocusedProvider = focusedProvider
 
   return (
     <div className="flex w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
@@ -634,6 +654,7 @@ function ProviderSetup({
             testProvider={testProvider}
             onAuthChange={handleAuthChange}
             onDone={() => { setEditingCustom(null); setFocusedProvider(null) }}
+            onSuccess={(providerId, config) => { setEditingCustom(null); setFocusedProvider(providerId); setCustomProviderBaseUrls(prev => ({ ...prev, [providerId]: (config.baseUrl as string) ?? '' })) }}
           />
         ) : focusedProvider && focusedProviderInfo ? (
           <RightPanel
@@ -647,6 +668,7 @@ function ProviderSetup({
             testProvider={testProvider}
             onAuthChange={handleAuthChange}
             onSelectModel={handleSelectModel}
+            providerBaseUrl={customProviderBaseUrls[focusedProvider]}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
