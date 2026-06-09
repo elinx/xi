@@ -29,6 +29,9 @@ function inferContextWindow(model: string): number {
   const m = model.toLowerCase()
   if (m.includes('gpt-4o') || m.includes('gpt-4-turbo')) return 128000
   if (m.includes('claude')) return 200000
+  if (m.includes('deepseek')) return 1000000
+  if (m.includes('gemini')) return 1000000
+  if (m.includes('gpt-5')) return 200000
   return 200000
 }
 

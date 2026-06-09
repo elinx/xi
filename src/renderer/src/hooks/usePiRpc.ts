@@ -58,6 +58,9 @@ function inferContextWindow(model: string): number {
   const m = model.toLowerCase()
   if (m.includes('gpt-4o') || m.includes('gpt-4-turbo')) return 128000
   if (m.includes('claude')) return 200000
+  if (m.includes('deepseek')) return 1000000
+  if (m.includes('gemini')) return 1000000
+  if (m.includes('gpt-5')) return 200000
   return 200000
 }
 
@@ -329,12 +332,12 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                   cacheWriteTokens: prev.cacheWriteTokens + msg.usage.cacheWrite,
                   totalTokens: msg.usage.totalTokens,
                   totalCost: prev.totalCost + msg.usage.cost.total,
-                  contextWindowSize: inferContextWindow(msg.responseModel),
+                  contextWindowSize: currentModelRef.current?.contextWindow ?? inferContextWindow(msg.responseModel),
                 }))
               } else if (msg.usage) {
                 onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                   ...prev,
-                  contextWindowSize: inferContextWindow(msg.responseModel),
+                  contextWindowSize: currentModelRef.current?.contextWindow ?? inferContextWindow(msg.responseModel),
                 }))
               }
               break
@@ -363,12 +366,12 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
                 cacheWriteTokens: prev.cacheWriteTokens + assistantMsg.usage.cacheWrite,
                 totalTokens: assistantMsg.usage.totalTokens,
                 totalCost: prev.totalCost + assistantMsg.usage.cost.total,
-                contextWindowSize: inferContextWindow(assistantMsg.responseModel),
+                contextWindowSize: currentModelRef.current?.contextWindow ?? inferContextWindow(assistantMsg.responseModel),
               }))
             } else if (assistantMsg.usage) {
               onSessionTokenUsageUpdate(sessionPath, (prev) => ({
                 ...prev,
-                contextWindowSize: inferContextWindow(assistantMsg.responseModel),
+                contextWindowSize: currentModelRef.current?.contextWindow ?? inferContextWindow(assistantMsg.responseModel),
               }))
             }
           }
@@ -613,7 +616,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       cacheWriteTokens: 0,
       totalTokens: 0,
       totalCost: 0,
-      contextWindowSize: 200000,
+      contextWindowSize: currentModelRef.current?.contextWindow ?? 200000,
     }))
     updateCache(sessionPath, (cache) => ({
       ...cache,
