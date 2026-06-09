@@ -92,7 +92,7 @@ async function init(data: WorkerInit): Promise<void> {
     sessionManager = sm
     const services = await pi!.createAgentSessionServices({ cwd, agentDir })
 
-    const guardedWriteTool = pi.createWriteTool(cwd, {
+    const guardedWriteTool = pi.createWriteToolDefinition(cwd, {
       operations: {
         writeFile: async (absolutePath: string, content: string) => {
           validateWritePath(absolutePath, cwd)
@@ -105,7 +105,7 @@ async function init(data: WorkerInit): Promise<void> {
       },
     })
 
-    const guardedEditTool = pi.createEditTool(cwd, {
+    const guardedEditTool = pi.createEditToolDefinition(cwd, {
       operations: {
         readFile: (absolutePath: string) => fs.readFile(absolutePath),
         writeFile: async (absolutePath: string, content: string) => {
