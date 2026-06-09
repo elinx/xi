@@ -176,9 +176,9 @@ async function init(data: WorkerInit): Promise<void> {
           if (base) return base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi')
           return undefined
         },
-        appendSystemPromptOverride: (base: string | undefined) => {
+        appendSystemPromptOverride: (base: string[]) => {
           const xiIdentity = 'You are Xi (ξ), a coding agent. When referring to yourself, say Xi, not pi.'
-          return base ? `${base}\n\n${xiIdentity}` : xiIdentity
+          return [...base, xiIdentity]
         },
       },
     })
