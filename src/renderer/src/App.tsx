@@ -284,6 +284,7 @@ function App(): React.ReactElement {
 
   const handleSwitchSession = useCallback(async (sessionPath: string) => {
     setQuotes([])
+    setActiveTab(SESSION_TAB_ID)
     userSwitchingRef.current = sessionPath
     await displaySessionRef.current(sessionPath)
     await switchSession(sessionPath)
@@ -293,7 +294,7 @@ function App(): React.ReactElement {
     }
     window.api.saveLastSession(sessionPath)
     userSwitchingRef.current = null
-  }, [switchSession])
+  }, [switchSession, setActiveTab])
 
   const currentSessionRef = useRef(currentSession)
   currentSessionRef.current = currentSession
