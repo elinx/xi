@@ -45,11 +45,14 @@ function validateWritePath(absolutePath: string, cwd: string): void {
 }
 
 function createSearchSessionsTool(cwd: string) {
-  const { Type } = require('@sinclair/typebox')
-  const schema = Type.Object({
-    query: Type.String({ description: 'Search query — matches against session names and message content' }),
-    limit: Type.Optional(Type.Number({ description: 'Max results to return (default 10)', default: 10 })),
-  })
+  const schema = {
+    type: 'object' as const,
+    properties: {
+      query: { type: 'string' as const, description: 'Search query — matches against session names and message content' },
+      limit: { type: 'number' as const, description: 'Max results to return (default 10)', default: 10 },
+    },
+    required: ['query'],
+  }
   return {
     name: 'searchSessions',
     label: 'searchSessions',
