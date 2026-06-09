@@ -22,9 +22,12 @@ interface InputBarProps {
   quotes: QuotedMessage[]
   onRemoveQuote: (messageId: string) => void
   onClearQuotes: () => void
+  queueCount?: number
+  onClearQueue?: () => void
+  onRemoveLastQueued?: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, onClearQueue, onRemoveLastQueued }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -431,6 +434,27 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
           </button>
         )}
       </div>
+      {queueCount > 0 && (
+        <div className="flex items-center gap-2 mt-1 px-1">
+          <span className="text-xs text-blue-600 font-medium">
+            {queueCount} queued
+          </span>
+          <button
+            onClick={onRemoveLastQueued}
+            className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
+            title="Remove last queued message (Esc)"
+          >
+            Remove last
+          </button>
+          <button
+            onClick={onClearQueue}
+            className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
+            title="Clear all queued messages"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
       </div>
     </div>
   )

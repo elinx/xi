@@ -25,6 +25,14 @@ import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
 
+interface QueuedMessage {
+  text: string
+  images?: { data: string; mimeType: string }[]
+  mentions?: Array<{ type: string; path: string; name: string }>
+  quotes?: QuotedMessage[]
+}
+
+
 function App(): React.ReactElement {
   const sessionCache = useSessionCache()
   const {
@@ -206,6 +214,9 @@ function App(): React.ReactElement {
     return (localStorage.getItem('xi-settings-view-mode') as ViewMode) || 'normal'
   })
   const [quotes, setQuotes] = useState<QuotedMessage[]>([])
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
+  const messageQueueRef = useRef<QueuedMessage[]>([])
+  messageQueueRef.current = messageQueue
   const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
@@ -267,6 +278,7 @@ function App(): React.ReactElement {
     const result = await window.api.openDirectory()
     if (!result.ok) return
     sessionCache.clearAllCaches()
+    setMessageQueue([])
     resetTabs()
     await refresh()
     refreshFileIndex(true)
@@ -426,8 +438,6 @@ function App(): React.ReactElement {
   }, [sessions])
 
   const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>, quotes?: QuotedMessage[]) => {
-    if (isPiStreaming()) return
-
     let finalText = text
     if (quotes && quotes.length > 0) {
       const quotedText = quotes.map(q => {
@@ -437,6 +447,11 @@ function App(): React.ReactElement {
         return `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`
       }).join('\n\n')
       finalText = quotedText + '\n\n' + text
+    }
+
+    if (isPiStreaming()) {
+      setMessageQueue(prev => [...prev, { text: finalText, images, mentions, quotes }])
+      return
     }
 
     const sessionPath = displayedSessionPathRef.current
@@ -570,15 +585,32 @@ function App(): React.ReactElement {
   useEffect(() => {
     setOnAgentEnd(() => () => {
       refresh()
+      const queue = messageQueueRef.current
+      if (queue.length > 0) {
+        const [next, ...rest] = queue
+        setMessageQueue(rest)
+        const sessionPath = displayedSessionPathRef.current
+        if (sessionPath) {
+          const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+          apiWithWorker.workerEnsureReady?.(sessionPath).then(() => {
+            sendPrompt(sessionPath, next.text, next.images, next.mentions)
+          })
+        }
+      }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setOnAgentEnd, refresh])
+  }, [setOnAgentEnd, refresh, sendPrompt])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
       if (paletteOpen) return
       if (e.key === 'Escape') {
-        if (isPiStreaming()) abort(displayedSessionPathRef.current)
+        if (isPiStreaming()) {
+          abort(displayedSessionPathRef.current)
+          setMessageQueue([])
+        } else if (messageQueueRef.current.length > 0) {
+          setMessageQueue(prev => prev.slice(0, -1))
+        }
       }
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key === '\\') {
@@ -700,6 +732,7 @@ function App(): React.ReactElement {
                             if (p.path === (projects[0]?.projectPath)) return
                             const result = await window.api.openDirectory()
                             sessionCache.clearAllCaches()
+                            setMessageQueue([])
                             resetTabs()
                             await refresh()
                             refreshFileIndex(true)
@@ -957,6 +990,9 @@ function App(): React.ReactElement {
               quotes={mergedQuotes}
               onRemoveQuote={handleRemoveQuote}
               onClearQuotes={handleClearQuotes}
+              queueCount={messageQueue.length}
+              onClearQueue={() => setMessageQueue([])}
+              onRemoveLastQueued={() => setMessageQueue(prev => prev.slice(0, -1))}
             />
           )}
         </div>
