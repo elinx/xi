@@ -217,13 +217,17 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('pi:setModel', async (_event, sessionPath: string | null, model: string, provider?: string) => {
     const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    if (!worker?.bridge.isConnected) {
+      console.log('[setModel] No worker, sessionPath:', sessionPath, 'primary:', workerManager?.getPrimary()?.sessionPath)
+      return { ok: false, error: 'Worker not connected' }
+    }
     try {
       const command: Record<string, unknown> = { type: 'set_model', model }
       if (provider) command.provider = provider
       const data = await worker.bridge.sendRpcCommand(command)
       return { ok: true, data }
     } catch (err: unknown) {
+      console.log('[setModel] Error:', err instanceof Error ? err.message : String(err), 'sessionPath:', sessionPath)
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
