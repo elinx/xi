@@ -35,6 +35,7 @@ interface UseSessionCacheReturn {
   updateCache: (sessionPath: string, updater: (cache: SessionCache) => SessionCache) => void
   displaySession: (sessionPath: string) => Promise<void>
   clearCache: (sessionPath: string) => void
+  clearAllCaches: () => void
   setCacheStreaming: (sessionPath: string, isStreaming: boolean, streamingMessageId: string | null) => void
   refreshDisplayedMessages: () => void
 
@@ -268,6 +269,19 @@ export function useSessionCache(): UseSessionCacheReturn {
     return workerStatusesRef.current.get(sessionPath) ?? 'none'
   }, [])
 
+  const clearAllCaches = useCallback(() => {
+    cacheMap.current.clear()
+    displayedSessionPathRef.current = null
+    setDisplayedSessionPath(null)
+    setDisplayedMessages([])
+    setDisplayedTokenUsage({ ...INITIAL_TOKEN_USAGE })
+    setDisplayedForkPoints([])
+    setIsDisplayedStreaming(false)
+    setDisplayedStreamingMessageId(null)
+    workerStatusesRef.current.clear()
+    setWorkerStatuses(new Map())
+  }, [])
+
   return {
     displayedSessionPath,
     displayedMessages,
@@ -276,11 +290,12 @@ export function useSessionCache(): UseSessionCacheReturn {
     displayedForkPoints,
     displayedStreamingMessageId,
     getCache,
-ensureCacheSync,
-getOrCreateCache,
+    ensureCacheSync,
+    getOrCreateCache,
     updateCache,
     displaySession,
     clearCache,
+    clearAllCaches,
     setCacheStreaming,
     refreshDisplayedMessages,
     updateSessionMessages,

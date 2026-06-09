@@ -21,10 +21,17 @@ let mainWindow: BrowserWindow | null = null
 let workerManager: WorkerManager | null = null
 let initialSessionPath: string | undefined
 
-const projectPath = process.cwd()
+let projectPath = process.cwd()
 
 let _git: SimpleGit | null = null
 let _gitAvailable: boolean | null = null
+
+function resetGit(newPath: string): void {
+  projectPath = newPath
+  _git = null
+  _gitAvailable = null
+}
+
 function getGit(): SimpleGit {
   if (!_git) {
     _git = simpleGit(projectPath, { binary: 'git' })
@@ -646,6 +653,8 @@ function registerIpcHandlers(): void {
       }
       const newCwd = result.filePaths[0]
       process.chdir(newCwd)
+      resetGit(newCwd)
+      sessionService.clearPendingNames()
       try {
         await workerManager?.disposeAll()
       } catch {}

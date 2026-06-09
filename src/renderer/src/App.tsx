@@ -266,8 +266,8 @@ function App(): React.ReactElement {
   async function handleOpenDirectory(): Promise<void> {
     const result = await window.api.openDirectory()
     if (!result.ok) return
+    sessionCache.clearAllCaches()
     resetTabs()
-    clearMessages(null)
     await refresh()
     refreshFileIndex(true)
     const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
@@ -699,8 +699,8 @@ function App(): React.ReactElement {
                             setShowRecentProjects(false)
                             if (p.path === (projects[0]?.projectPath)) return
                             const result = await window.api.openDirectory()
+                            sessionCache.clearAllCaches()
                             resetTabs()
-                            clearMessages(null)
                             await refresh()
                             refreshFileIndex(true)
                           }}

@@ -259,6 +259,10 @@ export function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode | nul
  *  entry to the now-existing file. */
 const pendingNames = new Map<string, string>()
 
+export function clearPendingNames(): void {
+  pendingNames.clear()
+}
+
 export function nameSession(sessionPath: string, name: string, _cwd?: string, _parentSessionPath?: string): boolean {
   try {
     if (!existsSync(sessionPath)) {
