@@ -1018,8 +1018,9 @@ function App(): React.ReactElement {
               onRemoveQuote={handleRemoveQuote}
               onClearQuotes={handleClearQuotes}
               queueCount={messageQueue.length}
+              queuePreviews={messageQueue.map(m => m.text.slice(0, 80))}
               onClearQueue={() => setMessageQueue([])}
-              onRemoveLastQueued={() => setMessageQueue(prev => prev.slice(0, -1))}
+              onRemoveQueuedAt={(i) => setMessageQueue(prev => prev.filter((_, idx) => idx !== i))}
             />
           )}
         </div>

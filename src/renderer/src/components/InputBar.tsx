@@ -26,11 +26,12 @@ interface InputBarProps {
   onRemoveQuote: (messageId: string) => void
   onClearQuotes: () => void
   queueCount?: number
+  queuePreviews?: string[]
   onClearQueue?: () => void
-  onRemoveLastQueued?: () => void
+  onRemoveQueuedAt?: (index: number) => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, onClearQueue, onRemoveLastQueued }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, queuePreviews = [], onClearQueue, onRemoveQueuedAt }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -516,24 +517,33 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
         )}
       </div>
       {queueCount > 0 && (
-        <div className="flex items-center gap-2 mt-1 px-1">
-          <span className="text-xs text-blue-600 font-medium">
-            {queueCount} queued
-          </span>
-          <button
-            onClick={onRemoveLastQueued}
-            className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
-            title="Remove last queued message (Esc)"
-          >
-            Remove last
-          </button>
-          <button
-            onClick={onClearQueue}
-            className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
-            title="Clear all queued messages"
-          >
-            Clear all
-          </button>
+        <div className="mt-1 px-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-600 font-medium">
+              {queueCount} queued
+            </span>
+            <button
+              onClick={onClearQueue}
+              className="text-[10px] text-gray-500 hover:text-red-600 transition-colors"
+              title="Clear all queued messages"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="space-y-0.5">
+            {queuePreviews.map((preview, i) => (
+              <div key={i} className="flex items-center gap-1.5 group rounded px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 transition-colors">
+                <span className="text-[11px] text-blue-800 truncate flex-1 max-w-[400px]">{preview}</span>
+                <button
+                  onClick={() => onRemoveQueuedAt?.(i)}
+                  className="text-[10px] text-gray-400 hover:text-red-600 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove this message"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       </div>
