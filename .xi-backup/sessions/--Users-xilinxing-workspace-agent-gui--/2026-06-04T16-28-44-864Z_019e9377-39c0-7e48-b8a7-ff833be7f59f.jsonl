@@ -1,6 +1,0 @@
-{"type":"session","version":3,"id":"019e9377-39c0-7e48-b8a7-ff833be7f59f","timestamp":"2026-06-04T16:28:44.864Z","cwd":"/Users/xilinxing/workspace/agent-gui","parentSession":"/Users/xilinxing/workspace/agent-gui/.xi/sessions/--Users-xilinxing-workspace-agent-gui--/2026-05-30T05-12-02-643Z_019e774b-e353-750e-ac1c-172ee834e61f.jsonl"}
-{"type":"model_change","id":"4898888e","parentId":null,"timestamp":"2026-06-04T16:28:44.869Z","provider":"glm","modelId":"glm-5"}
-{"type":"thinking_level_change","id":"dd5f99c2","parentId":"4898888e","timestamp":"2026-06-04T16:28:44.869Z","thinkingLevel":"off"}
-{"type":"session_info","id":"135cd51e","parentId":"dd5f99c2","timestamp":"2026-06-04T16:28:44.870Z","name":"chat"}
-{"type":"model_change","id":"5505c6b2","parentId":"135cd51e","timestamp":"2026-06-06T06:12:34.267Z","provider":"glm","modelId":"glm-5"}
-{"type":"thinking_level_change","id":"899c6a57","parentId":"5505c6b2","timestamp":"2026-06-06T06:12:34.268Z","thinkingLevel":"off"}

@@ -1,8 +1,0 @@
-{"type":"session","version":3,"id":"019e9b90-5dee-7157-aa5e-21f9e53533c8","timestamp":"2026-06-06T06:13:10.254Z","cwd":"/Users/xilinxing/workspace/agent-gui","parentSession":"/Users/xilinxing/workspace/agent-gui/.xi/sessions/--Users-xilinxing-workspace-agent-gui--/2026-06-06T06-13-02-817Z_019e9b90-40e1-7b9b-a03c-5e7709a9581a.jsonl"}
-{"type":"model_change","id":"6cad27df","parentId":null,"timestamp":"2026-06-06T06:13:10.260Z","provider":"glm","modelId":"glm-5"}
-{"type":"thinking_level_change","id":"79cf288a","parentId":"6cad27df","timestamp":"2026-06-06T06:13:10.260Z","thinkingLevel":"off"}
-{"type":"session_info","id":"402d49aa","parentId":"79cf288a","timestamp":"2026-06-06T06:13:10.264Z","name":"test1"}
-{"type":"model_change","id":"c5ebcb5b","parentId":"402d49aa","timestamp":"2026-06-06T06:13:11.163Z","provider":"glm","modelId":"glm-5"}
-{"type":"thinking_level_change","id":"a7cd68f3","parentId":"c5ebcb5b","timestamp":"2026-06-06T06:13:11.164Z","thinkingLevel":"off"}
-{"type":"model_change","id":"f491e280","parentId":"a7cd68f3","timestamp":"2026-06-06T06:19:43.386Z","provider":"glm","modelId":"glm-5"}
-{"type":"thinking_level_change","id":"a1b872c3","parentId":"f491e280","timestamp":"2026-06-06T06:19:43.387Z","thinkingLevel":"off"}
