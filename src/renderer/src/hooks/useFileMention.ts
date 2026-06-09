@@ -1,11 +1,21 @@
 import { useState, useCallback, useRef } from 'react'
 import type { FileEntry } from './useFileIndex'
+import type { SessionInfo } from '../types/session'
 
-export interface MentionItem {
+export interface FileMentionData {
   type: 'file'
   path: string
   name: string
 }
+
+export interface SessionMentionData {
+  type: 'session'
+  sessionId: string
+  name: string
+  filePath: string
+}
+
+export type MentionItem = FileMentionData | SessionMentionData
 
 interface FileMentionState {
   open: boolean

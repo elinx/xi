@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { PiModelInfo } from '../types/session'
+import type { PiModelInfo, SessionInfo } from '../types/session'
 import type { FileEntry } from '../hooks/useFileIndex'
 import { useFileMention, type MentionItem } from '../hooks/useFileMention'
+import { useSessionMention } from '../hooks/useSessionMention'
 import type { WorkerStatus } from '../hooks/useSessionCache'
 import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
+import SessionMentionDropdown from './SessionMentionDropdown'
 import QuoteCard, { type QuotedMessage } from './QuoteCard'
 
 interface InputBarProps {
@@ -18,6 +20,7 @@ interface InputBarProps {
   onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
   getAvailableModels?: () => Promise<PiModelInfo[]>
   files: FileEntry[]
+  sessions: SessionInfo[]
   sentMessages: string[]
   quotes: QuotedMessage[]
   onRemoveQuote: (messageId: string) => void
@@ -27,7 +30,7 @@ interface InputBarProps {
   onRemoveLastQueued?: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, onClearQueue, onRemoveLastQueued }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, onClearQueue, onRemoveLastQueued }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -37,6 +40,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
   const suppressMentionRef = useRef(false)
 
   const mention = useFileMention(files)
+  const sessionMention = useSessionMention(sessions)
 
   const showStop = isStreaming
   const noModel = isConnected && (!currentModel || (currentModel.id === 'unknown' && currentModel.provider === 'unknown'))
@@ -47,6 +51,8 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     for (const node of editorRef.current.childNodes) {
       if (node instanceof HTMLElement && node.dataset.mentionPath) {
         text += '@' + node.dataset.mentionPath
+      } else if (node instanceof HTMLElement && node.dataset.sessionId) {
+        text += '$' + (node.dataset.sessionName ?? '')
       } else if (node instanceof HTMLBRElement) {
         text += '\n'
       } else {
@@ -152,17 +158,19 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     const text = getPlainText().trim()
     if (!text && pastedImages.length === 0) return
     if (disabled) return
-    onSend(text, pastedImages.length > 0 ? pastedImages : undefined, mention.mentions.length > 0 ? mention.mentions : undefined, quotes.length > 0 ? quotes : undefined)
+    const allMentions = [...mention.mentions, ...sessionMention.sessionMentions]
+    onSend(text, pastedImages.length > 0 ? pastedImages : undefined, allMentions.length > 0 ? allMentions : undefined, quotes.length > 0 ? quotes : undefined)
     if (quotes.length > 0) onClearQuotes()
     if (editorRef.current) {
       editorRef.current.innerHTML = ''
     }
     setPastedImages([])
     mention.clearMentions()
+    sessionMention.clearMentions()
     setHistoryIndex(-1)
     draftRef.current = ''
     draftMentionsRef.current = []
-  }, [getPlainText, pastedImages, disabled, onSend, mention])
+  }, [getPlainText, pastedImages, disabled, onSend, mention, sessionMention])
 
   useEffect(() => {
     if (!editorRef.current) return
@@ -192,6 +200,25 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
       if (e.key === 'Escape') {
         e.preventDefault()
         mention.close()
+        return
+      }
+    }
+    if (sessionMention.open) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        sessionMention.onKeyDown(e)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const session = sessionMention.filteredSessions[sessionMention.selectedIndex]
+        if (session) handleSessionMentionSelect(session)
+        else sessionMention.close()
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        sessionMention.close()
         return
       }
     }
@@ -256,6 +283,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
       }
     }
     mention.onTextInput(cursorText, cursorOffset)
+    sessionMention.onTextInput(cursorText, cursorOffset)
   }
 
   const handleMentionSelect = useCallback((file: FileEntry) => {
@@ -303,6 +331,53 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     mention.selectItem(file)
     setTimeout(() => { suppressMentionRef.current = false }, 100)
   }, [mention])
+
+  const handleSessionMentionSelect = useCallback((session: SessionInfo) => {
+    if (!editorRef.current) return
+    const sel = window.getSelection()
+    if (!sel || !sel.focusNode) return
+
+    suppressMentionRef.current = true
+
+    const textNode = sel.focusNode.nodeType === Node.TEXT_NODE ? sel.focusNode as Text : null
+    const textContent = textNode?.textContent ?? ''
+    const cursorOffset = sel.focusOffset
+
+    const textBeforeCursor = textContent.substring(0, cursorOffset)
+    const dollarPos = textBeforeCursor.lastIndexOf('$')
+    if (dollarPos === -1) return
+
+    const before = textContent.substring(0, dollarPos)
+    const after = textContent.substring(cursorOffset)
+
+    const pill = document.createElement('span')
+    pill.contentEditable = 'false'
+    pill.dataset.sessionId = session.sessionId
+    pill.dataset.sessionName = session.name ?? ''
+    pill.className = 'inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-purple-100 text-purple-700 text-[13px] leading-5 align-baseline select-none cursor-default'
+    pill.innerHTML = `<svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${session.name}`
+
+    if (textNode && textNode.parentNode) {
+      const parent = textNode.parentNode
+      const afterNode = after.length > 0 ? document.createTextNode(after + '\u00A0') : document.createTextNode('\u00A0')
+
+      if (before.length > 0) {
+        parent.insertBefore(document.createTextNode(before), textNode)
+      }
+      parent.insertBefore(pill, textNode)
+      parent.insertBefore(afterNode, textNode)
+      parent.removeChild(textNode)
+
+      const range = document.createRange()
+      range.setStart(afterNode, after.length > 0 ? after.length + 1 : 1)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+
+    sessionMention.selectItem(session)
+    setTimeout(() => { suppressMentionRef.current = false }, 100)
+  }, [sessionMention])
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>): void {
     const items = e.clipboardData.items
@@ -407,7 +482,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
             onKeyDown={handleKeyDown}
             onInput={handleEditorInput}
             onPaste={handlePaste}
-            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ to mention files)'}
+            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ files, $ sessions)'}
             className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
           />
           <FileMentionDropdown
@@ -415,6 +490,12 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
             selectedIndex={mention.selectedIndex}
             onSelect={handleMentionSelect}
             visible={mention.open}
+          />
+          <SessionMentionDropdown
+            sessions={sessionMention.filteredSessions}
+            selectedIndex={sessionMention.selectedIndex}
+            onSelect={handleSessionMentionSelect}
+            visible={sessionMention.open}
           />
         </div>
         {showStop ? (

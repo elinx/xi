@@ -12,6 +12,7 @@ import type {
 } from '../types/pi-events'
 import type { ForkPoint, PiModelInfo } from '../types/session'
 import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, type TokenUsage } from '../utils/convert-messages'
+import type { MentionItem } from './useFileMention'
 import type { SessionCache } from './useSessionCache'
 
 export interface UsePiRpcOptions {
@@ -32,7 +33,7 @@ interface UsePiRpcReturn {
   isConnected: boolean
   currentModel: PiModelInfo | null
   thinkingLevel: string | null
-  sendPrompt: (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => void
+  sendPrompt: (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[]) => void
   abort: (sessionPath: string | null) => Promise<void>
   pendingUiRequests: Array<{ id: string; method: string; [key: string]: unknown }>
   respondToUiRequest: (sessionPath: string | null, requestId: string, response: Record<string, unknown>) => void
@@ -570,7 +571,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   }, [])
 
   const sendPrompt = useCallback(
-    (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>) => {
+    (sessionPath: string | null, text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[]) => {
       const command: Record<string, unknown> = {
         type: 'prompt',
         message: text,

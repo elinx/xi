@@ -24,11 +24,12 @@ import type { ForkPoint } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
+import type { MentionItem } from './hooks/useFileMention'
 
 interface QueuedMessage {
   text: string
   images?: { data: string; mimeType: string }[]
-  mentions?: Array<{ type: string; path: string; name: string }>
+  mentions?: MentionItem[]
   quotes?: QuotedMessage[]
 }
 
@@ -437,7 +438,7 @@ function App(): React.ReactElement {
     })
   }, [sessions])
 
-  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: Array<{ type: string; path: string; name: string }>, quotes?: QuotedMessage[]) => {
+  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => {
     let finalText = text
     if (quotes && quotes.length > 0) {
       const quotedText = quotes.map(q => {
@@ -447,6 +448,31 @@ function App(): React.ReactElement {
         return `> [Quoted ${q.role} message]:\n> ${q.content.replace(/\n/g, '\n> ')}`
       }).join('\n\n')
       finalText = quotedText + '\n\n' + text
+    }
+
+    const sessionMentions = mentions?.filter((m): m is Extract<MentionItem, { type: 'session' }> => m.type === 'session')
+    if (sessionMentions && sessionMentions.length > 0) {
+      const contextParts: string[] = []
+      for (const sm of sessionMentions) {
+        const cache = getCache(sm.filePath)
+        if (cache && cache.messages.length > 0) {
+          const recentMessages = cache.messages.slice(-10)
+          const formatted = recentMessages.map(msg => {
+            const role = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : msg.role
+            const content = msg.blocks.map(b => {
+              if (b.type === 'text') return b.content
+              if (b.type === 'tool_call') return `[Tool: ${b.toolName}]`
+              if (b.type === 'tool_result') return `[Result]`
+              return ''
+            }).join('')
+            return `${role}: ${content.slice(0, 500)}`
+          }).join('\n')
+          contextParts.push(`<session name="${sm.name}">\n${formatted}\n</session>`)
+        }
+      }
+      if (contextParts.length > 0) {
+        finalText = `[Referenced session context]\n${contextParts.join('\n\n')}\n\n${finalText}`
+      }
     }
 
     if (isPiStreaming()) {
@@ -986,6 +1012,7 @@ function App(): React.ReactElement {
               onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
               getAvailableModels={() => getAvailableModels(activeSessionPath)}
               files={indexedFiles}
+              sessions={sessions?.projects?.flatMap(p => p.allSessions) ?? []}
               sentMessages={sentMessages}
               quotes={mergedQuotes}
               onRemoveQuote={handleRemoveQuote}
