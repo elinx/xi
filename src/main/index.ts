@@ -168,14 +168,14 @@ function initWorkerManager(sessionPath?: string): void {
 
 function registerIpcHandlers(): void {
   ipcMain.handle('pi:sendCommand', (_event, sessionPath: string | null, command: Record<string, unknown>) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     worker.bridge.sendCommand(command)
     return { ok: true }
   })
 
   ipcMain.handle('pi:sendExtensionUIResponse', (_event, sessionPath: string | null, response: Record<string, unknown>) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     worker.bridge.sendExtensionUIResponse(response)
     return { ok: true }
@@ -216,24 +216,20 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('pi:setModel', async (_event, sessionPath: string | null, model: string, provider?: string) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) {
-      console.log('[setModel] No worker, sessionPath:', sessionPath, 'primary:', workerManager?.getPrimary()?.sessionPath)
-      return { ok: false, error: 'Worker not connected' }
-    }
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
       const command: Record<string, unknown> = { type: 'set_model', model }
       if (provider) command.provider = provider
       const data = await worker.bridge.sendRpcCommand(command)
       return { ok: true, data }
     } catch (err: unknown) {
-      console.log('[setModel] Error:', err instanceof Error ? err.message : String(err), 'sessionPath:', sessionPath)
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
   ipcMain.handle('pi:cycleModel', async (_event, sessionPath: string | null, direction?: 'forward' | 'backward') => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
       const data = await worker.bridge.sendRpcCommand({ type: 'cycle_model', direction: direction ?? 'forward' })
@@ -244,7 +240,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('pi:getModelInfo', async (_event, sessionPath: string | null) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
     try {
       const data = await worker.bridge.sendRpcCommand({ type: 'get_state' })
@@ -662,7 +658,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:getForkMessages', async (_event, sessionPath: string | null) => {
     try {
-      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
       if (!worker?.bridge.isConnected) return []
       const data = (await worker.bridge.sendRpcCommand({ type: 'get_fork_messages' })) as {
         messages?: ForkableMessage[]
@@ -674,7 +670,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:forkAtEntry', async (_event, sessionPath: string | null, entryId: string, name?: string) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) {
       return { success: false, error: 'Worker not connected' }
     }
@@ -740,7 +736,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:newSession', async (_event, sessionPath: string | null, name: string, parentSessionPath?: string) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) {
       return { success: false, error: 'Worker not connected' }
     }
@@ -785,7 +781,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:renameSession', async (_event, sessionPath: string | null, name: string) => {
-    const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (worker?.bridge.isConnected) {
       try {
         await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
@@ -838,7 +834,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:getMessages', async (_event, sessionPath: string | null) => {
     try {
-      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
       if (!worker?.bridge.isConnected) return []
       const data = (await worker.bridge.sendRpcCommand({ type: 'get_messages' })) as { messages?: unknown[] }
       return data.messages ?? []
@@ -902,7 +898,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('session:clearSession', async (_event, sessionPath: string | null) => {
     try {
-      const worker = sessionPath ? workerManager?.get(sessionPath) : workerManager?.getPrimary()
+      const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
       if (!worker?.bridge.isConnected) {
         return { success: false, error: 'Worker not connected' }
       }
