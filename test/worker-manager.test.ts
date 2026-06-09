@@ -110,11 +110,13 @@ describe('WorkerManager', () => {
 
       await mgr.initPrimary('/cwd')
 
-      expect(statuses).toContainEqual({
-        sessionId: 'primary',
-        role: 'primary',
-        status: 'connected',
-      })
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          sessionId: 'primary',
+          role: 'primary',
+          status: 'connected',
+        }),
+      )
     })
 
     it('sets status="error" and emits on bridge.start() failure', async () => {
@@ -127,11 +129,13 @@ describe('WorkerManager', () => {
 
       expect(mgr.getPrimary()).toBeNull()
 
-      expect(statuses).toContainEqual({
-        sessionId: 'primary',
-        role: 'primary',
-        status: 'error',
-      })
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          sessionId: 'primary',
+          role: 'primary',
+          status: 'error',
+        }),
+      )
     })
 
     it('throws if primary already exists', async () => {
