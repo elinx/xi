@@ -22,7 +22,7 @@ const POPULAR_PROVIDERS = [
   { id: 'mistral', name: 'Mistral', subtitle: 'Mistral AI', color: '#f97316' },
 ]
 
-const POPULAR_IDS = new Set(POPULAR_PROVIDERS.map(p => p.id))
+const POPULAR_IDS = new Set(POPULAR_PROVIDERS.map(p => p.id.toLowerCase()))
 const CUSTOM_COLOR = '#6b7280'
 
 function stringToColor(str: string): string {
@@ -527,7 +527,7 @@ function ProviderSetup({
 
   const customProviders = useMemo(() => {
     return Object.entries(authStatus)
-      .filter(([id]) => !POPULAR_IDS.has(id))
+      .filter(([id]) => !POPULAR_IDS.has(id.toLowerCase()))
       .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source, color: stringToColor(id) }))
   }, [authStatus])
 
@@ -575,14 +575,18 @@ function ProviderSetup({
   }, [])
 
   const allProviders = useMemo(() => {
+    const authLower: Record<string, { configured: boolean; source?: string }> = {}
+    for (const [k, v] of Object.entries(authStatus)) {
+      authLower[k.toLowerCase()] = v
+    }
     return [
       ...POPULAR_PROVIDERS.map(p => ({
         id: p.id,
         name: p.name,
         subtitle: p.subtitle,
         color: p.color,
-        configured: authStatus[p.id]?.configured ?? false,
-        source: authStatus[p.id]?.source,
+        configured: authLower[p.id.toLowerCase()]?.configured ?? false,
+        source: authLower[p.id.toLowerCase()]?.source,
       })),
       ...customProviders,
     ]
