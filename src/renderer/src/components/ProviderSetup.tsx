@@ -25,6 +25,15 @@ const POPULAR_PROVIDERS = [
 const POPULAR_IDS = new Set(POPULAR_PROVIDERS.map(p => p.id))
 const CUSTOM_COLOR = '#6b7280'
 
+function stringToColor(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const hue = ((hash % 360) + 360) % 360
+  return `hsl(${hue}, 55%, 50%)`
+}
+
 type AuthStatusMap = Record<string, { configured: boolean; source?: string }>
 type TestResult = { ok: boolean; error?: string; latencyMs?: number }
 
@@ -519,7 +528,7 @@ function ProviderSetup({
   const customProviders = useMemo(() => {
     return Object.entries(authStatus)
       .filter(([id]) => !POPULAR_IDS.has(id))
-      .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source }))
+      .map(([id, s]) => ({ id, name: id, subtitle: 'Custom', configured: s.configured, source: s.source, color: stringToColor(id) }))
   }, [authStatus])
 
   const handleSelectModel = useCallback(async (model: ModelInfo) => {
@@ -575,10 +584,7 @@ function ProviderSetup({
         configured: authStatus[p.id]?.configured ?? false,
         source: authStatus[p.id]?.source,
       })),
-      ...customProviders.map(p => ({
-        ...p,
-        color: CUSTOM_COLOR,
-      })),
+      ...customProviders,
     ]
   }, [authStatus, customProviders])
 
@@ -589,7 +595,7 @@ function ProviderSetup({
 
   const focusedProviderInfo = useMemo(() => {
     if (!focusedProvider) return null
-    return allProviders.find(p => p.id === focusedProvider) ?? { id: focusedProvider, name: focusedProvider, subtitle: 'Custom', color: CUSTOM_COLOR, configured: false }
+    return allProviders.find(p => p.id === focusedProvider) ?? { id: focusedProvider, name: focusedProvider, subtitle: 'Custom', color: stringToColor(focusedProvider), configured: false }
   }, [allProviders, focusedProvider])
 
   const effectiveFocusedProvider = focusedProvider
