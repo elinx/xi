@@ -1544,6 +1544,11 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   }, [])
 
   useEffect(() => {
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg?.role === 'user') {
+      userScrolledUpRef.current = false
+      isNearBottomRef.current = true
+    }
     if (userScrolledUpRef.current) return
     if (!isNearBottomRef.current) return
     if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
