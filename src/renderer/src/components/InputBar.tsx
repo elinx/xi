@@ -8,6 +8,7 @@ import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
 import SessionMentionDropdown from './SessionMentionDropdown'
 import QuoteCard, { type QuotedMessage } from './QuoteCard'
+import { TokenUsageRing } from './TokenUsageRing'
 
 interface InputBarProps {
   onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => void
@@ -25,6 +26,7 @@ interface InputBarProps {
   quotes: QuotedMessage[]
   onRemoveQuote: (messageId: string) => void
   onClearQuotes: () => void
+  tokenUsage?: { totalTokens: number; contextWindowSize: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; totalCost: number }
   queueCount?: number
   queueMessages?: { text: string }[]
   onClearQueue?: () => void
@@ -32,7 +34,7 @@ interface InputBarProps {
   onSendQueued?: (index: number) => void
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -451,6 +453,18 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
       <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
         {statusDot}
         {statusText}
+        {tokenUsage && isConnected && (
+          <span>
+            <TokenUsageRing size={16} showPercent={false} tooltipPosition="top"
+              usedTokens={tokenUsage.totalTokens}
+              contextWindowSize={tokenUsage.contextWindowSize}
+              inputTokens={tokenUsage.inputTokens}
+              outputTokens={tokenUsage.outputTokens}
+              cacheReadTokens={tokenUsage.cacheReadTokens}
+              totalCost={tokenUsage.totalCost}
+            />
+          </span>
+        )}
       </div>
       {noModel && (
         <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
@@ -485,6 +499,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
         </div>
       )}
       <div className="flex items-end gap-2 relative">
+
         <div className="flex-1 relative">
           <div
             ref={editorRef}

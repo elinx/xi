@@ -7,6 +7,9 @@ interface TokenUsageRingProps {
   outputTokens: number
   cacheReadTokens: number
   totalCost: number
+  tooltipPosition?: 'top' | 'bottom'
+  size?: number
+  showPercent?: boolean
 }
 
 export function interpolateColor(hex1: string, hex2: string, t: number): string {
@@ -52,6 +55,9 @@ export function TokenUsageRing({
   outputTokens,
   cacheReadTokens,
   totalCost,
+  tooltipPosition = 'bottom',
+  size = 36,
+  showPercent = true,
 }: TokenUsageRingProps) {
   const [hovered, setHovered] = useState(false)
 
@@ -59,8 +65,7 @@ export function TokenUsageRing({
   const pct = Math.max(0, Math.min(1, rawPct))
   const percent = Math.round(pct * 100)
 
-  const strokeWidth = 4
-  const size = 36
+  const strokeWidth = size <= 20 ? 3 : 4
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const dashOffset = circumference * (1 - pct)
@@ -76,6 +81,7 @@ export function TokenUsageRing({
     { label: 'Cache Read:', value: formatTokens(cacheReadTokens) },
     'divider',
     { label: 'Used:', value: formatTokens(usedTokens) },
+    { label: '% Used:', value: `${percent}%` },
     { label: 'Window:', value: formatTokens(contextWindowSize) },
     { label: 'Remaining:', value: formatTokens(remaining) },
     { label: 'Cost:', value: `$${totalCost.toFixed(2)}` },
@@ -123,20 +129,20 @@ export function TokenUsageRing({
           y={size / 2}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize={9}
+          fontSize={size <= 20 ? 6 : 9}
           fontWeight={600}
           fill="#374151"
         >
-          {percent}
+          {showPercent ? percent : ''}
         </text>
       </svg>
       <div
         data-tooltip
         style={{
           position: 'absolute',
-          top: '100%',
-          right: 0,
-          marginTop: 6,
+          [tooltipPosition === 'top' ? 'bottom' : 'top']: '100%',
+          left: 0,
+          [tooltipPosition === 'top' ? 'marginBottom' : 'marginTop']: 6,
           background: '#1a1a2e',
           borderRadius: 6,
           padding: '8px 10px',
