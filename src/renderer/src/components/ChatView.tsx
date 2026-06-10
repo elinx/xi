@@ -1552,7 +1552,10 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   }, [messages, isStreaming])
 
   useEffect(() => {
-    if (!isStreaming) return
+    if (!isStreaming) {
+      userScrolledUpRef.current = false
+      return
+    }
     const el = scrollContainerRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
