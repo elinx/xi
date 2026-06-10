@@ -1516,6 +1516,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     })
   }, [])
 
+  const scrollRafRef = useRef<number | null>(null)
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
@@ -1524,6 +1526,11 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     isNearBottomRef.current = nearBottom
     if (nearBottom) {
       userScrolledUpRef.current = false
+    } else {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = null
+      }
     }
     setShowScrollToBottom(!nearBottom)
   }, [])
@@ -1536,7 +1543,6 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     setShowScrollToBottom(false)
   }, [])
 
-  const scrollRafRef = useRef<number | null>(null)
   useEffect(() => {
     if (userScrolledUpRef.current) return
     if (!isNearBottomRef.current) return
@@ -1561,33 +1567,15 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY < 0) {
         userScrolledUpRef.current = true
+        if (scrollRafRef.current !== null) {
+          cancelAnimationFrame(scrollRafRef.current)
+          scrollRafRef.current = null
+        }
       }
     }
     el.addEventListener('wheel', onWheel, { passive: true })
     return () => el.removeEventListener('wheel', onWheel)
   }, [isStreaming])
-
-  // Restore scroll position when the container becomes visible again
-  // (covers: viewMode change, tab switch away and back, panel resize)
-  useEffect(() => {
-    const el = scrollContainerRef.current
-    if (!el) return
-    let wasHidden = el.offsetWidth === 0 || el.offsetHeight === 0
-    const observer = new ResizeObserver(() => {
-      const isHidden = el.offsetWidth === 0 || el.offsetHeight === 0
-      // Only act when transitioning from hidden → visible
-      if (wasHidden && !isHidden) {
-        if (isNearBottomRef.current) {
-          el.scrollTop = el.scrollHeight
-        } else {
-          el.scrollTop = savedScrollTopRef.current
-        }
-      }
-      wasHidden = isHidden
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
 
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
