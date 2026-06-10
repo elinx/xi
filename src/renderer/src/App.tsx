@@ -609,7 +609,7 @@ function App(): React.ReactElement {
   }, [displayedStreaming, sessionCache.displayedMessages])
 
   useEffect(() => {
-    setOnAgentEnd(() => () => {
+    setOnAgentEnd(() => {
       refresh()
       const queue = messageQueueRef.current
       if (queue.length > 0) {
