@@ -10,7 +10,7 @@ interface SessionSidebarProps {
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string, parentSessionPath: string) => void
-  onRenameSession: (name: string) => void
+  onRenameSession: (sessionPath: string, name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
@@ -70,7 +70,7 @@ function SessionNode({
   isOnActivePath: boolean
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitch: (path: string) => void
-  onRename: (name: string) => void
+  onRename: (sessionPath: string, name: string) => void
   onDelete: (path: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
@@ -117,7 +117,7 @@ function SessionNode({
   const handleRenameSubmit = useCallback(() => {
     const trimmed = renameValue.trim()
     if (trimmed && trimmed !== getSessionDisplayName(node.session)) {
-      onRename(trimmed)
+      onRename(node.session.filePath, trimmed)
     }
     setIsRenaming(false)
   }, [renameValue, node.session, onRename])

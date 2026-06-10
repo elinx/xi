@@ -824,19 +824,36 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('session:renameSession', async (_event, sessionPath: string | null, name: string) => {
-    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
-    if (worker?.bridge.isConnected) {
-      try {
-        await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
-      } catch {}
+    // If sessionPath is provided, write the name directly to that session's file
+    if (sessionPath) {
+      sessionService.nameSession(sessionPath, name)
 
-      try {
-        const data = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-        const currentPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
-        if (currentPath) {
-          sessionService.nameSession(currentPath, name)
-        }
-      } catch {}
+      // If that session is also the active one, update Pi's runtime state
+      const primary = workerManager?.getPrimary()
+      if (primary?.bridge.isConnected) {
+        try {
+          const data = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          if (data.sessionFile === sessionPath) {
+            await primary.bridge.sendRpcCommand({ type: 'set_session_name', name })
+          }
+        } catch {}
+      }
+    } else {
+      // Fallback: rename current session via Pi worker
+      const worker = workerManager?.getPrimary()
+      if (worker?.bridge.isConnected) {
+        try {
+          await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
+        } catch {}
+
+        try {
+          const data = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const currentPath = typeof data.sessionFile === 'string' ? data.sessionFile : null
+          if (currentPath) {
+            sessionService.nameSession(currentPath, name)
+          }
+        } catch {}
+      }
     }
 
     return { success: true }

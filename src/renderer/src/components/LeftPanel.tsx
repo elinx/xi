@@ -20,7 +20,7 @@ interface LeftPanelProps {
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitchSession: (sessionPath: string) => void
   onNewSession: (name: string, parentSessionPath: string) => void
-  onRenameSession: (name: string) => void
+  onRenameSession: (sessionPath: string, name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
