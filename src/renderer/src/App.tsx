@@ -1018,9 +1018,25 @@ function App(): React.ReactElement {
               onRemoveQuote={handleRemoveQuote}
               onClearQuotes={handleClearQuotes}
               queueCount={messageQueue.length}
-              queuePreviews={messageQueue.map(m => m.text.slice(0, 80))}
+              queueMessages={messageQueue.map(m => ({ text: m.text }))}
               onClearQueue={() => setMessageQueue([])}
               onRemoveQueuedAt={(i) => setMessageQueue(prev => prev.filter((_, idx) => idx !== i))}
+              onSendQueued={(i) => {
+                const msg = messageQueueRef.current[i]
+                if (!msg) return
+                setMessageQueue(prev => prev.filter((_, idx) => idx !== i))
+                if (isPiStreaming()) {
+                  setMessageQueue(prev => [msg, ...prev])
+                } else {
+                  const sessionPath = displayedSessionPathRef.current
+                  if (sessionPath) {
+                    const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+                    apiWithWorker.workerEnsureReady?.(sessionPath).then(() => {
+                      sendPrompt(sessionPath, msg.text, msg.images, msg.mentions)
+                    })
+                  }
+                }
+              }}
             />
           )}
         </div>
