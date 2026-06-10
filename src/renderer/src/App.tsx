@@ -951,7 +951,7 @@ function App(): React.ReactElement {
             onAddTab={handleAddTab}
           />
 
-          <div className="flex-1 overflow-y-auto relative">
+          <div className="flex-1 overflow-hidden relative">
             <div className={activeTab?.type === 'session' ? 'h-full' : 'hidden'}>
               <ChatView
                 messages={displayedMessages}

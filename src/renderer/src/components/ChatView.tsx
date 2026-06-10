@@ -1592,7 +1592,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const turns = viewMode !== 'normal' ? groupByTurns(messages) : []
 
   return (
-    <div className="relative flex flex-1">
+    <div className="relative flex h-full">
       <div ref={scrollContainerRef} onScroll={handleScroll} onContextMenu={handleContextMenu} className="flex-1 overflow-y-auto bg-white px-4 py-6">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
