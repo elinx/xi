@@ -339,16 +339,16 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
     : resultText
 
   return (
-    <div className="py-1 border-t border-gray-200/50 first:border-t-0">
+    <div className="first:border-t-0">
       {/* Header line — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 py-1 text-left text-gray-600 hover:text-gray-900 transition-colors"
+        className="flex w-full items-center gap-1.5 py-0.5 text-left text-gray-400 hover:text-gray-600 transition-colors"
       >
-        <span className="text-xs">{icon}</span>
-        <span className="font-mono text-xs font-medium">{block.toolName}</span>
+        <span className="text-[10px]">{icon}</span>
+        <span className="font-mono text-[11px]">{block.toolName}</span>
         {headerSummary && (
-          <span className="flex-1 truncate font-mono text-xs text-gray-400">{headerSummary}</span>
+          <span className="flex-1 truncate font-mono text-[11px] text-gray-300">{headerSummary}</span>
         )}
         {!headerSummary && <span className="flex-1" />}
         {statusEl}
