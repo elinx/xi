@@ -3,7 +3,7 @@ import type { PiModelInfo } from '../types/session'
 
 interface ModelSelectorProps {
   currentModel: PiModelInfo | null
-  onSetModel: (modelId: string, provider?: string) => Promise<boolean>
+  onSetModel: (modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   getAvailableModels: () => Promise<PiModelInfo[]>
   onClose: () => void
 }
@@ -37,12 +37,20 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
+  const [error, setError] = useState<string | null>(null)
+
   const handleSelect = useCallback(async (model: PiModelInfo) => {
     const key = `${model.provider}/${model.id}`
     setSwitching(key)
-    const success = await onSetModel(model.id, model.provider)
+    setError(null)
+    const result = await onSetModel(model.id, model.provider)
     setSwitching(null)
-    if (success) onClose()
+    if (result.success) {
+      onClose()
+    } else {
+      setError(result.error ?? `Failed to switch to ${model.name || model.id}`)
+      setTimeout(() => setError(null), 6000)
+    }
   }, [onSetModel, onClose])
 
   const filtered = models
@@ -152,6 +160,14 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
         ))}
       </div>
 
+      {error && (
+        <div className="px-3 py-1.5 border-t border-red-100 bg-red-50 text-[10px] text-red-600 flex items-center gap-1">
+          <svg className="w-2.5 h-2.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </div>
+      )}
       <div className="px-3 py-1.5 border-t border-gray-100 text-[10px] text-gray-400">
         <span className="inline-flex items-center gap-1">
           <svg className="w-2.5 h-2.5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>

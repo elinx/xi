@@ -16,7 +16,7 @@ interface SettingsPanelProps {
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
   getAvailableModels?: () => Promise<Array<{ provider: string; id: string; name: string; hasAuth: boolean; reasoning: boolean | null; contextWindow: number | null }>>
-  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
+  onSetModel?: (modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   onAuthChange?: () => void
   currentModel?: { provider: string; id: string } | null
 }

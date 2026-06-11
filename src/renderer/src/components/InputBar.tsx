@@ -18,7 +18,7 @@ interface InputBarProps {
   onStop?: () => void
   workerStatus?: WorkerStatus
   currentModel?: PiModelInfo | null
-  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
+  onSetModel?: (modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   getAvailableModels?: () => Promise<PiModelInfo[]>
   files: FileEntry[]
   sessions: SessionInfo[]

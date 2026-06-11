@@ -416,21 +416,49 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       }
 
       case 'set_model': {
-        const registry = session.modelRegistry
+        const sessionRegistry = session.modelRegistry
+        const servicesRegistry = runtime!.services.modelRegistry
         const modelId = cmd.model as string
         const provider = cmd.provider as string | undefined
         let targetModel: typeof session.model | undefined
+        // Try session registry first
         if (provider) {
-          targetModel = registry.find(provider, modelId)
-        } else {
-          const allModels = registry.getAll()
-          targetModel = allModels.find(m => m.id === modelId) ?? allModels.find(m => m.name === modelId)
+          targetModel = sessionRegistry.find(provider, modelId)
         }
         if (!targetModel) {
-          send({ channel: 'response', id: cmd.id, command: 'set_model', success: false, error: `Model not found: ${provider ? provider + '/' : ''}${modelId}` })
+          const allModels = sessionRegistry.getAll()
+          targetModel = allModels.find(m => m.provider === provider && m.id === modelId)
+            ?? allModels.find(m => m.id === modelId)
+            ?? allModels.find(m => m.name === modelId)
+        }
+        // If still not found and registries differ, try services registry
+        if (!targetModel && sessionRegistry !== servicesRegistry) {
+          if (provider) {
+            targetModel = servicesRegistry.find(provider, modelId)
+          }
+          if (!targetModel) {
+            const allModels = servicesRegistry.getAll()
+            targetModel = allModels.find(m => m.provider === provider && m.id === modelId)
+              ?? allModels.find(m => m.id === modelId)
+              ?? allModels.find(m => m.name === modelId)
+          }
+        }
+        if (!targetModel) {
+          send({ channel: 'response', id: cmd.id, command: 'set_model', success: false, error: `Model not found: ${provider ? provider + '/' : ''}${modelId}. The custom provider may not be registered in this worker — try restarting the session.` })
           break
         }
-        await session.setModel(targetModel)
+        // Check auth before calling setModel to give a clear error
+        if (!sessionRegistry.hasConfiguredAuth(targetModel) && (sessionRegistry === servicesRegistry || !servicesRegistry.hasConfiguredAuth(targetModel))) {
+          send({ channel: 'response', id: cmd.id, command: 'set_model', success: false, error: `No API key configured for ${provider}/${modelId}` })
+          break
+        }
+        try {
+          await session.setModel(targetModel)
+        } catch (setErr: unknown) {
+          const msg = setErr instanceof Error ? setErr.message : String(setErr)
+          send({ channel: 'response', id: cmd.id, command: 'set_model', success: false, error: `setModel failed: ${msg}` })
+          break
+        }
         const newModel = session.model
         send({
           channel: 'response',
@@ -508,7 +536,7 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
 
       case 'register_custom_provider': {
         const config = cmd.config as { name?: string; baseUrl: string; apiKey?: string; models?: Array<{ id: string; name: string; reasoning: boolean; input: string[]; cost: { input: number; output: number; cacheRead: number; cacheWrite: number }; contextWindow: number; maxTokens: number }> }
-        runtime!.services.modelRegistry.registerProvider(cmd.provider as string, config)
+        session.modelRegistry.registerProvider(cmd.provider as string, config)
         if (config.apiKey) {
           runtime!.services.authStorage.set(cmd.provider as string, { type: 'api_key', key: config.apiKey })
         }

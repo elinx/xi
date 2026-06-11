@@ -43,7 +43,7 @@ interface UsePiRpcReturn {
   onAgentEnd: (() => void) | null
   setOnAgentEnd: (cb: (() => void) | null) => void
   getAvailableModels: (sessionPath: string | null) => Promise<PiModelInfo[]>
-  setModel: (sessionPath: string | null, modelId: string, provider?: string) => Promise<boolean>
+  setModel: (sessionPath: string | null, modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   cycleModel: (sessionPath: string | null, direction?: 'forward' | 'backward') => Promise<boolean>
   getProviderAuthStatus: () => Promise<Record<string, { configured: boolean; source?: string }>>
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
@@ -698,14 +698,14 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return []
   }, [])
 
-  const setModel = useCallback(async (sessionPath: string | null, modelId: string, provider?: string): Promise<boolean> => {
+  const setModel = useCallback(async (sessionPath: string | null, modelId: string, provider?: string): Promise<{ success: boolean; error?: string }> => {
     type ApiWithSetModel = typeof window.api & { setModel: (sp: string | null, model: string, provider?: string) => Promise<{ ok: boolean; data?: PiModelInfo | null; error?: string }> }
     const result = await (window.api as ApiWithSetModel).setModel(sessionPath, modelId, provider)
     if (result.ok) {
       setCurrentModel(result.data ?? null)
-      return true
+      return { success: true }
     }
-    return false
+    return { success: false, error: result.error }
   }, [])
 
   const cycleModelFn = useCallback(async (sessionPath: string | null, direction?: 'forward' | 'backward'): Promise<boolean> => {

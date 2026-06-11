@@ -55,7 +55,7 @@ interface ProviderSetupProps {
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
   getAvailableModels?: () => Promise<Array<ModelInfo>>
-  onSetModel?: (modelId: string, provider?: string) => Promise<boolean>
+  onSetModel?: (modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   onAuthChange?: () => void
   currentModel?: { provider: string; id: string } | null
 }

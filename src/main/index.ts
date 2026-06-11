@@ -270,35 +270,47 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('pi:setApiKey', async (_event, _sessionPath: string | null, provider: string, apiKey: string) => {
-    const primary = workerManager?.getPrimary()
-    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
-    try {
-      await primary.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
-      return { ok: true }
-    } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    // Broadcast to ALL workers so every session's registry is updated
+    const workers = workerManager?.getAllWorkers() ?? []
+    let anyOk = false
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        await worker.bridge.sendRpcCommand({ type: 'set_api_key', provider, apiKey })
+        anyOk = true
+      } catch {}
     }
+    return anyOk ? { ok: true } : { ok: false, error: 'No connected workers' }
   })
 
   ipcMain.handle('pi:removeAuth', async (_event, _sessionPath: string | null, provider: string) => {
-    const primary = workerManager?.getPrimary()
-    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
-    try {
-      await primary.bridge.sendRpcCommand({ type: 'remove_auth', provider })
-      return { ok: true }
-    } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    // Broadcast to ALL workers so every session's registry is updated
+    const workers = workerManager?.getAllWorkers() ?? []
+    let anyOk = false
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        await worker.bridge.sendRpcCommand({ type: 'remove_auth', provider })
+        anyOk = true
+      } catch {}
     }
+    return anyOk ? { ok: true } : { ok: false, error: 'No connected workers' }
   })
 
   ipcMain.handle('pi:registerCustomProvider', async (_event, _sessionPath: string | null, provider: string, config: Record<string, unknown>) => {
-    const primary = workerManager?.getPrimary()
-    if (!primary?.bridge.isConnected) return { ok: false, error: 'Pi not connected' }
-    try {
-      await primary.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
-    } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    // Broadcast to ALL workers so every session's registry gets the provider
+    const workers = workerManager?.getAllWorkers() ?? []
+    let anyOk = false
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        await worker.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config })
+        anyOk = true
+      } catch (err: unknown) {
+        // Log but continue — other workers may succeed
+      }
     }
+    if (!anyOk) return { ok: false, error: 'Pi not connected' }
     // registerProvider is memory-only; write models.json so Pi SDK reloads on restart
     // Pi SDK validateConfig requires apiKey for non-built-in providers with custom models
     try {
