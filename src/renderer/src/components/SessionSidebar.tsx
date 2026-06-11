@@ -576,61 +576,90 @@ function SessionSidebar({
       {contextMenu && (
         <div
           data-context-menu
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-xs min-w-[140px]"
+          className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[180px]"
           style={{ left: contextMenuPos?.x ?? contextMenu.x, top: contextMenuPos?.y ?? contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer"
+          <button
+            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
             onClick={() => {
               setTriggerRenamePath(contextMenu.session.filePath)
               setContextMenu(null)
             }}
           >
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+            </svg>
             Rename
-          </div>
-          <div
-            className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer"
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
             onClick={() => {
               const newStatus = contextMenu.session.status === 'completed' ? 'active' : 'completed'
               onSetSessionStatus(contextMenu.session.filePath, newStatus)
               setContextMenu(null)
             }}
           >
-            {contextMenu.session.status === 'completed' ? 'Mark as active' : 'Mark as completed'}
-          </div>
+            {contextMenu.session.status === 'completed' ? (
+              <>
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Mark as Active
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Mark as Completed
+              </>
+            )}
+          </button>
           {contextMenu.session.parentSessionPath && (
-            <div
-              className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer"
+            <button
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
               onClick={() => {
                 onSwitchSession(contextMenu.session.parentSessionPath!)
                 setContextMenu(null)
               }}
             >
-              Go to parent
-            </div>
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+              </svg>
+              Go to Parent
+            </button>
+          )}
+          {(contextMenu.session.filePath === currentSession?.filePath || !contextMenu.session.isMain) && (
+            <div className="border-t border-gray-100 my-0.5" />
           )}
           {contextMenu.session.filePath === currentSession?.filePath && (
-            <div
-              className="px-3 py-1.5 hover:bg-purple-50 cursor-pointer text-purple-600"
+            <button
+              className="w-full px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 text-left transition-colors flex items-center gap-2"
               onClick={() => {
                 setTriggerForkPath(contextMenu.session.filePath)
                 setContextMenu(null)
               }}
             >
+              <svg className="w-3.5 h-3.5 text-purple-400" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
+              </svg>
               Fork
-            </div>
+            </button>
           )}
           {!contextMenu.session.isMain && (
-            <div
-              className="px-3 py-1.5 hover:bg-red-50 cursor-pointer text-red-600"
+            <button
+              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 text-left transition-colors flex items-center gap-2"
               onClick={() => {
                 onDeleteSession(contextMenu.session.filePath)
                 setContextMenu(null)
               }}
             >
+              <svg className="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
               Delete
-            </div>
+            </button>
           )}
         </div>
       )}
