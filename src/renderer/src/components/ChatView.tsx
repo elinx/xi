@@ -762,7 +762,7 @@ function MergedBlocksRenderer({
     )
   }
 
-  return <div className="space-y-1">{elements}</div>
+  return <div className="space-y-2">{elements}</div>
 }
 
 /**
@@ -848,7 +848,7 @@ function MessageBlocksRenderer({
     )
   }
 
-  return <div className="space-y-1">{elements}</div>
+  return <div className="space-y-2">{elements}</div>
 }
 
 /** Render a tool_result that has no matching tool_call (rare edge case) */
