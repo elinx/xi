@@ -1226,7 +1226,7 @@ function TurnCard({
 
       {/* Agent message — same style as normal mode, with collapse */}
       <div className="group flex items-start gap-2">
-        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
+        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-orange-500 bg-gray-800">
           ξ
         </div>
         <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
@@ -1345,7 +1345,7 @@ function OutlineRow({
           })}
           {turn.assistantMessages.some(m => m.blocks.some(b => b.type === 'text' && !b.subtype)) && (
             <div className="flex items-center gap-2 py-0.5">
-              <div className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-xs font-serif text-white bg-orange-400">ξ</div>
+              <div className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-xs font-serif text-orange-500 bg-gray-800">ξ</div>
               <span className="text-[11px] text-gray-400 truncate">{getAgentSummary(turn.assistantMessages)}</span>
             </div>
           )}
@@ -1680,7 +1680,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   data-msg-role="assistant"
                   className="group flex items-start gap-2"
                 >
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-orange-500 bg-gray-800">
                     ξ
                   </div>
                   <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
