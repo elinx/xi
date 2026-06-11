@@ -20,12 +20,6 @@ import type { ViewMode } from '../utils/compact-view'
 import { groupByTurns, getUserSummary, getAgentSummary } from '../utils/compact-view'
 import type { ConversationTurn } from '../utils/compact-view'
 
-// Slot constants — same as sidebar tree-line-fix for precise alignment
-const SLOT_W = 16
-const LINE_LEFT = 8
-const GRAY = '#e5e7eb'
-const BLUE = '#3b82f6'
-
 interface ChatViewProps {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -979,77 +973,77 @@ function ForkNameInput({
   )
 }
 
-function TurnDotSlot({ active, isFirst, isLast, isCollapsed, onClick }: {
-  active: boolean
-  isFirst: boolean
-  isLast: boolean
-  isCollapsed?: boolean
-  onClick?: () => void
-}) {
-  const borderColor = active ? BLUE : GRAY
-  return (
-    <div
-      className={`flex-shrink-0 relative${isCollapsed ? ' cursor-pointer' : ''}`}
-      style={{ width: SLOT_W, alignSelf: 'stretch' }}
-      onClick={isCollapsed ? onClick : undefined}
-    >
-      {/* Line above dot — from top to dot center (only if not first) */}
-      {!isFirst && (
-        <div
-          className="absolute"
-          style={{ left: LINE_LEFT, top: 0, height: 'calc(50% - 5px)', width: 1.5, backgroundColor: GRAY }}
-        />
-      )}
-      {/* Dot */}
-      <div
-        className={isCollapsed ? 'transition-colors' : undefined}
-        style={{
-          left: LINE_LEFT - 5,
-          top: 'calc(50% - 5px)',
-          width: 10,
-          height: 10,
-          borderRadius: '50%',
-          backgroundColor: active ? BLUE : 'white',
-          border: `2px solid ${borderColor}`,
-          position: 'absolute',
-          ...(isCollapsed ? { cursor: 'pointer' } : {}),
-        }}
-        onMouseEnter={isCollapsed ? (e) => { (e.currentTarget as HTMLElement).style.borderColor = BLUE } : undefined}
-        onMouseLeave={isCollapsed ? (e) => { (e.currentTarget as HTMLElement).style.borderColor = borderColor } : undefined}
-      />
-      {/* Line below dot — from dot center to bottom (only if not last) */}
-      {!isLast && (
-        <div
-          className="absolute"
-          style={{ left: LINE_LEFT, top: 'calc(50% + 5px)', bottom: 0, width: 1.5, backgroundColor: GRAY }}
-        />
-      )}
-    </div>
-  )
-}
+/** Collapsible agent content within Turn mode */
+function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingTarget, onEnterAnnotation, onExitAnnotation, onSendFeedback, onFileSelect, isStreaming, streamingMessageId, forkPoints, onForkClick, forkInputMessageId, forkEntryId, onForkClose, onForkAtEntry, onQuoteMessage, onForwardClick, sessions }: {
+  turn: ConversationTurn
+  isExpanded: boolean
+  onToggleExpand: () => void
+  annotatingTarget: { messageId: string; blockIndex: number } | null
+  onEnterAnnotation: (messageId: string, blockIndex: number) => void
+  onExitAnnotation: () => void
+  onSendFeedback: (description: string, imageData: string) => void
+  onFileSelect?: (filePath: string) => void
+  isStreaming: boolean
+  streamingMessageId: string | null
+  forkPoints: ForkPoint[]
+  onForkClick: (messageId: string, piEntryId: string | undefined) => void
+  forkInputMessageId: string | null
+  forkEntryId: string | null
+  onForkClose: () => void
+  onForkAtEntry: (entryId: string, name: string) => void
+  onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
+  onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
+  sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
+}): React.ReactElement {
+  const allBlocks = turn.assistantMessages.flatMap((m) => m.blocks)
+  const textBlocks = allBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+  const fullText = textBlocks.map((b) => b.content).join('\n\n')
+  const lines = fullText.split('\n').filter(l => l.trim())
+  const needCollapse = lines.length > 3 || fullText.length > 150
 
-/**
- * Expanded content with a blue left border aligned to the dot center.
- * Uses a wrapper with padding-left=SLOT_W so the border at left=LINE_LEFT (8px)
- * visually aligns with the dot center in the gutter slot.
- */
-function ExpandedContent({ children }: { children: React.ReactNode }) {
+  // Collect fork points for the last assistant message
+  const lastAssistantMsg = turn.assistantMessages[turn.assistantMessages.length - 1]
+  const msgForkPoints = forkPoints.filter((fp) => turn.assistantMessages.some((m) => m.piEntryId === fp.entryId))
+
   return (
-    <div className="relative flex-1 min-w-0 overflow-visible">
-      {/* Blue left border aligned to dot center at LINE_LEFT */}
-      <div
-        className="absolute"
-        style={{
-          left: LINE_LEFT - SLOT_W,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          backgroundColor: BLUE,
-          borderRadius: '2px 0 0 2px',
-        }}
-      />
-      <div className="bg-blue-50/30 rounded-r-lg">
-        {children}
+    <div className="flex items-start gap-2">
+      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-800">
+        Xi
+      </div>
+      <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+        <MergedBlocksRenderer
+          messages={turn.assistantMessages}
+          isStreaming={isStreaming}
+          streamingMessageId={streamingMessageId}
+          annotatingTarget={annotatingTarget}
+          onEnterAnnotation={onEnterAnnotation}
+          onExitAnnotation={onExitAnnotation}
+          onSendFeedback={onSendFeedback}
+          onFileSelect={onFileSelect}
+        />
+        {needCollapse && (
+          <button
+            onClick={onToggleExpand}
+            className="text-[11px] font-medium text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+          >
+            {isExpanded ? '收起' : '展开'}
+          </button>
+        )}
+        {msgForkPoints.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {msgForkPoints.map((fp, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                </svg>
+                forked: {fp.childName || '(unnamed)'}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1057,8 +1051,6 @@ function ExpandedContent({ children }: { children: React.ReactNode }) {
 
 function TurnCard({
   turn,
-  isFirst,
-  isLast,
   isExpanded,
   onToggleExpand,
   annotatingTarget,
@@ -1101,129 +1093,65 @@ function TurnCard({
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
-  const agentSummary = getAgentSummary(turn.assistantMessages)
-
-  if (isExpanded) {
-    const allMessages = [turn.userMessage, ...turn.assistantMessages]
-    return (
-      <div className="flex">
-        <TurnDotSlot active={true} isFirst={isFirst} isLast={isLast} />
-        <ExpandedContent>
-          <div className="flex items-center justify-end px-3 py-1">
-            <button
-              onClick={onToggleExpand}
-              className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Collapse
-            </button>
-          </div>
-          <div className="space-y-4 px-4 pb-4">
-            {allMessages.map((msg) => {
-              const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
-              const msgTextBlocks = msg.blocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
-              const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
-              return (
-                <div
-                  key={msg.id}
-                  data-msg-id={msg.id}
-                  data-msg-role={msg.role}
-
-                  className={`group relative rounded-lg px-4 py-3 ${
-                    msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      {msg.role === 'user' ? 'You' : 'Xi'}
-                    </span>
-                    <div className="relative flex items-center gap-1">
-                      <CopyButton blocks={msg.blocks} />
-                      {onQuoteMessage && !isStreaming && (
-                        <button
-                          onClick={() => onQuoteMessage(msg.id, msg.role as 'user' | 'assistant', msgTextContent, msg.timestamp ?? Date.now())}
-                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Quote message"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                          </svg>
-                        </button>
-                      )}
-                      {onForwardClick && !isStreaming && (
-                        <button
-                          onClick={() => onForwardClick(msg.id, msg.role as 'user' | 'assistant', msgTextContent)}
-                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Forward to session"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                          </svg>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onForkClick(msg.id, msg.piEntryId)}
-                        className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                        title="Fork from here"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
-                        </svg>
-                      </button>
-                      {forkInputMessageId === msg.id && forkEntryId && (
-                        <ForkNameInput
-                          onForkAtEntry={onForkAtEntry}
-                          onClose={onForkClose}
-                          defaultEntryId={forkEntryId}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <MessageBlocksRenderer msg={msg} isStreaming={isStreaming} streamingMessageId={streamingMessageId} annotatingTarget={annotatingTarget} onEnterAnnotation={onEnterAnnotation} onExitAnnotation={onExitAnnotation} onSendFeedback={onSendFeedback} onFileSelect={onFileSelect} />
-                  {msgForkPoints.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                      {msgForkPoints.map((fp, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                          </svg>
-                          forked: {fp.childName || '(unnamed)'}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </ExpandedContent>
-      </div>
-    )
-  }
+  const allUserBlocks = turn.userMessage.blocks
 
   return (
-    <div className="flex">
-      <TurnDotSlot active={false} isFirst={isFirst} isLast={isLast} isCollapsed onClick={onToggleExpand} />
-      <div
-        className="flex-1 cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2.5 hover:bg-gray-50 transition-colors ml-1"
-        onClick={onToggleExpand}
-      >
-        <div className="text-sm text-gray-800">{userSummary}</div>
-        <div className="mt-0.5 text-sm text-gray-500 pl-4">
-          <span className="mr-1 text-gray-400">{'\u2192'}</span>
-          {agentSummary || '...'}
+    <div className="space-y-2">
+      {/* User message — same style as normal mode */}
+      <div className="group flex items-center justify-end gap-2">
+        <div className="max-w-[85%] min-w-0 rounded-lg bg-blue-50 px-3 py-2">
+          <MessageBlocksRenderer
+            msg={turn.userMessage}
+            isStreaming={isStreaming}
+            streamingMessageId={streamingMessageId}
+            annotatingTarget={annotatingTarget}
+            onEnterAnnotation={onEnterAnnotation}
+            onExitAnnotation={onExitAnnotation}
+            onSendFeedback={onSendFeedback}
+            onFileSelect={onFileSelect}
+          />
+        </div>
+        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-blue-500">
+          You
         </div>
       </div>
+
+      {/* Agent message — same style as normal mode, with collapse */}
+      <CollapsibleAgentContent
+        turn={turn}
+        isExpanded={isExpanded}
+        onToggleExpand={onToggleExpand}
+        annotatingTarget={annotatingTarget}
+        onEnterAnnotation={onEnterAnnotation}
+        onExitAnnotation={onExitAnnotation}
+        onSendFeedback={onSendFeedback}
+        onFileSelect={onFileSelect}
+        isStreaming={isStreaming}
+        streamingMessageId={streamingMessageId}
+        forkPoints={forkPoints}
+        onForkClick={onForkClick}
+        forkInputMessageId={forkInputMessageId}
+        forkEntryId={forkEntryId}
+        onForkClose={onForkClose}
+        onForkAtEntry={onForkAtEntry}
+        onQuoteMessage={onQuoteMessage}
+        onForwardClick={onForwardClick}
+        sessions={sessions}
+      />
     </div>
   )
 }
 
+/** Tool name to color mapping */
+const TOOL_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  read: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: '#059669' },
+  write: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: '#2563eb' },
+  edit: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: '#d97706' },
+  bash: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', dot: '#9ca3af' },
+}
+
 function OutlineRow({
   turn,
-  isFirst,
-  isLast,
   isExpanded,
   onToggleExpand,
   annotatingTarget,
@@ -1266,118 +1194,47 @@ function OutlineRow({
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
+  const allTools = turn.assistantMessages.flatMap((m) => m.blocks.filter((b): b is ToolCallBlock => b.type === 'tool_call'))
 
-  if (isExpanded) {
-    const allMessages = [turn.userMessage, ...turn.assistantMessages]
-    return (
-      <div className="flex">
-        <TurnDotSlot active={true} isFirst={isFirst} isLast={isLast} />
-        <ExpandedContent>
-          <div className="flex items-center justify-between px-3 py-1">
-            <span className="text-xs text-gray-400">#{turn.index}</span>
-            <button
-              onClick={onToggleExpand}
-              className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Collapse
-            </button>
-          </div>
-          <div className="space-y-4 px-4 pb-4">
-            {allMessages.map((msg) => {
-              const msgForkPoints = forkPoints.filter((fp) => fp.entryId === msg.piEntryId)
-              const msgTextBlocks = msg.blocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
-              const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
-              return (
-                <div
-                  key={msg.id}
-                  data-msg-id={msg.id}
-                  data-msg-role={msg.role}
-
-                  className={`group relative rounded-lg px-4 py-3 ${
-                    msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      {msg.role === 'user' ? 'You' : 'Xi'}
-                    </span>
-                    <div className="relative flex items-center gap-1">
-                      <CopyButton blocks={msg.blocks} />
-                      {onQuoteMessage && !isStreaming && (
-                        <button
-                          onClick={() => onQuoteMessage(msg.id, msg.role as 'user' | 'assistant', msgTextContent, msg.timestamp ?? Date.now())}
-                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Quote message"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                          </svg>
-                        </button>
-                      )}
-                      {onForwardClick && !isStreaming && (
-                        <button
-                          onClick={() => onForwardClick(msg.id, msg.role as 'user' | 'assistant', msgTextContent)}
-                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Forward to session"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                          </svg>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onForkClick(msg.id, msg.piEntryId)}
-                        className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                        title="Fork from here"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
-                        </svg>
-                      </button>
-                      {forkInputMessageId === msg.id && forkEntryId && (
-                        <ForkNameInput
-                          onForkAtEntry={onForkAtEntry}
-                          onClose={onForkClose}
-                          defaultEntryId={forkEntryId}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <MessageBlocksRenderer msg={msg} isStreaming={isStreaming} streamingMessageId={streamingMessageId} annotatingTarget={annotatingTarget} onEnterAnnotation={onEnterAnnotation} onExitAnnotation={onExitAnnotation} onSendFeedback={onSendFeedback} onFileSelect={onFileSelect} />
-                  {msgForkPoints.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                      {msgForkPoints.map((fp, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                          </svg>
-                          forked: {fp.childName || '(unnamed)'}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </ExpandedContent>
-      </div>
-    )
-  }
+  // Color dots for tools
+  const toolDots = allTools.map((tool, i) => {
+    const c = TOOL_COLORS[tool.toolName] || TOOL_COLORS.bash
+    return <span key={i} style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: c.dot }} />
+  })
 
   return (
-    <div className="flex">
-      <TurnDotSlot active={false} isFirst={isFirst} isLast={isLast} isCollapsed onClick={onToggleExpand} />
+    <div>
+      {/* Main row: one line per turn */}
       <div
-        className="flex-1 cursor-pointer rounded px-3 py-1.5 hover:bg-gray-50 transition-colors ml-1"
+        className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={onToggleExpand}
       >
-        <span className="text-xs text-gray-400 mr-2 font-mono">{turn.index}</span>
-        <span className="text-sm text-gray-800">{userSummary}</span>
+        <span className="text-[11px] font-mono text-gray-300 w-4 text-right flex-shrink-0">{turn.index}</span>
+        <span className="text-[13px] text-gray-700 flex-1 truncate">{userSummary}</span>
+        <div className="flex items-center gap-0.5 flex-shrink-0">{toolDots}</div>
       </div>
+
+      {/* Expanded: tool list + agent summary */}
+      {isExpanded && (
+        <div className="ml-9 mr-3 mb-1 pl-4 border-l border-gray-200 space-y-0.5">
+          {allTools.map((tool, i) => {
+            const c = TOOL_COLORS[tool.toolName] || TOOL_COLORS.bash
+            const headerSummary = tool.args.path ? String(tool.args.path) : tool.args.command ? String(tool.args.command).substring(0, 50) : ''
+            return (
+              <div key={i} className="flex items-center gap-2 py-0.5">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${c.bg} ${c.text} ${c.border}`}>{tool.toolName}</span>
+                <span className="text-[11px] text-gray-400 mono truncate">{headerSummary}</span>
+              </div>
+            )
+          })}
+          {turn.assistantMessages.some(m => m.blocks.some(b => b.type === 'text' && !b.subtype)) && (
+            <div className="flex items-center gap-2 py-0.5">
+              <div className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gray-700">X</div>
+              <span className="text-[11px] text-gray-400 truncate">{getAgentSummary(turn.assistantMessages)}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1745,13 +1602,11 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           <div ref={bottomRef} />
         </div>
       ) : viewMode === 'turn' ? (
-        <div className="mx-auto max-w-3xl space-y-0">
+        <div className="mx-auto max-w-2xl space-y-4">
           {turns.map((turn, idx) => (
             <TurnCard
               key={turn.id}
               turn={turn}
-              isFirst={idx === 0}
-              isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
               annotatingTarget={annotatingTarget}
@@ -1775,13 +1630,11 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           <div ref={bottomRef} />
         </div>
       ) : (
-        <div className="mx-auto max-w-3xl space-y-0">
+        <div className="mx-auto max-w-xl space-y-0">
           {turns.map((turn, idx) => (
             <OutlineRow
               key={turn.id}
               turn={turn}
-              isFirst={idx === 0}
-              isLast={idx === turns.length - 1}
               isExpanded={expandedTurns.has(turn.id)}
               onToggleExpand={() => toggleTurn(turn.id)}
               annotatingTarget={annotatingTarget}
