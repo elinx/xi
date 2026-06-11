@@ -768,7 +768,7 @@ function MergedBlocksRenderer({
     )
   }
 
-  return <div className="space-y-3">{elements}</div>
+  return <div className="space-y-1">{elements}</div>
 }
 
 /**
@@ -854,7 +854,7 @@ function MessageBlocksRenderer({
     )
   }
 
-  return <div className="space-y-3">{elements}</div>
+  return <div className="space-y-1">{elements}</div>
 }
 
 /** Render a tool_result that has no matching tool_call (rare edge case) */
@@ -1595,9 +1595,9 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           </div>
         </div>
       ) : viewMode === 'normal' ? (
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="mx-auto max-w-2xl space-y-2">
           {(() => {
-            // Merge consecutive assistant messages into one card
+            // Group consecutive same-role messages
             const groups: { role: 'user' | 'assistant'; msgs: ChatMessage[] }[] = []
             for (const msg of messages) {
               if (msg.role === 'system') continue
@@ -1612,104 +1612,132 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             return groups.map((group, gi) => {
               const isUser = group.role === 'user'
               const allBlocks = group.msgs.flatMap((m) => m.blocks)
-              // Use the first message's id for fork targeting
               const firstMsg = group.msgs[0]
               const msgForkPoints = forkPoints.filter((fp) => group.msgs.some((m) => m.piEntryId === fp.entryId))
+              const msgTextBlocks = allBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+              const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
 
-              return (
+              const actions = (
+                <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+                  <CopyButton blocks={allBlocks} />
+                  {onQuoteMessage && !isStreaming && (
+                    <button
+                      onClick={() => onQuoteMessage(firstMsg.id, isUser ? 'user' : 'assistant', msgTextContent, firstMsg.timestamp ?? Date.now())}
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      title="Quote message"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                      </svg>
+                    </button>
+                  )}
+                  {onForwardMessage && sessions && !isStreaming && (
+                    <button
+                      onClick={() => setForwardingMessage({ id: firstMsg.id, role: isUser ? 'user' : 'assistant', content: msgTextContent })}
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      title="Forward to session"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                      </svg>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
+                    className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                    title="Fork from here"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 001.5 0zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
+                    </svg>
+                  </button>
+                  {forkInputMessageId === firstMsg.id && forkEntryId && (
+                    <ForkNameInput
+                      onForkAtEntry={onForkAtEntry}
+                      onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
+                      defaultEntryId={forkEntryId}
+                    />
+                  )}
+                </div>
+              )
+
+              return isUser ? (
                 <div
                   key={gi}
                   data-msg-id={firstMsg.id}
-                  data-msg-role={isUser ? 'user' : 'assistant'}
-
-                  className={`group relative rounded-lg px-4 py-3 ${
-                    isUser ? 'bg-blue-50' : 'bg-gray-50'
-                  }`
-                  }
+                  data-msg-role="user"
+                  className="group flex items-center justify-end gap-2"
                 >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      {isUser ? 'You' : 'Xi'}
-                    </span>
-                    <div className="relative flex items-center gap-1">
-                      <CopyButton blocks={allBlocks} />
-                      {onQuoteMessage && !isStreaming && (
-                        <button
-                          onClick={() => {
-                            const textContent = allBlocks
-                              .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
-                              .map((b) => b.content)
-                              .join('\n')
-                            onQuoteMessage(firstMsg.id, isUser ? 'user' : 'assistant', textContent, firstMsg.timestamp ?? Date.now())
-                          }}
-                          className="rounded px-2 py-0.5 text-xs text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Quote message"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                          </svg>
-                        </button>
-                      )}
-                      {onForwardMessage && sessions && !isStreaming && (
-                        <button
-                          onClick={() => {
-                            const textContent = allBlocks
-                              .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
-                              .map((b) => b.content)
-                              .join('\n')
-                            setForwardingMessage({ id: firstMsg.id, role: isUser ? 'user' : 'assistant', content: textContent })
-                          }}
-                          className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                          title="Forward to session"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                          </svg>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
-                        className="rounded p-1 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 hover:bg-gray-100 group-hover:opacity-100"
-                        title="Fork from here"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
-                        </svg>
-                      </button>
-                      {forkInputMessageId === firstMsg.id && forkEntryId && (
-                        <ForkNameInput
-                          onForkAtEntry={onForkAtEntry}
-                          onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
-                          defaultEntryId={forkEntryId}
-                        />
-                      )}
-                    </div>
+                  {actions}
+                  <div className="max-w-[85%] min-w-0 rounded-lg bg-blue-50 px-3 py-2">
+                    <MergedBlocksRenderer
+                      messages={group.msgs}
+                      isStreaming={isStreaming}
+                      streamingMessageId={streamingMessageId}
+                      annotatingTarget={annotatingTarget}
+                      onEnterAnnotation={handleEnterAnnotation}
+                      onExitAnnotation={handleExitAnnotation}
+                      onSendFeedback={handleSendFeedback}
+                      onFileSelect={onFileSelect}
+                    />
+                    {msgForkPoints.length > 0 && (
+                      <div className="mt-1 flex flex-wrap justify-end gap-1.5">
+                        {msgForkPoints.map((fp, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                            </svg>
+                            forked: {fp.childName || '(unnamed)'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <MergedBlocksRenderer
-                    messages={group.msgs}
-                    isStreaming={isStreaming}
-                    streamingMessageId={streamingMessageId}
-                    annotatingTarget={annotatingTarget}
-                    onEnterAnnotation={handleEnterAnnotation}
-                    onExitAnnotation={handleExitAnnotation}
-                    onSendFeedback={handleSendFeedback}
-                    onFileSelect={onFileSelect}
-                  />
-                  {msgForkPoints.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200/50 pt-2">
-                      {msgForkPoints.map((fp, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                          </svg>
-                          forked: {fp.childName || '(unnamed)'}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-blue-500">
+                    You
+                  </div>
+                </div>
+              ) : (
+                <div
+                  key={gi}
+                  data-msg-id={firstMsg.id}
+                  data-msg-role="assistant"
+                  className="group flex items-start gap-2"
+                >
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-800">
+                    Xi
+                  </div>
+                  <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+                    <MergedBlocksRenderer
+                      messages={group.msgs}
+                      isStreaming={isStreaming}
+                      streamingMessageId={streamingMessageId}
+                      annotatingTarget={annotatingTarget}
+                      onEnterAnnotation={handleEnterAnnotation}
+                      onExitAnnotation={handleExitAnnotation}
+                      onSendFeedback={handleSendFeedback}
+                      onFileSelect={onFileSelect}
+                    />
+                    {msgForkPoints.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {msgForkPoints.map((fp, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                            </svg>
+                            forked: {fp.childName || '(unnamed)'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {actions}
                 </div>
               )
             })
