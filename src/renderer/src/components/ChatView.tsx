@@ -1011,20 +1011,36 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
         Xi
       </div>
       <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
-        <MergedBlocksRenderer
-          messages={turn.assistantMessages}
-          isStreaming={isStreaming}
-          streamingMessageId={streamingMessageId}
-          annotatingTarget={annotatingTarget}
-          onEnterAnnotation={onEnterAnnotation}
-          onExitAnnotation={onExitAnnotation}
-          onSendFeedback={onSendFeedback}
-          onFileSelect={onFileSelect}
-        />
+        {isExpanded || !needCollapse ? (
+          <MergedBlocksRenderer
+            messages={turn.assistantMessages}
+            isStreaming={isStreaming}
+            streamingMessageId={streamingMessageId}
+            annotatingTarget={annotatingTarget}
+            onEnterAnnotation={onEnterAnnotation}
+            onExitAnnotation={onExitAnnotation}
+            onSendFeedback={onSendFeedback}
+            onFileSelect={onFileSelect}
+          />
+        ) : (
+          <div className="relative max-h-[4.8em] overflow-hidden">
+            <MergedBlocksRenderer
+              messages={turn.assistantMessages}
+              isStreaming={isStreaming}
+              streamingMessageId={streamingMessageId}
+              annotatingTarget={annotatingTarget}
+              onEnterAnnotation={onEnterAnnotation}
+              onExitAnnotation={onExitAnnotation}
+              onSendFeedback={onSendFeedback}
+              onFileSelect={onFileSelect}
+            />
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent" />
+          </div>
+        )}
         {needCollapse && (
           <button
             onClick={onToggleExpand}
-            className="text-[11px] font-medium text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+            className={`text-[11px] font-medium mt-1 transition-colors ${isExpanded ? 'text-gray-400 hover:text-gray-600' : 'text-blue-500 hover:text-blue-600'}`}
           >
             {isExpanded ? '收起' : '展开'}
           </button>
