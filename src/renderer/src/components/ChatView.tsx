@@ -1006,11 +1006,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
   const msgForkPoints = forkPoints.filter((fp) => turn.assistantMessages.some((m) => m.piEntryId === fp.entryId))
 
   return (
-    <div className="flex items-start gap-2">
-      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-800">
-        Xi
-      </div>
-      <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+    <>
         {isExpanded || !needCollapse ? (
           <MergedBlocksRenderer
             messages={turn.assistantMessages}
@@ -1060,8 +1056,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
             ))}
           </div>
         )}
-      </div>
-    </div>
+    </>
   )
 }
 
@@ -1110,11 +1105,108 @@ function TurnCard({
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const allUserBlocks = turn.userMessage.blocks
+  const userTextBlocks = allUserBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+  const userTextContent = userTextBlocks.map((b) => b.content).join('\n')
+  const allAgentBlocks = turn.assistantMessages.flatMap((m) => m.blocks)
+  const agentTextBlocks = allAgentBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
+  const agentTextContent = agentTextBlocks.map((b) => b.content).join('\n')
+  const firstAgentMsg = turn.assistantMessages[0]
+
+  const userActions = (
+    <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+      <CopyButton blocks={allUserBlocks} />
+      {onQuoteMessage && !isStreaming && (
+        <button
+          onClick={() => onQuoteMessage(turn.userMessage.id, 'user', userTextContent, turn.userMessage.timestamp ?? Date.now())}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Quote message"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+          </svg>
+        </button>
+      )}
+      {onForwardClick && sessions && !isStreaming && (
+        <button
+          onClick={() => onForwardClick(turn.userMessage.id, 'user', userTextContent)}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Forward to session"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+        </button>
+      )}
+      <button
+        onClick={() => onForkClick(turn.userMessage.id, turn.userMessage.piEntryId)}
+        className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+        title="Fork from here"
+      >
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 001.5 0zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
+        </svg>
+      </button>
+      {forkInputMessageId === turn.userMessage.id && forkEntryId && (
+        <ForkNameInput
+          onForkAtEntry={onForkAtEntry}
+          onClose={onForkClose}
+          defaultEntryId={forkEntryId}
+        />
+      )}
+    </div>
+  )
+
+  const agentActions = (
+    <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+      <CopyButton blocks={allAgentBlocks} />
+      {onQuoteMessage && !isStreaming && firstAgentMsg && (
+        <button
+          onClick={() => onQuoteMessage(firstAgentMsg.id, 'assistant', agentTextContent, firstAgentMsg.timestamp ?? Date.now())}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Quote message"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+          </svg>
+        </button>
+      )}
+      {onForwardClick && sessions && !isStreaming && firstAgentMsg && (
+        <button
+          onClick={() => onForwardClick(firstAgentMsg.id, 'assistant', agentTextContent)}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Forward to session"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+        </button>
+      )}
+      {firstAgentMsg && (
+        <button
+          onClick={() => onForkClick(firstAgentMsg.id, firstAgentMsg.piEntryId)}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Fork from here"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 001.5 0zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
+          </svg>
+        </button>
+      )}
+      {firstAgentMsg && forkInputMessageId === firstAgentMsg.id && forkEntryId && (
+        <ForkNameInput
+          onForkAtEntry={onForkAtEntry}
+          onClose={onForkClose}
+          defaultEntryId={forkEntryId}
+        />
+      )}
+    </div>
+  )
 
   return (
     <div className="space-y-2">
       {/* User message — same style as normal mode */}
       <div className="group flex items-center justify-end gap-2">
+        {userActions}
         <div className="max-w-[85%] min-w-0 rounded-lg bg-blue-50 px-3 py-2">
           <MessageBlocksRenderer
             msg={turn.userMessage}
@@ -1133,27 +1225,35 @@ function TurnCard({
       </div>
 
       {/* Agent message — same style as normal mode, with collapse */}
-      <CollapsibleAgentContent
-        turn={turn}
-        isExpanded={isExpanded}
-        onToggleExpand={onToggleExpand}
-        annotatingTarget={annotatingTarget}
-        onEnterAnnotation={onEnterAnnotation}
-        onExitAnnotation={onExitAnnotation}
-        onSendFeedback={onSendFeedback}
-        onFileSelect={onFileSelect}
-        isStreaming={isStreaming}
-        streamingMessageId={streamingMessageId}
-        forkPoints={forkPoints}
-        onForkClick={onForkClick}
-        forkInputMessageId={forkInputMessageId}
-        forkEntryId={forkEntryId}
-        onForkClose={onForkClose}
-        onForkAtEntry={onForkAtEntry}
-        onQuoteMessage={onQuoteMessage}
-        onForwardClick={onForwardClick}
-        sessions={sessions}
-      />
+      <div className="group flex items-start gap-2">
+        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gray-800">
+          Xi
+        </div>
+        <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+          <CollapsibleAgentContent
+            turn={turn}
+            isExpanded={isExpanded}
+            onToggleExpand={onToggleExpand}
+            annotatingTarget={annotatingTarget}
+            onEnterAnnotation={onEnterAnnotation}
+            onExitAnnotation={onExitAnnotation}
+            onSendFeedback={onSendFeedback}
+            onFileSelect={onFileSelect}
+            isStreaming={isStreaming}
+            streamingMessageId={streamingMessageId}
+            forkPoints={forkPoints}
+            onForkClick={onForkClick}
+            forkInputMessageId={forkInputMessageId}
+            forkEntryId={forkEntryId}
+            onForkClose={onForkClose}
+            onForkAtEntry={onForkAtEntry}
+            onQuoteMessage={onQuoteMessage}
+            onForwardClick={onForwardClick}
+            sessions={sessions}
+          />
+        </div>
+        {agentActions}
+      </div>
     </div>
   )
 }
