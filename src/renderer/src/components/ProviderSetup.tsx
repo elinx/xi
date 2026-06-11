@@ -46,11 +46,21 @@ interface ModelInfo {
   contextWindow: number | null
 }
 
+interface DeleteTarget {
+  type: 'provider' | 'model' | 'auth'
+  providerId: string
+  providerName: string
+  modelId?: string
+  modelName?: string
+}
+
 interface ProviderSetupProps {
   getProviderAuthStatus: () => Promise<AuthStatusMap>
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  deleteCustomProvider: (provider: string) => Promise<{ ok: boolean; error?: string }>
+  removeModelFromProvider: (provider: string, modelId: string) => Promise<{ ok: boolean; error?: string }>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
@@ -76,6 +86,45 @@ function ProviderIcon({ name, color, size = 'md' }: { name: string; color: strin
     >
       {name[0]}
     </span>
+  )
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  onConfirm,
+  onCancel,
+}: {
+  title: string
+  message: string
+  confirmLabel?: string
+  danger?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+         onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-800 shadow-2xl p-5"
+           onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium text-white transition-colors ${
+              danger ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'
+            }`}>
+            {confirmLabel ?? 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -123,10 +172,14 @@ function RightPanel({
   selectedModelKey,
   switchingModel,
   setApiKey,
+  removeAuth,
   testProvider,
   onAuthChange,
   onSelectModel,
+  onDeleteProvider,
+  onRemoveModel,
   providerBaseUrl,
+  isCustomProvider,
 }: {
   providerId: string
   providerInfo: { name: string; subtitle: string; color: string; configured: boolean; source?: string }
@@ -135,14 +188,19 @@ function RightPanel({
   selectedModelKey: string | null
   switchingModel: boolean
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
+  removeAuth: (provider: string) => Promise<boolean>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<TestResult>
   onAuthChange?: () => void
   onSelectModel: (model: ModelInfo) => void
+  onDeleteProvider?: (providerId: string, providerName: string) => void
+  onRemoveModel?: (providerId: string, modelId: string, modelName: string) => void
   providerBaseUrl?: string
+  isCustomProvider: boolean
 }) {
   const [apiKey, setApiKeyInput] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [removingAuth, setRemovingAuth] = useState(false)
 
   const isConfigured = authStatus[providerId]?.configured ?? false
 
@@ -161,6 +219,13 @@ function RightPanel({
       onAuthChange?.()
     }
   }, [providerId, apiKey, setApiKey, onAuthChange])
+
+  const handleClearApiKey = useCallback(async () => {
+    setRemovingAuth(true)
+    await removeAuth(providerId)
+    setRemovingAuth(false)
+    onAuthChange?.()
+  }, [providerId, removeAuth, onAuthChange])
 
   return (
     <div className="flex flex-col h-full">
@@ -225,29 +290,41 @@ function RightPanel({
                     const modelKey = `${model.provider}/${model.id}`
                     const isSelected = selectedModelKey === modelKey
                     return (
-                      <button
-                        key={modelKey}
-                        onClick={() => onSelectModel(model)}
-                        disabled={switchingModel}
-                        className={`w-full px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
-                          isSelected
-                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                        } disabled:opacity-50`}
-                      >
-                        <span className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center ${
-                          isSelected ? 'border-blue-500 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'
-                        }`}>
-                          {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400" />}
-                        </span>
-                        <span className="flex-1 truncate">{model.name}</span>
-                        {switchingModel && isSelected && (
-                          <svg className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
+                      <div key={modelKey} className="group flex items-center">
+                        <button
+                          onClick={() => onSelectModel(model)}
+                          disabled={switchingModel}
+                          className={`flex-1 px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
+                            isSelected
+                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                          } disabled:opacity-50`}
+                        >
+                          <span className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center ${
+                            isSelected ? 'border-blue-500 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'
+                          }`}>
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400" />}
+                          </span>
+                          <span className="flex-1 truncate">{model.name}</span>
+                          {switchingModel && isSelected && (
+                            <svg className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          )}
+                        </button>
+                        {isCustomProvider && onRemoveModel && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onRemoveModel(providerId, model.id, model.name) }}
+                            className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
+                            title="Remove model"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         )}
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -263,6 +340,26 @@ function RightPanel({
               {saving ? 'Saving...' : isConfigured ? 'Update' : 'Save'}
             </button>
             <TestConnectionButton providerId={providerId} testProvider={testProvider} apiKeyOverride={apiKey || undefined} baseUrlOverride={providerBaseUrl} />
+          </div>
+
+          {/* Danger zone */}
+          <div className="pt-3 mt-1 border-t border-gray-100 dark:border-gray-700/50">
+            {isCustomProvider ? (
+              <button
+                onClick={() => onDeleteProvider?.(providerId, providerInfo.name)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                Delete Provider
+              </button>
+            ) : isConfigured ? (
+              <button
+                onClick={handleClearApiKey}
+                disabled={removingAuth}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+              >
+                {removingAuth ? 'Clearing...' : 'Clear API Key'}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -460,6 +557,8 @@ function ProviderSetup({
   setApiKey,
   removeAuth,
   registerCustomProvider,
+  deleteCustomProvider,
+  removeModelFromProvider,
   testProvider,
   getProviderConfig,
   listCustomProviders,
@@ -477,6 +576,9 @@ function ProviderSetup({
 
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
   const pendingModelKeyRef = useRef<string | null>(null)
+
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (pendingModelKeyRef.current) {
@@ -503,17 +605,20 @@ function ProviderSetup({
     setModels(result)
   }, [getAvailableModels])
 
+  const refreshCustomProviders = useCallback(async () => {
+    const result = await listCustomProviders()
+    if (result.ok) {
+      setCustomProviderBaseUrls(result.providers)
+    }
+  }, [listCustomProviders])
+
   useEffect(() => {
     refreshAuth()
   }, [refreshAuth])
 
   useEffect(() => {
-    listCustomProviders().then(result => {
-      if (result.ok && Object.keys(result.providers).length > 0) {
-        setCustomProviderBaseUrls(result.providers)
-      }
-    })
-  }, [listCustomProviders])
+    refreshCustomProviders()
+  }, [refreshCustomProviders])
 
   useEffect(() => {
     if (hasModelsSupport) {
@@ -548,21 +653,6 @@ function ProviderSetup({
     setSwitchingModel(false)
   }, [onSetModel])
 
-  const handleRemoveAuth = useCallback(async (provider: string): Promise<boolean> => {
-    const ok = await removeAuth(provider)
-    if (ok) {
-      if (focusedProvider === provider) {
-        setFocusedProvider(null)
-      }
-      await refreshAuth()
-      onAuthChange?.()
-      if (hasModelsSupport) {
-        refreshModels()
-      }
-    }
-    return ok
-  }, [removeAuth, focusedProvider, refreshAuth, onAuthChange, hasModelsSupport, refreshModels])
-
   const handleAuthChange = useCallback(async () => {
     await refreshAuth()
     onAuthChange?.()
@@ -588,6 +678,50 @@ function ProviderSetup({
       } catch {}
     }
   }, [hasModelsSupport, currentModel, getAvailableModels, onSetModel])
+
+  const handleDeleteProvider = useCallback((providerId: string, providerName: string) => {
+    setDeleteTarget({ type: 'provider', providerId, providerName })
+  }, [])
+
+  const handleRemoveModel = useCallback((providerId: string, modelId: string, modelName: string) => {
+    const providerName = customProviderBaseUrls[providerId]?.name || providerId
+    setDeleteTarget({ type: 'model', providerId, providerName, modelId, modelName })
+  }, [customProviderBaseUrls])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      if (deleteTarget.type === 'provider') {
+        const result = await deleteCustomProvider(deleteTarget.providerId)
+        if (result.ok) {
+          if (focusedProvider === deleteTarget.providerId) {
+            setFocusedProvider(null)
+            setEditingCustom(null)
+          }
+          await refreshAuth()
+          await refreshCustomProviders()
+          if (hasModelsSupport) {
+            await refreshModels()
+          }
+          onAuthChange?.()
+        }
+      } else if (deleteTarget.type === 'model' && deleteTarget.modelId) {
+        const result = await removeModelFromProvider(deleteTarget.providerId, deleteTarget.modelId)
+        if (result.ok) {
+          await refreshAuth()
+          await refreshCustomProviders()
+          if (hasModelsSupport) {
+            await refreshModels()
+          }
+          onAuthChange?.()
+        }
+      }
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }, [deleteTarget, focusedProvider, deleteCustomProvider, removeModelFromProvider, refreshAuth, refreshCustomProviders, hasModelsSupport, refreshModels, onAuthChange])
 
   const popularProvidersList = useMemo(() => {
     const authLower: Record<string, { configured: boolean; source?: string }> = {}
@@ -619,6 +753,7 @@ function ProviderSetup({
   }, [allProviders, focusedProvider])
 
   const effectiveFocusedProvider = focusedProvider
+  const isFocusedCustomProvider = effectiveFocusedProvider ? effectiveFocusedProvider in customProviderBaseUrls : false
 
   return (
     <div className="flex w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
@@ -642,7 +777,7 @@ function ProviderSetup({
                     }
                   })
                 }}
-                className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
+                className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all group ${
                   isFocused
                     ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
                     : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
@@ -652,6 +787,16 @@ function ProviderSetup({
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
                 </div>
+                {/* Delete button for custom providers - visible on hover */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteProvider(p.id, p.name) }}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
+                  title="Delete provider"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
                 {p.configured ? (
                   <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -764,10 +909,14 @@ function ProviderSetup({
             selectedModelKey={selectedModelKey}
             switchingModel={switchingModel}
             setApiKey={setApiKey}
+            removeAuth={removeAuth}
             testProvider={testProvider}
             onAuthChange={handleAuthChange}
             onSelectModel={handleSelectModel}
+            onDeleteProvider={handleDeleteProvider}
+            onRemoveModel={handleRemoveModel}
             providerBaseUrl={customProviderBaseUrls[focusedProvider]?.baseUrl}
+            isCustomProvider={isFocusedCustomProvider}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
@@ -782,6 +931,45 @@ function ProviderSetup({
           </div>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <ConfirmDialog
+          title={
+            deleteTarget.type === 'provider'
+              ? 'Delete Provider'
+              : 'Remove Model'
+          }
+          message={
+            deleteTarget.type === 'provider'
+              ? `Are you sure you want to delete "${deleteTarget.providerName}"? This will remove the provider and all its models. This action cannot be undone.`
+              : `Are you sure you want to remove model "${deleteTarget.modelName}" from "${deleteTarget.providerName}"?`
+          }
+          confirmLabel={
+            deleteTarget.type === 'provider'
+              ? 'Delete Provider'
+              : 'Remove Model'
+          }
+          danger
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {/* Deleting overlay */}
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+          <div className="rounded-lg bg-white dark:bg-gray-800 px-4 py-3 shadow-xl flex items-center gap-2">
+            <svg className="w-4 h-4 text-blue-500 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {deleteTarget?.type === 'provider' ? 'Deleting provider...' : 'Removing model...'}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -544,6 +544,14 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
         break
       }
 
+      case 'unregister_custom_provider': {
+        session.modelRegistry.unregisterProvider(cmd.provider as string)
+        runtime!.services.authStorage.remove(cmd.provider as string)
+        runtime!.services.modelRegistry.refresh()
+        send({ channel: 'response', id: cmd.id, command: 'unregister_custom_provider', success: true })
+        break
+      }
+
       case 'send_extension_ui_response': {
         send({ channel: 'response', id: cmd.id, command: 'send_extension_ui_response', success: true })
         break

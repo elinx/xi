@@ -12,6 +12,8 @@ interface SettingsPanelProps {
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  deleteCustomProvider: (provider: string) => Promise<{ ok: boolean; error?: string }>
+  removeModelFromProvider: (provider: string, modelId: string) => Promise<{ ok: boolean; error?: string }>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
@@ -27,6 +29,8 @@ function SettingsPanel({
   setApiKey,
   removeAuth,
   registerCustomProvider,
+  deleteCustomProvider,
+  removeModelFromProvider,
   testProvider,
   getProviderConfig,
   listCustomProviders,
@@ -87,6 +91,8 @@ function SettingsPanel({
                 setApiKey={setApiKey}
                 removeAuth={removeAuth}
                 registerCustomProvider={registerCustomProvider}
+                deleteCustomProvider={deleteCustomProvider}
+                removeModelFromProvider={removeModelFromProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
                 listCustomProviders={listCustomProviders}

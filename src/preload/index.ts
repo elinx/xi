@@ -125,6 +125,12 @@ const api = {
   listCustomProviders: (): Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }> =>
     ipcRenderer.invoke('provider:listCustomProviders'),
 
+  deleteCustomProvider: (provider: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('provider:deleteCustomProvider', provider),
+
+  removeModelFromProvider: (provider: string, modelId: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('provider:removeModel', provider, modelId),
+
   openConfigDir: (): void =>
     ipcRenderer.send('app:openConfigDir'),
 

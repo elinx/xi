@@ -574,6 +574,121 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('provider:deleteCustomProvider', async (_event, provider: string) => {
+    // 1. Check if currently using this provider → fallback
+    const primary = workerManager?.getPrimary()
+    if (primary?.bridge.isConnected) {
+      try {
+        const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const currentModel = stateData.model as Record<string, unknown> | undefined | null
+        if (currentModel && currentModel.provider === provider) {
+          // Find a fallback model from a different provider
+          const modelsData = await primary.bridge.sendRpcCommand({ type: 'get_available_models' }) as { models?: Array<Record<string, unknown>> }
+          const fallback = modelsData.models?.find(m => m.provider !== provider && m.hasAuth)
+          if (fallback) {
+            await primary.bridge.sendRpcCommand({ type: 'set_model', model: fallback.id, provider: fallback.provider as string })
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Remove from models.json FIRST (before broadcast, so refresh() loads updated data)
+    const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
+    const modelsPath = join(agentDir, 'models.json')
+    if (existsSync(modelsPath)) {
+      try {
+        const data = JSON.parse(readFileSync(modelsPath, 'utf-8'))
+        if (data.providers && data.providers[provider]) {
+          delete data.providers[provider]
+          writeFileSync(modelsPath, JSON.stringify(data, null, 2))
+        }
+      } catch {}
+    }
+
+    // 3. Clear credentials from auth.json
+    const authPath = join(agentDir, 'auth.json')
+    if (existsSync(authPath)) {
+      try {
+        const authData = JSON.parse(readFileSync(authPath, 'utf-8'))
+        if (authData[provider]) {
+          delete authData[provider]
+          writeFileSync(authPath, JSON.stringify(authData, null, 2))
+        }
+      } catch {}
+    }
+
+    // 4. Broadcast: unregister from all workers (after disk is updated, so refresh() picks up the change)
+    const workers = workerManager?.getAllWorkers() ?? []
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        await worker.bridge.sendRpcCommand({ type: 'unregister_custom_provider', provider })
+      } catch {}
+    }
+
+    return { ok: true }
+  })
+
+  ipcMain.handle('provider:removeModel', async (_event, provider: string, modelId: string) => {
+    // 1. Check if currently using this model → fallback
+    const primary = workerManager?.getPrimary()
+    if (primary?.bridge.isConnected) {
+      try {
+        const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const currentModel = stateData.model as Record<string, unknown> | undefined | null
+        if (currentModel && currentModel.id === modelId && currentModel.provider === provider) {
+          const modelsData = await primary.bridge.sendRpcCommand({ type: 'get_available_models' }) as { models?: Array<Record<string, unknown>> }
+          const sameProviderFallback = modelsData.models?.find(m => m.provider === provider && m.id !== modelId && m.hasAuth)
+          const anyFallback = sameProviderFallback ?? modelsData.models?.find(m => m.provider !== provider && m.hasAuth)
+          if (anyFallback) {
+            await primary.bridge.sendRpcCommand({ type: 'set_model', model: anyFallback.id, provider: anyFallback.provider as string })
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Remove model from models.json
+    const agentDir = process.env.PI_CODING_AGENT_DIR || join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
+    const modelsPath = join(agentDir, 'models.json')
+    let updatedConfig: Record<string, unknown> | null = null
+    let hasRemainingModels = false
+    if (existsSync(modelsPath)) {
+      try {
+        const data = JSON.parse(readFileSync(modelsPath, 'utf-8'))
+        if (data.providers?.[provider]?.models) {
+          const models = data.providers[provider].models as Array<Record<string, unknown>>
+          const filtered = models.filter(m => m.id !== modelId)
+          if (filtered.length === 0) {
+            // No models left → delete entire provider
+            delete data.providers[provider]
+          } else {
+            data.providers[provider].models = filtered
+            updatedConfig = data.providers[provider] as Record<string, unknown>
+            hasRemainingModels = true
+          }
+          writeFileSync(modelsPath, JSON.stringify(data, null, 2))
+        }
+      } catch {}
+    }
+
+    // 3. Broadcast: update all workers
+    const workers = workerManager?.getAllWorkers() ?? []
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        if (hasRemainingModels && updatedConfig) {
+          // Re-register with updated config (fewer models)
+          await worker.bridge.sendRpcCommand({ type: 'register_custom_provider', provider, config: updatedConfig })
+        } else {
+          // No models left → unregister entire provider
+          await worker.bridge.sendRpcCommand({ type: 'unregister_custom_provider', provider })
+        }
+      } catch {}
+    }
+
+    return { ok: true }
+  })
+
   ipcMain.on('app:openConfigDir', () => {
     const configDir = join(process.env.HOME ?? process.env.USERPROFILE ?? '~', '.xi')
     if (!existsSync(configDir)) {

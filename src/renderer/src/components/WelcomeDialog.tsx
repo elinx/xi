@@ -8,6 +8,8 @@ interface WelcomeDialogProps {
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  deleteCustomProvider: (provider: string) => Promise<{ ok: boolean; error?: string }>
+  removeModelFromProvider: (provider: string, modelId: string) => Promise<{ ok: boolean; error?: string }>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   listCustomProviders: () => Promise<{ ok: boolean; providers: Record<string, { baseUrl: string; name?: string }> }>
@@ -18,7 +20,7 @@ interface WelcomeDialogProps {
   onSkip: () => void
 }
 
-function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, listCustomProviders, getAvailableModels, onSetModel, onAuthChange, currentModel, onSkip }: WelcomeDialogProps): React.ReactElement {
+function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, getAvailableModels, onSetModel, onAuthChange, currentModel, onSkip }: WelcomeDialogProps): React.ReactElement {
   const [showSetup, setShowSetup] = useState(false)
   const [hasConfiguredProvider, setHasConfiguredProvider] = useState(false)
 
@@ -93,6 +95,8 @@ function WelcomeDialog({ getProviderAuthStatus, setApiKey, removeAuth, registerC
                 setApiKey={setApiKey}
                 removeAuth={removeAuth}
                 registerCustomProvider={registerCustomProvider}
+                deleteCustomProvider={deleteCustomProvider}
+                removeModelFromProvider={removeModelFromProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
                 listCustomProviders={listCustomProviders}

@@ -82,7 +82,7 @@ function App(): React.ReactElement {
     updateCache: sessionCache.updateCache,
   }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, ensureCacheSync, sessionCache.updateCache])
 
-  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const displayedMessages = sessionCache.displayedMessages
@@ -957,6 +957,8 @@ function App(): React.ReactElement {
                 setApiKey={setApiKey}
                 removeAuth={removeAuth}
                 registerCustomProvider={registerCustomProvider}
+                deleteCustomProvider={deleteCustomProvider}
+                removeModelFromProvider={removeModelFromProvider}
                 testProvider={testProvider}
                 getProviderConfig={getProviderConfig}
                 listCustomProviders={listCustomProviders}
@@ -1030,18 +1032,20 @@ function App(): React.ReactElement {
              getProviderAuthStatus={getProviderAuthStatus}
              setApiKey={setApiKey}
              removeAuth={removeAuth}
-              registerCustomProvider={registerCustomProvider}
-               testProvider={testProvider}
-               getProviderConfig={getProviderConfig}
-               listCustomProviders={listCustomProviders}
-               getAvailableModels={() => getAvailableModels(null)}
-               onSetModel={(modelId, provider) => setModel(null, modelId, provider)}
-               onAuthChange={() => {
-                getAvailableModels(null)
-                refreshModelInfo()
-              }}
-              currentModel={currentModel}
-              onSkip={() => setShowWelcome(false)}
+             registerCustomProvider={registerCustomProvider}
+             deleteCustomProvider={deleteCustomProvider}
+             removeModelFromProvider={removeModelFromProvider}
+             testProvider={testProvider}
+             getProviderConfig={getProviderConfig}
+             listCustomProviders={listCustomProviders}
+             getAvailableModels={() => getAvailableModels(null)}
+             onSetModel={(modelId, provider) => setModel(null, modelId, provider)}
+             onAuthChange={() => {
+              getAvailableModels(null)
+              refreshModelInfo()
+            }}
+            currentModel={currentModel}
+            onSkip={() => setShowWelcome(false)}
            />
        )}
 

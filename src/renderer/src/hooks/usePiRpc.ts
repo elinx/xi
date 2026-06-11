@@ -49,6 +49,8 @@ interface UsePiRpcReturn {
   setApiKey: (provider: string, apiKey: string) => Promise<boolean>
   removeAuth: (provider: string) => Promise<boolean>
   registerCustomProvider: (provider: string, config: Record<string, unknown>) => Promise<boolean>
+  deleteCustomProvider: (provider: string) => Promise<{ ok: boolean; error?: string }>
+  removeModelFromProvider: (provider: string, modelId: string) => Promise<{ ok: boolean; error?: string }>
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   refreshModelInfo: () => void
@@ -792,5 +794,21 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result
   }, [])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, listCustomProviders: listCustomProvidersFn, refreshModelInfo }
+  const deleteCustomProviderFn = useCallback(async (provider: string): Promise<{ ok: boolean; error?: string }> => {
+    const result = await window.api.deleteCustomProvider(provider)
+    if (result.ok) {
+      refreshModelInfo()
+    }
+    return result
+  }, [refreshModelInfo])
+
+  const removeModelFromProviderFn = useCallback(async (provider: string, modelId: string): Promise<{ ok: boolean; error?: string }> => {
+    const result = await window.api.removeModelFromProvider(provider, modelId)
+    if (result.ok) {
+      refreshModelInfo()
+    }
+    return result
+  }, [refreshModelInfo])
+
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, deleteCustomProvider: deleteCustomProviderFn, removeModelFromProvider: removeModelFromProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, listCustomProviders: listCustomProvidersFn, refreshModelInfo }
 }
