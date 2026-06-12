@@ -158,6 +158,26 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
             }
           }
         }
+        // Also detect HTML from write tool calls (same logic as streaming path in usePiRpc)
+        const matchingToolCall = lastAssistant.blocks.find(
+          (b) => b.type === 'tool_call' && (b as { toolCallId: string }).toolCallId === (msg.toolCallId as string)
+        )
+        if (
+          matchingToolCall &&
+          matchingToolCall.type === 'tool_call' &&
+          msg.toolName === 'write' &&
+          matchingToolCall.args &&
+          typeof (matchingToolCall.args as Record<string, unknown>).path === 'string' &&
+          ((matchingToolCall.args as Record<string, unknown>).path as string).endsWith('.html') &&
+          typeof (matchingToolCall.args as Record<string, unknown>).content === 'string'
+        ) {
+          const args = matchingToolCall.args as Record<string, unknown>
+          resultBlocks.push({
+            type: 'html',
+            content: args.content as string,
+            title: (args.path as string).split('/').pop(),
+          })
+        }
         if (resultBlocks.length > 0) {
           lastAssistant.blocks.push({
             type: 'tool_result',
