@@ -1568,7 +1568,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           </div>
         </div>
       ) : viewMode === 'normal' ? (
-        <div className="mx-auto max-w-2xl space-y-2">
+        <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl space-y-2">
           {(() => {
             // Group consecutive same-role messages
             const groups: { role: 'user' | 'assistant'; msgs: ChatMessage[] }[] = []
@@ -1718,7 +1718,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           <div ref={bottomRef} />
         </div>
       ) : viewMode === 'turn' ? (
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl space-y-4">
           {turns.map((turn, idx) => (
             <TurnCard
               key={turn.id}
@@ -1746,7 +1746,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           <div ref={bottomRef} />
         </div>
       ) : (
-        <div className="mx-auto max-w-xl space-y-0">
+        <div className="mx-auto max-w-xl xl:max-w-3xl space-y-0">
           {turns.map((turn, idx) => (
             <OutlineRow
               key={turn.id}

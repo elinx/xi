@@ -450,6 +450,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
         onClearQueue={onClearQueue}
       />
       <div className="border-t border-gray-200 bg-white px-4 py-3">
+      <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
       <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
         {statusDot}
         {statusText}
@@ -539,6 +540,7 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
             Send
           </button>
         )}
+      </div>
       </div>
       </div>
     </div>
