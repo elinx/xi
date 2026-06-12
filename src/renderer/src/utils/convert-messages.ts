@@ -149,6 +149,12 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
                 src: `data:${img.mimeType};base64,${img.data}`,
                 alt: `Result from ${msg.toolName as string}`,
               })
+            } else if (c.type === 'html') {
+              resultBlocks.push({
+                type: 'html',
+                content: c.content,
+                title: c.title ?? `${msg.toolName as string} result`,
+              })
             }
           }
         }

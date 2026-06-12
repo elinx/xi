@@ -271,6 +271,12 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
 
 const COLLAPSE_THRESHOLD = 15
 
+/** Extract HTML blocks from tool result content for inline rendering */
+function extractHtmlFromResult(result: ToolResultBlock | undefined): HtmlBlock[] {
+  if (!result) return []
+  return result.content.filter((c): c is HtmlBlock => c.type === 'html')
+}
+
 const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { block: ToolCallBlock; result?: ToolResultBlock }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
@@ -326,6 +332,9 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
     }
   })()
 
+  // HTML blocks from result — rendered inline (always visible, outside collapsed section)
+  const htmlBlocks = extractHtmlFromResult(result)
+
   // Result text content
   const resultText = result
     ? result.content.filter((c): c is TextBlock => c.type === 'text').map((c) => c.content).join('\n')
@@ -360,6 +369,10 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
           <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
       </button>
+      {/* HTML preview — always visible when result contains HTML */}
+      {htmlBlocks.length > 0 && htmlBlocks.map((htmlBlock, i) => (
+        <HtmlBlockRenderer key={`html-inline-${i}`} block={htmlBlock} />
+      ))}
       {/* Expandable details */}
       {expanded && (
         <div className="ml-4 border-l-2 border-gray-200 pl-3 py-1">
@@ -444,13 +457,10 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
               )}
             </div>
           )}
-          {/* Non-text result content (images, html) */}
+          {/* Non-text result content (images only — html is rendered inline above) */}
           {result && result.content.map((child, i) => {
             if (child.type === 'image') {
               return <ImageBlockRenderer key={`img-${i}`} block={child as ImageBlock} />
-            }
-            if (child.type === 'html') {
-              return <HtmlBlockRenderer key={`html-${i}`} block={child as HtmlBlock} />
             }
             return null
           })}
