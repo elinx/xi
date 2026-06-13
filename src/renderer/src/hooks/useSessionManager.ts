@@ -22,6 +22,7 @@ interface UseSessionManagerReturn {
   renameSession: (sessionPath: string | null, name: string) => Promise<void>
   deleteSession: (sessionPath: string) => Promise<boolean>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
+  reparentSession: (sessionPath: string, newParentPath: string | null) => Promise<boolean>
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   refresh: () => Promise<void>
   getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
@@ -127,6 +128,15 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     return false
   }, [loadSessions])
 
+  const reparentSession = useCallback(async (sessionPath: string, newParentPath: string | null): Promise<boolean> => {
+    const result = await api.reparentSession(sessionPath, newParentPath)
+    if (result.success) {
+      await loadSessions()
+      return true
+    }
+    return false
+  }, [loadSessions])
+
   const clearSession = useCallback(async (sessionPath: string | null): Promise<string | null> => {
     try {
       const result = await api.clearSession(sessionPath)
@@ -169,6 +179,7 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     renameSession,
     deleteSession,
     setSessionStatus,
+    reparentSession,
     getForkPoints,
     refresh,
     getForkMessages,

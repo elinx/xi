@@ -87,6 +87,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
     let messageCount = 0
     let name: string | null = null
     let status: 'active' | 'completed' | null = null
+    let parentSessionPath: string | null = header.parentSession ?? null
 
     for (let i = 1; i < lines.length; i++) {
       try {
@@ -103,6 +104,10 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if (entry.status === 'active' || entry.status === 'completed') {
             status = entry.status
           }
+          // session_info 中的 parentSession 覆盖 header
+          if ('parentSession' in entry) {
+            parentSessionPath = typeof entry.parentSession === 'string' ? entry.parentSession : null
+          }
         }
       } catch {
         continue
@@ -116,7 +121,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
       status,
       createdAt: header.timestamp,
       cwd: header.cwd,
-      parentSessionPath: header.parentSession ?? null,
+      parentSessionPath,
       messageCount,
       isMain: false
     }
@@ -259,6 +264,35 @@ export function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode | nul
  *  entry to the now-existing file. */
 const pendingNames = new Map<string, string>()
 
+/**
+ * Check whether reparenting `sessionPath` under `newParentPath` would
+ * create a cycle in the session tree. Walk the parent chain from
+ * `newParentPath` upwards; if we ever reach `sessionPath`, it's a cycle.
+ */
+export function wouldCreateCycle(
+  sessionPath: string,
+  newParentPath: string | null,
+  sessions: SessionInfo[]
+): boolean {
+  if (!newParentPath) return false // clearing parent can't create a cycle
+  if (newParentPath === sessionPath) return true
+
+  const parentMap = new Map<string, string | null>()
+  for (const s of sessions) {
+    parentMap.set(s.filePath, s.parentSessionPath)
+  }
+
+  let current: string | null = newParentPath
+  const visited = new Set<string>()
+  while (current) {
+    if (current === sessionPath) return true
+    if (visited.has(current)) return false // unrelated pre-existing cycle
+    visited.add(current)
+    current = parentMap.get(current) ?? null
+  }
+  return false
+}
+
 export function clearPendingNames(): void {
   pendingNames.clear()
 }
@@ -343,6 +377,36 @@ export function setSessionStatus(sessionPath: string, status: 'active' | 'comple
     const entry = JSON.stringify({
       type: 'session_info',
       status,
+    })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Change a session's parent by appending a session_info entry.
+ * This uses the same append-only override mechanism as name/status:
+ * the last session_info entry's parentSession field wins.
+ *
+ * Pass null to clear the parent (make session a root-level orphan).
+ * Does NOT perform cycle detection — callers should check with
+ * wouldCreateCycle() before calling this.
+ */
+export function reparentSession(sessionPath: string, newParentPath: string | null): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  // Self-reference guard
+  if (newParentPath === sessionPath) return false
+
+  // If a new parent is specified, verify it exists
+  if (newParentPath && !existsSync(newParentPath)) return false
+
+  try {
+    const entry = JSON.stringify({
+      type: 'session_info',
+      parentSession: newParentPath,
     })
     appendFileSync(sessionPath, entry + '\n')
     return true

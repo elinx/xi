@@ -12,6 +12,8 @@ import {
   setSessionStatus,
   addForkPoint,
   getForkPoints,
+  reparentSession,
+  wouldCreateCycle,
 } from '../src/main/session-service'
 import type { SessionInfo } from '../src/renderer/src/types/session'
 
@@ -591,5 +593,244 @@ describe('getForkPoints', () => {
     expect(points).toHaveLength(1)
     expect(points[0].entryId).toBe('good')
     expect(points[0].childName).toBe('')
+  })
+})
+
+describe('parseSessionFile parentSession override', () => {
+  it('uses header parentSession when no session_info override', () => {
+    const dir = join(testDir, 'sessions')
+    const parentPath = join(dir, 'parent.jsonl')
+    writeSession(dir, 'parent.jsonl',
+      { id: 'uuid-p', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'parent-session' }]
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: parentPath },
+    )
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBe(parentPath)
+  })
+
+  it('overrides parentSession via session_info entry', () => {
+    const dir = join(testDir, 'sessions')
+    const oldParent = join(dir, 'old-parent.jsonl')
+    const newParent = join(dir, 'new-parent.jsonl')
+    writeSession(dir, 'old-parent.jsonl',
+      { id: 'uuid-op', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    writeSession(dir, 'new-parent.jsonl',
+      { id: 'uuid-np', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: oldParent },
+      [
+        { type: 'session_info', name: 'child-session' },
+        { type: 'session_info', parentSession: newParent },
+      ]
+    )
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBe(newParent)
+  })
+
+  it('clears parentSession via session_info with null', () => {
+    const dir = join(testDir, 'sessions')
+    const parentPath = join(dir, 'parent.jsonl')
+    writeSession(dir, 'parent.jsonl',
+      { id: 'uuid-p', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: parentPath },
+      [
+        { type: 'session_info', parentSession: null },
+      ]
+    )
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBeNull()
+  })
+
+  it('last session_info wins for parentSession', () => {
+    const dir = join(testDir, 'sessions')
+    const parent1 = join(dir, 'p1.jsonl')
+    const parent2 = join(dir, 'p2.jsonl')
+    writeSession(dir, 'p1.jsonl', { id: 'uuid-1', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' })
+    writeSession(dir, 'p2.jsonl', { id: 'uuid-2', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' })
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+      [
+        { type: 'session_info', parentSession: parent1 },
+        { type: 'session_info', parentSession: parent2 },
+      ]
+    )
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBe(parent2)
+  })
+})
+
+describe('reparentSession', () => {
+  it('appends session_info with new parentSession', () => {
+    const dir = join(testDir, 'sessions')
+    const parentPath = join(dir, 'parent.jsonl')
+    writeSession(dir, 'parent.jsonl',
+      { id: 'uuid-p', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' }
+    )
+
+    const ok = reparentSession(childPath, parentPath)
+    expect(ok).toBe(true)
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBe(parentPath)
+  })
+
+  it('clears parent when newParentPath is null', () => {
+    const dir = join(testDir, 'sessions')
+    const parentPath = join(dir, 'parent.jsonl')
+    writeSession(dir, 'parent.jsonl',
+      { id: 'uuid-p', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project', parentSession: parentPath }
+    )
+
+    const ok = reparentSession(childPath, null)
+    expect(ok).toBe(true)
+
+    const result = parseSessionFile(childPath)!
+    expect(result.parentSessionPath).toBeNull()
+  })
+
+  it('rejects self-reference', () => {
+    const dir = join(testDir, 'sessions')
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' }
+    )
+
+    const ok = reparentSession(childPath, childPath)
+    expect(ok).toBe(false)
+  })
+
+  it('returns false for non-existent session file', () => {
+    const ok = reparentSession('/nonexistent/file.jsonl', '/some/parent.jsonl')
+    expect(ok).toBe(false)
+  })
+
+  it('returns false for non-existent parent file', () => {
+    const dir = join(testDir, 'sessions')
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' }
+    )
+
+    const ok = reparentSession(childPath, '/nonexistent/parent.jsonl')
+    expect(ok).toBe(false)
+  })
+
+  it('preserves existing name and status after reparent', () => {
+    const dir = join(testDir, 'sessions')
+    const parentPath = join(dir, 'parent.jsonl')
+    writeSession(dir, 'parent.jsonl',
+      { id: 'uuid-p', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' }
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+      [
+        { type: 'session_info', name: 'my-session' },
+        { type: 'session_info', status: 'completed' },
+      ]
+    )
+
+    reparentSession(childPath, parentPath)
+
+    const result = parseSessionFile(childPath)!
+    expect(result.name).toBe('my-session')
+    expect(result.status).toBe('completed')
+    expect(result.parentSessionPath).toBe(parentPath)
+  })
+
+  it('reparent updates tree structure', () => {
+    const dir = join(testDir, 'sessions')
+    const mainPath = writeSession(dir, 'main.jsonl',
+      { id: 'uuid-m', timestamp: '2026-05-26T16:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'main' }]
+    )
+    const childPath = writeSession(dir, 'child.jsonl',
+      { id: 'uuid-c', timestamp: '2026-05-26T17:00:00.000Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'orphan-child' }]
+    )
+
+    // Before reparent: child is orphan, hangs off main
+    let result = listSessions(undefined, dir)
+    let root = result.projects[0].root!
+    expect(root.children).toHaveLength(1) // child is direct child of main
+    expect(root.children[0].session.name).toBe('orphan-child')
+
+    // Reparent: make child a child of main explicitly
+    reparentSession(childPath, mainPath)
+
+    result = listSessions(undefined, dir)
+    root = result.projects[0].root!
+    expect(root.children).toHaveLength(1)
+    expect(root.children[0].session.name).toBe('orphan-child')
+    expect(root.children[0].session.parentSessionPath).toBe(mainPath)
+  })
+})
+
+describe('wouldCreateCycle', () => {
+  it('returns false for null newParent', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    expect(wouldCreateCycle('/a', null, sessions)).toBe(false)
+  })
+
+  it('returns true for self-reference', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    expect(wouldCreateCycle('/a', '/a', sessions)).toBe(true)
+  })
+
+  it('returns true for direct cycle A->B->A', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/b', messageCount: 0, isMain: false },
+      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    // Moving /b under /a would create /b->/a->/b
+    expect(wouldCreateCycle('/b', '/a', sessions)).toBe(true)
+  })
+
+  it('returns true for indirect cycle A->B->C->A', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/c', messageCount: 0, isMain: false },
+      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/a', messageCount: 0, isMain: false },
+      { filePath: '/c', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    // Moving /c under /b would create /c->/b->/a->/c
+    expect(wouldCreateCycle('/c', '/b', sessions)).toBe(true)
+  })
+
+  it('returns false for valid reparent', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true },
+      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false },
+      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    // Moving /b under /main is fine
+    expect(wouldCreateCycle('/b', '/main', sessions)).toBe(false)
+  })
+
+  it('returns false for moving to descendant of same root (no cycle)', () => {
+    const sessions: SessionInfo[] = [
+      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true },
+      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false },
+      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+    ]
+    // Moving /b under /a is fine (no cycle)
+    expect(wouldCreateCycle('/b', '/a', sessions)).toBe(false)
   })
 })

@@ -23,6 +23,7 @@ interface LeftPanelProps {
   onRenameSession: (sessionPath: string, name: string) => void
   onDeleteSession: (sessionPath: string) => Promise<boolean>
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
+  onReparentSession: (sessionPath: string, newParentPath: string | null) => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
 }
 
@@ -77,6 +78,7 @@ export default function LeftPanel({
   onRenameSession,
   onDeleteSession,
   onSetSessionStatus,
+  onReparentSession,
   onForkFromEnd,
 }: LeftPanelProps) {
   if (collapsed) return null
@@ -117,6 +119,7 @@ export default function LeftPanel({
             onRenameSession={onRenameSession}
             onDeleteSession={onDeleteSession}
             onSetSessionStatus={onSetSessionStatus}
+            onReparentSession={onReparentSession}
             onForkFromEnd={onForkFromEnd}
             isCollapsed={false}
             onToggleCollapse={onToggleCollapse}

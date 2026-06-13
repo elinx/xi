@@ -1123,6 +1123,29 @@ function registerIpcHandlers(): void {
     return { success: false, error: 'Failed to set session status' }
   })
 
+  ipcMain.handle('session:reparentSession', async (_event, sessionPath: string, newParentPath: string | null) => {
+    // Get all sessions for validation
+    const result = sessionService.listSessions()
+    const allSessions = result.projects.flatMap(p => p.allSessions)
+
+    // Cannot reparent the main session
+    const target = allSessions.find(s => s.filePath === sessionPath)
+    if (target?.isMain) {
+      return { success: false, error: 'Cannot reparent the main session' }
+    }
+
+    // Cycle detection
+    if (newParentPath && sessionService.wouldCreateCycle(sessionPath, newParentPath, allSessions)) {
+      return { success: false, error: 'Cannot create a cycle in the session tree' }
+    }
+
+    const ok = sessionService.reparentSession(sessionPath, newParentPath)
+    if (ok) {
+      return { success: true }
+    }
+    return { success: false, error: 'Failed to reparent session' }
+  })
+
   ipcMain.handle('session:getMessagesForSession', async (_event, sessionPath: string) => {
     return sessionService.parseSessionMessages(sessionPath)
   })

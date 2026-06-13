@@ -95,6 +95,9 @@ const api = {
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed'): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:setSessionStatus', sessionPath, status),
 
+  reparentSession: (sessionPath: string, newParentPath: string | null): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:reparentSession', sessionPath, newParentPath),
+
   clearSession: (sessionPath: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession', sessionPath),
 
