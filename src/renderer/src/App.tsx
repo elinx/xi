@@ -339,11 +339,7 @@ function App(): React.ReactElement {
   currentSessionRef.current = currentSession
 
   const handleNewSession = useCallback(async (name: string, parentSessionPath: string) => {
-    const currentPath = displayedSessionPathRef.current
-    if (isPiStreaming()) {
-      await abort(currentPath)
-    }
-    const newPath = await newSession(currentPath, name, parentSessionPath)
+    const newPath = await newSession(null, name, parentSessionPath)
     if (newPath) {
       await refresh()
       await displaySessionRef.current(newPath)
@@ -353,7 +349,7 @@ function App(): React.ReactElement {
       }
       window.api.saveLastSession(newPath)
     }
-  }, [abort, newSession, refresh, isPiStreaming])
+  }, [newSession, refresh])
 
   const handleForkAtEntry = useCallback(async (entryId: string, name: string) => {
     const currentPath = displayedSessionPathRef.current

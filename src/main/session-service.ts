@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync, appendFileSync, unlinkSync, rmSync, mkdirSync, statSync, renameSync } from 'fs'
 import { join, dirname, resolve } from 'path'
+import { randomUUID } from 'crypto'
 import type {
   SessionInfo,
   SessionListResult,
@@ -68,6 +69,39 @@ export function getSessionDir(cwd?: string): string {
   return sessionDir
 }
 
+
+/** Create a new empty session JSONL file with header and optional name.
+ *  Returns the absolute path to the created file.
+ *  This is a pure file operation — no Pi runtime involved. */
+export function createSessionFile(
+  sessionDir: string,
+  cwd: string,
+  name: string,
+  parentSessionPath?: string
+): string {
+  const id = randomUUID()
+  const timestamp = new Date().toISOString()
+  // File name matches Pi SDK convention: ISO timestamp with ':' and '.' replaced by '-', then '_' + uuid
+  const fileTimestamp = timestamp.replace(/[:.]/g, '-')
+  const fileName = `${fileTimestamp}_${id}.jsonl`
+  const filePath = join(sessionDir, fileName)
+
+  const header: Record<string, unknown> = {
+    type: 'session',
+    version: 3,
+    id,
+    timestamp,
+    cwd,
+  }
+  if (parentSessionPath) {
+    header.parentSession = parentSessionPath
+  }
+
+  writeFileSync(filePath, JSON.stringify(header) + '\n')
+  nameSession(filePath, name)
+
+  return filePath
+}
 
 export function parseSessionFile(filePath: string): SessionInfo | null {
   try {

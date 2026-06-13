@@ -949,46 +949,12 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:newSession', async (_event, sessionPath: string | null, name: string, parentSessionPath?: string) => {
-    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) {
-      return { success: false, error: 'Worker not connected' }
-    }
+  ipcMain.handle('session:newSession', async (_event, _sessionPath: string | null, name: string, parentSessionPath?: string) => {
+    const cwd = process.cwd()
+    const sessionDir = sessionService.getSessionDir(cwd)
     try {
-      const command: Record<string, unknown> = { type: 'new_session' }
-      if (parentSessionPath) {
-        command.parentSession = parentSessionPath
-      }
-      await worker.bridge.sendRpcCommand(command)
-
-      if (name) {
-        try {
-          await worker.bridge.sendRpcCommand({ type: 'set_session_name', name })
-        } catch {}
-      }
-
-      try {
-        await worker.bridge.sendRpcCommand({ type: 'flush_session' })
-      } catch {}
-
-      let newSessionPath: string | null = null
-      try {
-        const postState = (await worker.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-        const sp = typeof postState.sessionFile === 'string' ? postState.sessionFile : null
-        if (sp) {
-          newSessionPath = sp
-          sessionService.nameSession(sp, name ?? 'session')
-          sessionService.flushPendingName(sp)
-        }
-      } catch {}
-
-      if (worker.sessionPath && newSessionPath && newSessionPath !== worker.sessionPath) {
-        try {
-          await worker.bridge.sendRpcCommand({ type: 'switch_session', sessionPath: worker.sessionPath })
-        } catch {}
-      }
-
-      return { success: true, sessionPath: newSessionPath }
+      const sessionPath = sessionService.createSessionFile(sessionDir, cwd, name, parentSessionPath || undefined)
+      return { success: true, sessionPath }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
