@@ -440,7 +440,7 @@ function SessionNode({
               title={isExpanded ? 'Collapse' : `Expand (${hiddenCount} hidden)`}
             >
               <svg
-                className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
