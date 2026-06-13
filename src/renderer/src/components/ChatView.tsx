@@ -291,6 +291,10 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
     read: '📄',
     edit: '✏️',
     write: '📝',
+    ls: '📁',
+    find: '🔍',
+    grep: '🔎',
+    search_sessions: '💬',
   }
   const icon = toolIcon[block.toolName] ?? '🔧'
 
@@ -304,14 +308,28 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
           : String(block.args.command)
         : ''
       break
-    case 'read':
-      headerSummary = block.args.path ? String(block.args.path) : ''
+    case 'read': {
+      const parts = [block.args.path ? String(block.args.path) : '']
+      if (block.args.offset) parts.push(`L${block.args.offset}`)
+      if (block.args.limit) parts.push(`limit ${block.args.limit}`)
+      headerSummary = parts.filter(Boolean).join(' ')
       break
+    }
     case 'edit':
-      headerSummary = block.args.path ? String(block.args.path) : ''
-      break
     case 'write':
       headerSummary = block.args.path ? String(block.args.path) : ''
+      break
+    case 'ls':
+      headerSummary = block.args.path ? String(block.args.path) : '.'
+      break
+    case 'find':
+      headerSummary = [block.args.pattern ? String(block.args.pattern) : '', block.args.path ? String(block.args.path) : ''].filter(Boolean).join(' in ')
+      break
+    case 'grep':
+      headerSummary = block.args.pattern ? String(block.args.pattern) : ''
+      break
+    case 'search_sessions':
+      headerSummary = block.args.query ? String(block.args.query) : ''
       break
     default:
       headerSummary = ''
@@ -417,7 +435,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
               <BashCopyButton command={String(block.args.command)} />
             </div>
           ) : block.toolName === 'read' && block.args.path ? (
-            <span className="text-xs text-gray-500">{String(block.args.path)}</span>
+            <span className="text-xs text-gray-500">{String(block.args.path)}{block.args.offset ? ` (from line ${block.args.offset})` : ''}{block.args.limit ? ` limit ${block.args.limit}` : ''}</span>
           ) : block.toolName === 'write' && block.args.path ? (
             <div>
               <span className="text-xs text-gray-400">{String(block.args.path)}</span>
@@ -425,6 +443,16 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
                 <pre className="overflow-x-auto text-xs text-gray-500 mt-1 whitespace-pre-wrap max-h-40">{String(block.args.content).length > 500 ? String(block.args.content).substring(0, 500) + '...' : String(block.args.content)}</pre>
               )}
             </div>
+          ) : block.toolName === 'ls' ? (
+            <span className="text-xs text-gray-500">{block.args.path ? String(block.args.path) : '.'}{block.args.limit ? ` (limit ${block.args.limit})` : ''}</span>
+          ) : block.toolName === 'find' ? (
+            <span className="text-xs text-gray-500">{block.args.pattern ? String(block.args.pattern) : ''}{block.args.path ? ` in ${String(block.args.path)}` : ''}</span>
+          ) : block.toolName === 'grep' ? (
+            <div>
+              <span className="text-xs text-gray-500">{block.args.pattern ? `/${String(block.args.pattern)}/` : ''}{block.args.path ? ` in ${String(block.args.path)}` : ''}{block.args.glob ? ` (${String(block.args.glob)})` : ''}</span>
+            </div>
+          ) : block.toolName === 'search_sessions' ? (
+            <span className="text-xs text-gray-500">query: {block.args.query ? String(block.args.query) : ''}{block.args.limit ? ` (limit ${block.args.limit})` : ''}</span>
           ) : (
             <pre className="overflow-x-auto text-xs text-gray-500">
               {JSON.stringify(block.args, null, 2)}
@@ -1296,6 +1324,10 @@ const TOOL_COLORS: Record<string, { bg: string; text: string; border: string; do
   write: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: '#2563eb' },
   edit: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: '#d97706' },
   bash: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', dot: '#9ca3af' },
+  ls: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: '#7c3aed' },
+  find: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: '#db2777' },
+  grep: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', dot: '#0891b2' },
+  search_sessions: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: '#ea580c' },
 }
 
 function OutlineRow({
@@ -1367,7 +1399,7 @@ function OutlineRow({
         <div className="ml-9 mr-3 mb-1 pl-4 border-l border-gray-200 space-y-0.5">
           {allTools.map((tool, i) => {
             const c = TOOL_COLORS[tool.toolName] || TOOL_COLORS.bash
-            const headerSummary = tool.args.path ? String(tool.args.path) : tool.args.command ? String(tool.args.command).substring(0, 50) : ''
+            const headerSummary = tool.toolName === 'ls' ? (tool.args.path ? String(tool.args.path) : '.') : tool.toolName === 'find' ? [tool.args.pattern ? String(tool.args.pattern).substring(0, 50) : '', tool.args.path ? String(tool.args.path) : ''].filter(Boolean).join(' in ') : tool.args.path ? String(tool.args.path) : tool.args.command ? String(tool.args.command).substring(0, 50) : tool.args.pattern ? String(tool.args.pattern).substring(0, 50) : tool.args.query ? String(tool.args.query).substring(0, 50) : ''
             return (
               <div key={i} className="flex items-center gap-2 py-0.5">
                 <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${c.bg} ${c.text} ${c.border}`}>{tool.toolName}</span>
