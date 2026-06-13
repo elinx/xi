@@ -103,6 +103,9 @@ function SessionNode({
   onMoveUnderTargetChange,
   onMoveUnderConfirm,
   onMoveUnderCancel,
+  // Collapse persistence
+  collapsedPaths,
+  onToggleCollapsed,
   // Drag props
   dragSourcePath,
   dropTargetInfo,
@@ -133,6 +136,9 @@ function SessionNode({
   onMoveUnderTargetChange: (path: string | null) => void
   onMoveUnderConfirm: (sessionPath: string, newParentPath: string) => void
   onMoveUnderCancel: () => void
+  // Collapse persistence
+  collapsedPaths: Set<string>
+  onToggleCollapsed: (sessionPath: string) => void
   // Drag props
   dragSourcePath: string | null
   dropTargetInfo: { path: string; position: DropPosition } | null
@@ -142,7 +148,7 @@ function SessionNode({
   onDropTargetChange: (info: { path: string; position: DropPosition } | null) => void
   onDropOnSession: (sourcePath: string, targetPath: string, position: DropPosition) => void
 }): React.ReactElement {
-  const [isExpanded, setIsExpanded] = useState(true)
+  const isExpanded = !collapsedPaths.has(node.session.filePath)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(getSessionDisplayName(node.session))
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -275,7 +281,7 @@ function SessionNode({
           // Auto-expand collapsed nodes after 500ms hover
           if (!isExpanded && hasChildren && autoExpandTimerRef.current === null) {
             autoExpandTimerRef.current = setTimeout(() => {
-              setIsExpanded(true)
+              onToggleCollapsed(node.session.filePath) // expand by removing from collapsed set
               autoExpandTimerRef.current = null
             }, 500)
           }
@@ -383,7 +389,7 @@ function SessionNode({
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setIsExpanded(!isExpanded)
+                onToggleCollapsed(node.session.filePath)
               }}
               className={`flex-shrink-0 rounded px-0.5 py-0.5 transition-colors ${
                 isExpanded
@@ -667,6 +673,8 @@ function SessionNode({
                 onMoveUnderTargetChange={onMoveUnderTargetChange}
                 onMoveUnderConfirm={onMoveUnderConfirm}
                 onMoveUnderCancel={onMoveUnderCancel}
+                collapsedPaths={collapsedPaths}
+                onToggleCollapsed={onToggleCollapsed}
                 dragSourcePath={dragSourcePath}
                 dropTargetInfo={dropTargetInfo}
                 dragDescendantPaths={dragDescendantPaths}
@@ -709,6 +717,31 @@ function SessionSidebar({
   const [triggerRenamePath, setTriggerRenamePath] = useState<string | null>(null)
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
   const [moveUnderTarget, setMoveUnderTarget] = useState<string | null>(null)
+
+  // Collapsed state persistence
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('xi-session-collapsed-paths')
+      if (stored) {
+        return new Set(JSON.parse(stored) as string[])
+      }
+    } catch { /* ignore */ }
+    return new Set()
+  })
+  const handleToggleCollapsed = useCallback((sessionPath: string) => {
+    setCollapsedPaths(prev => {
+      const next = new Set(prev)
+      if (next.has(sessionPath)) {
+        next.delete(sessionPath)
+      } else {
+        next.add(sessionPath)
+      }
+      try {
+        localStorage.setItem('xi-session-collapsed-paths', JSON.stringify([...next]))
+      } catch { /* ignore */ }
+      return next
+    })
+  }, [])
 
   // Drag state
   const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
@@ -908,6 +941,8 @@ function SessionSidebar({
             onMoveUnderTargetChange={setMoveUnderTarget}
             onMoveUnderConfirm={handleMoveUnderConfirm}
             onMoveUnderCancel={() => setMoveUnderTarget(null)}
+            collapsedPaths={collapsedPaths}
+            onToggleCollapsed={handleToggleCollapsed}
             dragSourcePath={dragSourcePath}
             dropTargetInfo={dropTargetInfo}
             dragDescendantPaths={dragDescendantPaths}
