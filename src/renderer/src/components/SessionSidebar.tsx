@@ -21,6 +21,15 @@ interface SessionSidebarProps {
   onResizeStart: (e: React.MouseEvent) => void
 }
 
+/** Count total number of descendants (recursive) of a tree node. */
+function countDescendants(node: SessionTreeNode): number {
+  let count = 0
+  for (const child of node.children) {
+    count += 1 + countDescendants(child)
+  }
+  return count
+}
+
 function formatRelativeTime(isoTimestamp: string): string {
   const now = Date.now()
   const then = new Date(isoTimestamp).getTime()
@@ -144,6 +153,7 @@ function SessionNode({
   const isCompleted = node.session.status === 'completed'
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
+  const hiddenCount = hasChildren && !isExpanded ? countDescendants(node) : 0
 
   // Auto-expand timer for drag hover
   const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -307,7 +317,9 @@ function SessionNode({
                       : 'bg-gray-100 text-gray-900'
                     : isCompleted
                       ? 'text-gray-400 hover:bg-gray-100/60 hover:text-gray-500'
-                      : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
+                      : hiddenCount > 0
+                        ? 'bg-gray-50/80 text-gray-700 hover:bg-gray-100/60 hover:text-gray-800'
+                        : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
         }`}
         onClick={() => {
           if (isMoveUnderMode && isMoveUnderDropTarget) {
@@ -336,6 +348,7 @@ function SessionNode({
               </span>
             </span>
           )}
+          {/* Name + collapse indicator (always together, name shrinks) */}
           {isRenaming ? (
             <input
               autoFocus
@@ -350,10 +363,11 @@ function SessionNode({
               className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
             />
           ) : (
-            <span className={`flex-1 truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
+            <span className={`shrink truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
               {getSessionDisplayName(node.session)}
             </span>
           )}
+          {/* Status dot — right after name */}
           {node.session.isMain ? (
             <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
           ) : workerStatuses.get(node.session.filePath) === 'connected' ? (
@@ -364,18 +378,19 @@ function SessionNode({
             <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-red-500" />
           ) : null}
 
-          <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-            {formatRelativeTime(node.session.createdAt)}
-          </span>
-
+          {/* Collapse/expand arrow — always visible when collapsed, hover-only when expanded */}
           {hasChildren && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 setIsExpanded(!isExpanded)
               }}
-              className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
-              title={isExpanded ? 'Collapse' : 'Expand'}
+              className={`flex-shrink-0 rounded px-0.5 py-0.5 transition-colors ${
+                isExpanded
+                  ? 'text-gray-300 hover:text-gray-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+              title={isExpanded ? 'Collapse' : `Expand (${hiddenCount} hidden)`}
             >
               <svg
                 className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -390,6 +405,22 @@ function SessionNode({
               </svg>
             </button>
           )}
+          {/* Hidden count badge — only when collapsed with children */}
+          {hasChildren && !isExpanded && (
+            <span
+              className="flex-shrink-0 min-w-[1.25rem] h-[1.25rem] flex items-center justify-center rounded-full bg-gray-200/80 text-gray-500 text-[9px] font-semibold leading-none px-1"
+              title={`${hiddenCount} sub-session${hiddenCount > 1 ? 's' : ''} hidden`}
+            >
+              {hiddenCount}
+            </span>
+          )}
+
+          {/* Spacer to push right-side items to the end */}
+          <span className="flex-1 min-w-1" />
+
+          <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            {formatRelativeTime(node.session.createdAt)}
+          </span>
 
           {node.session.parentSessionPath && (
             <button
