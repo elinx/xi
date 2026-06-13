@@ -230,21 +230,6 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
   const lineCount = content.split('\n').length
   const firstLine = content.split('\n')[0] || 'Thinking...'
 
-  if (isStreaming) {
-    return (
-      <div className="py-1 border-l-3 border-violet-300 pl-3">
-        <div className="flex items-center gap-2 text-xs font-medium text-violet-500">
-          <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <span>Thinking...</span>
-          {content && <span className="flex-1 truncate text-violet-400 italic">{content.split('\n')[0]}</span>}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="py-1 border-l-3 border-violet-300 pl-3">
       <button
@@ -252,14 +237,22 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
         className="flex w-full items-center gap-2 text-left text-xs font-medium text-violet-500 hover:text-violet-700 transition-colors"
       >
         <svg
-          className={`h-3 w-3 transition-transform ${collapsed ? '' : 'rotate-90'}`}
+          className={`h-3 w-3 shrink-0 transition-transform ${collapsed ? '' : 'rotate-90'}`}
           fill="currentColor"
           viewBox="0 0 20 20"
         >
           <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
         </svg>
-        <span>Thinking</span>
-        <span className="text-violet-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
+        {isStreaming && (
+          <svg className="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )}
+        <span>{isStreaming ? 'Thinking...' : 'Thinking'}</span>
+        {!isStreaming && (
+          <span className="text-violet-400">({lineCount} line{lineCount !== 1 ? 's' : ''})</span>
+        )}
         {collapsed && firstLine && (
           <span className="flex-1 truncate text-violet-400 italic">{firstLine}</span>
         )}
@@ -267,6 +260,9 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
       {!collapsed && (
         <div className="whitespace-pre-wrap text-xs italic text-violet-500/70 leading-relaxed">
           {content}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-violet-400 animate-pulse align-text-bottom" />
+          )}
         </div>
       )}
     </div>
