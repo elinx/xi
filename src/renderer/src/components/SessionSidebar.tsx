@@ -363,10 +363,10 @@ function SessionNode({
                       ? 'bg-gray-100 text-gray-400'
                       : 'bg-gray-100 text-gray-900'
                     : isCompleted
-                      ? 'text-gray-400 hover:bg-gray-100/60 hover:text-gray-500'
+                      ? 'text-gray-400 hover:bg-blue-50/60 hover:text-gray-500 border-l-[3px] border-l-transparent hover:border-l-blue-400'
                       : hiddenCount > 0
-                        ? 'bg-gray-50/80 text-gray-700 hover:bg-gray-100/60 hover:text-gray-800'
-                        : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
+                        ? 'bg-gray-50/80 text-gray-700 hover:bg-blue-50/60 hover:text-gray-800 border-l-[3px] border-l-transparent hover:border-l-blue-400'
+                        : 'text-gray-600 hover:bg-blue-50/60 hover:text-gray-800 border-l-[3px] border-l-transparent hover:border-l-blue-400'
         }`}
         onClick={() => {
           if (isMoveUnderMode && isMoveUnderDropTarget) {
