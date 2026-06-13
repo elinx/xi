@@ -19,6 +19,8 @@ import type { ImageAnnotatorHandle } from './ImageAnnotator'
 import type { ViewMode } from '../utils/compact-view'
 import { groupByTurns, getUserSummary, getAgentSummary } from '../utils/compact-view'
 import type { ConversationTurn } from '../utils/compact-view'
+import PromptInspector, { InspectorErrorBoundary } from './PromptInspector'
+import type { PromptSnapshot } from '../types/pi-events'
 
 interface ChatViewProps {
   messages: ChatMessage[]
@@ -36,6 +38,8 @@ interface ChatViewProps {
   onForwardMessage?: (messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => void
   currentSessionPath?: string
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
+  onInspectPrompt?: (messageId: string) => Promise<PromptSnapshot | null>
+  captureEnabled?: boolean
 }
 
 function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
@@ -1090,6 +1094,8 @@ function TurnCard({
   onQuoteMessage,
   onForwardClick,
   sessions,
+  captureEnabled,
+  onInspect,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -1112,6 +1118,8 @@ function TurnCard({
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
   onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
+  captureEnabled?: boolean
+  onInspect?: (messageId: string) => void
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const allUserBlocks = turn.userMessage.blocks
@@ -1188,6 +1196,17 @@ function TurnCard({
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+        </button>
+      )}
+      {captureEnabled && !isStreaming && firstAgentMsg && onInspect && (
+        <button
+          onClick={() => onInspect(firstAgentMsg.id)}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Inspect prompt"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
         </button>
       )}
@@ -1411,7 +1430,7 @@ function SessionPickerModal({ sessions, currentSessionPath, onSelect, onClose }:
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
@@ -1426,6 +1445,9 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const [forkEntryId, setForkEntryId] = useState<string | null>(null)
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set())
   const [forwardingMessage, setForwardingMessage] = useState<{ id: string; role: 'user' | 'assistant'; content: string } | null>(null)
+  const [inspectorMessageId, setInspectorMessageId] = useState<string | null>(null)
+  const [inspectorSnapshot, setInspectorSnapshot] = useState<PromptSnapshot | null>(null)
+  const [inspectorLoading, setInspectorLoading] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -1482,6 +1504,18 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     setForkInputMessageId(null)
     setForkEntryId(null)
   }, [])
+
+  const handleInspect = useCallback(async (messageId: string) => {
+    setInspectorMessageId(messageId)
+    setInspectorSnapshot(null)
+    setInspectorLoading(true)
+    try {
+      const result = await onInspectPrompt?.(messageId) ?? null
+      setInspectorSnapshot(result)
+    } finally {
+      setInspectorLoading(false)
+    }
+  }, [onInspectPrompt])
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     const msgEl = (e.target as HTMLElement).closest('[data-msg-id]') as HTMLElement | null
@@ -1625,6 +1659,17 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       </svg>
                     </button>
                   )}
+                  {!isUser && captureEnabled && !isStreaming && (
+                    <button
+                      onClick={() => handleInspect(firstMsg.id)}
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      title="Inspect prompt"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
                     className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1751,6 +1796,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               onQuoteMessage={onQuoteMessage}
               onForwardClick={(id, role, content) => setForwardingMessage({ id, role, content })}
               sessions={sessions}
+              captureEnabled={captureEnabled}
+              onInspect={(id) => { handleInspect(id) }}
             />
           ))}
           <div ref={bottomRef} />
@@ -1844,6 +1891,21 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           />
         </>,
         document.body
+      )}
+      {inspectorMessageId && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/20"
+            onClick={() => { setInspectorMessageId(null); setInspectorSnapshot(null) }}
+          />
+          <InspectorErrorBoundary onClose={() => { setInspectorMessageId(null); setInspectorSnapshot(null) }}>
+            <PromptInspector
+              snapshot={inspectorSnapshot}
+              loading={inspectorLoading}
+              onClose={() => { setInspectorMessageId(null); setInspectorSnapshot(null) }}
+            />
+          </InspectorErrorBoundary>
+        </>
       )}
     </div>
   )

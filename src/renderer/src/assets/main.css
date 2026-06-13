@@ -43,3 +43,12 @@
   background-color: rgba(255, 200, 0, 0.15);
   transition: background-color 2s ease-out;
 }
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
