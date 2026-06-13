@@ -1199,6 +1199,35 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('session:clearMessages', async (_event, sessionPath: string) => {
+    try {
+      // 1. Rewrite the session file: keep header + session_info, remove messages + fork_points
+      const ok = sessionService.clearSessionMessages(sessionPath)
+      if (!ok) {
+        return { success: false, error: 'Failed to clear session file' }
+      }
+
+      // 2. If this is the worker's active session, tell it to reload from the cleared file
+      const primary = workerManager?.getPrimary()
+      if (primary?.bridge.isConnected) {
+        try {
+          const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+          const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
+          if (currentPath === sessionPath) {
+            // Reload the session so the worker picks up the cleared state
+            await primary.bridge.sendRpcCommand({ type: 'switch_session', sessionPath })
+          }
+        } catch {
+          // Worker might be in a different session — that's fine
+        }
+      }
+
+      return { success: true, sessionPath }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('session:getLastSession', () => {
     return sessionService.getLastSession(process.cwd())
   })

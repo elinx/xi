@@ -336,6 +336,48 @@ export function flushPendingName(sessionPath: string): boolean {
   }
 }
 
+/**
+ * Clear all messages and fork_points from a session file,
+ * keeping the header and session_info entries (name, status, parentSession).
+ * Returns true if the file was successfully rewritten.
+ */
+export function clearSessionMessages(sessionPath: string): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  try {
+    const content = readFileSync(sessionPath, 'utf-8')
+    const lines = content.split('\n').filter((line) => line.trim().length > 0)
+    if (lines.length === 0) return false
+
+    const kept: string[] = []
+    let hasHeader = false
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>
+        if (entry.type === 'session' && !hasHeader) {
+          // Keep the first session header
+          kept.push(line)
+          hasHeader = true
+        } else if (entry.type === 'session_info') {
+          // Keep name, status, parentSession metadata
+          kept.push(line)
+        }
+        // Skip: message, fork_point, and everything else
+      } catch {
+        // Unparseable line — skip
+      }
+    }
+
+    if (!hasHeader) return false
+
+    writeFileSync(sessionPath, kept.join('\n') + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function deleteSession(sessionPath: string, sessionDir?: string): boolean {
   if (!existsSync(sessionPath)) return false
 

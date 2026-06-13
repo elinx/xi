@@ -83,7 +83,7 @@ function App(): React.ReactElement {
   }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, ensureCacheSync, sessionCache.updateCache])
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled } = usePiRpc(piRpcOptions)
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, clearMessages: clearSessionMessages, refresh } = useSessionManager(isConnected)
 
   const displayedMessages = sessionCache.displayedMessages
   const displayedTokenUsage = sessionCache.displayedTokenUsage
@@ -978,6 +978,13 @@ function App(): React.ReactElement {
             onTabClick={setActiveTab}
             onTabClose={closeTab}
             onAddTab={handleAddTab}
+            onClearSession={async () => {
+              if (!activeSessionPath) return
+              const result = await clearSessionMessages(activeSessionPath)
+              if (result) {
+                clearMessages(result)
+              }
+            }}
           />
 
           <div className="flex-1 overflow-hidden relative">

@@ -94,6 +94,7 @@ export interface SessionIpcApi {
   deleteSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   getForkPoints: (sessionPath: string) => Promise<ForkPoint[]>
   clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string; sessionPath?: string }>
+  clearMessages: (sessionPath: string) => Promise<{ success: boolean; error?: string; sessionPath?: string }>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
   reparentSession: (sessionPath: string, newParentPath: string | null) => Promise<{ success: boolean; error?: string }>
 }

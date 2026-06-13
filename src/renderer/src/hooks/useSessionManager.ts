@@ -7,6 +7,7 @@ type ExtendedApi = typeof window.api & SessionIpcApi & {
   forkAtEntry: (sessionPath: string | null, entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
   renameSession: (sessionPath: string | null, name: string) => Promise<{ success: boolean; error?: string }>
   clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string }>
+  clearMessages: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
 }
 const api = window.api as ExtendedApi
@@ -27,6 +28,7 @@ interface UseSessionManagerReturn {
   refresh: () => Promise<void>
   getForkMessages: (sessionPath: string | null) => Promise<ForkableMessage[]>
   clearSession: (sessionPath: string | null) => Promise<string | null>
+  clearMessages: (sessionPath: string) => Promise<string | null>
 }
 
 export function useSessionManager(isConnected: boolean): UseSessionManagerReturn {
@@ -151,6 +153,19 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     }
   }, [loadSessions, loadCurrentSession])
 
+  const clearMessages = useCallback(async (sessionPath: string): Promise<string | null> => {
+    try {
+      const result = await api.clearMessages(sessionPath)
+      if (result.success) {
+        await loadSessions()
+        return result.sessionPath ?? null
+      }
+      return null
+    } catch {
+      return null
+    }
+  }, [loadSessions])
+
   useEffect(() => {
     loadSessions()
     if (isConnected) {
@@ -184,5 +199,6 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     refresh,
     getForkMessages,
     clearSession,
+    clearMessages,
   }
 }

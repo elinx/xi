@@ -101,6 +101,9 @@ const api = {
   clearSession: (sessionPath: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession', sessionPath),
 
+  clearMessages: (sessionPath: string): Promise<{ success: boolean; error?: string; sessionPath?: string }> =>
+    ipcRenderer.invoke('session:clearMessages', sessionPath),
+
   openDirectory: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('project:openDirectory'),
 
