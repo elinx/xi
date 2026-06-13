@@ -354,14 +354,14 @@ function SessionNode({
               ? 'bg-blue-50 ring-2 ring-blue-400 text-blue-900'
               : isCurrentDropTarget && (dropPosition === 'before' || dropPosition === 'after')
                 ? isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'bg-gray-50/60 text-gray-700'
+                  ? 'bg-blue-50/60 text-blue-900'
+                  : 'bg-blue-50/60 text-blue-900'
                 : isMoveUnderMode && isMoveUnderDropTarget
                   ? 'hover:bg-blue-100 hover:text-blue-900 ring-1 ring-blue-300 hover:ring-blue-500'
                   : isActive
                     ? isCompleted
-                      ? 'bg-gray-100 text-gray-400'
-                      : 'bg-gray-100 text-gray-900'
+                      ? 'bg-blue-50/40 text-gray-500'
+                      : 'bg-blue-50/80 text-blue-900'
                     : isCompleted
                       ? 'text-gray-400 hover:bg-blue-100/80 hover:text-gray-500'
                       : hiddenCount > 0
