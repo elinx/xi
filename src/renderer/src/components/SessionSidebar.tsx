@@ -354,19 +354,19 @@ function SessionNode({
               ? 'bg-blue-50 ring-2 ring-blue-400 text-blue-900'
               : isCurrentDropTarget && (dropPosition === 'before' || dropPosition === 'after')
                 ? isActive
-                  ? 'bg-blue-100/80 text-blue-900'
-                  : 'bg-blue-100/80 text-blue-900'
+                  ? 'bg-violet-100/80 text-violet-900'
+                  : 'bg-violet-100/80 text-violet-900'
                 : isMoveUnderMode && isMoveUnderDropTarget
-                  ? 'hover:bg-blue-100 hover:text-blue-900 ring-1 ring-blue-300 hover:ring-blue-500'
+                  ? 'hover:bg-violet-100 hover:text-violet-900 ring-1 ring-violet-300 hover:ring-violet-500'
                   : isActive
                     ? isCompleted
-                      ? 'bg-blue-100/50 text-gray-500'
-                      : 'bg-blue-100 text-blue-900'
+                      ? 'bg-violet-100/50 text-gray-500'
+                      : 'bg-violet-100 text-violet-900'
                     : isCompleted
-                      ? 'text-gray-400 hover:bg-blue-100/80 hover:text-gray-500'
+                      ? 'text-gray-400 hover:bg-violet-100/80 hover:text-gray-500'
                       : hiddenCount > 0
-                        ? 'bg-gray-50/80 text-gray-700 hover:bg-blue-100/80 hover:text-gray-800'
-                        : 'text-gray-600 hover:bg-blue-100/80 hover:text-gray-800'
+                        ? 'bg-gray-50/80 text-gray-700 hover:bg-violet-100/80 hover:text-gray-800'
+                        : 'text-gray-600 hover:bg-violet-100/80 hover:text-gray-800'
         }`}
         onClick={() => {
           if (isMoveUnderMode && isMoveUnderDropTarget) {
