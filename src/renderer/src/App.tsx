@@ -19,7 +19,7 @@ import SettingsPanel from './components/SettingsPanel'
 import CommandPalette from './components/CommandPalette'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage, TextBlock } from './types/message'
-import type { ForkPoint } from './types/session'
+import type { ForkPoint, SessionTreeNode } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
@@ -137,6 +137,14 @@ function App(): React.ReactElement {
   const resetTabs = useTabStore(s => s.resetTabs)
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isSessionTabActive = activeTab?.type === 'session'
+
+  // Trigger session tree scroll when switching back to session tab
+  const triggerSessionScroll = useLayoutStore(s => s.triggerSessionScroll)
+  useEffect(() => {
+    if (isSessionTabActive) {
+      triggerSessionScroll()
+    }
+  }, [isSessionTabActive, triggerSessionScroll])
 
   const [isLeftResizing, setIsLeftResizing] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -692,6 +700,27 @@ function App(): React.ReactElement {
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
   const projects = sessions?.projects ?? []
   const projectPath = projects[0]?.projectPath
+
+  // Session tree collapse/expand all
+  const collapseAllSessions = useLayoutStore(s => s.collapseAllSessions)
+  const expandAllSessions = useLayoutStore(s => s.expandAllSessions)
+  const sessionCollapsedPaths = useLayoutStore(s => s.sessionCollapsedPaths)
+  const sessionRoot = projects[0]?.root ?? null
+  // Collect expandable paths excluding root (main) — collapsing main would hide everything
+  const sessionExpandablePaths = useMemo(() => {
+    if (!sessionRoot) return []
+    const paths: string[] = []
+    const walk = (node: SessionTreeNode, isRoot: boolean) => {
+      if (!isRoot && node.children.length > 0) {
+        paths.push(node.session.filePath)
+      }
+      node.children.forEach(child => walk(child, false))
+    }
+    walk(sessionRoot, true)
+    return paths
+  }, [sessionRoot])
+  const isAllExpanded = sessionCollapsedPaths.length === 0
+
   const projectName = projectPath?.split(/[/\\]/).pop() ?? 'Sessions'
 
   const handleFileSelect = useCallback((filePath: string, scrollToLine?: number) => {
@@ -837,6 +866,31 @@ function App(): React.ReactElement {
                    </button>
                  )}
                 </div>
+                {sessionExpandablePaths.length > 0 && (
+                  <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
+                    <button
+                      onClick={() => {
+                        if (isAllExpanded) {
+                          collapseAllSessions(sessionExpandablePaths)
+                        } else {
+                          expandAllSessions()
+                        }
+                        triggerSessionScroll()
+                      }}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${isAllExpanded ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title={isAllExpanded ? 'Collapse all sessions' : 'Expand all sessions'}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                        {isAllExpanded ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l-3 3 3 3M15 9l3 3-3 3" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l3-3 3 3M9 15l3 3 3-3" />
+                        )}
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 {isSessionTabActive && (
                   <div className="flex items-center rounded-md border border-gray-200 bg-gray-100 p-0.5">
                     <button

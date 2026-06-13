@@ -2,6 +2,26 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
 import { getSessionDisplayName } from '../utils/session-utils'
+import { useLayoutStore } from '../hooks/useLayoutStore'
+
+/** Collect all ancestor paths from root to the given target session path (exclusive of target, inclusive of root). */
+function getAncestorPaths(root: SessionTreeNode | null, targetPath: string): string[] {
+  if (!root) return []
+  const result: string[] = []
+  function walk(node: SessionTreeNode, path: string[]): boolean {
+    const currentPath = [...path, node.session.filePath]
+    if (node.session.filePath === targetPath) {
+      result.push(...currentPath)
+      return true
+    }
+    for (const child of node.children) {
+      if (walk(child, currentPath)) return true
+    }
+    return false
+  }
+  walk(root, [])
+  return result
+}
 
 interface SessionSidebarProps {
   sessions: SessionListResult | null
@@ -718,38 +738,45 @@ function SessionSidebar({
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
   const [moveUnderTarget, setMoveUnderTarget] = useState<string | null>(null)
 
-  // Collapsed state persistence
-  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('xi-session-collapsed-paths')
-      if (stored) {
-        return new Set(JSON.parse(stored) as string[])
+  const projects = sessions?.projects ?? []
+  const root = projects[0]?.root ?? null
+
+  // Collapsed state from layout store (shared with App.tsx toolbar)
+  const sessionCollapsedPathsArr = useLayoutStore(s => s.sessionCollapsedPaths)
+  const toggleSessionCollapsed = useLayoutStore(s => s.toggleSessionCollapsed)
+  const expandSessionPaths = useLayoutStore(s => s.expandSessionPaths)
+  const sessionScrollTrigger = useLayoutStore(s => s.sessionScrollTrigger)
+  const collapsedPaths = new Set(sessionCollapsedPathsArr)
+  const handleToggleCollapsed = toggleSessionCollapsed
+
+  // Auto-scroll to active session: expand ancestors + scroll into view
+  const activeSessionPath = displayedSessionPath ?? currentSession?.filePath ?? null
+  useEffect(() => {
+    if (!activeSessionPath || !root) return
+
+    // Expand ancestors of the active session so it's visible in the DOM
+    const ancestors = getAncestorPaths(root, activeSessionPath)
+    const needsExpand = ancestors.filter(p => collapsedPaths.has(p))
+    if (needsExpand.length > 0) {
+      expandSessionPaths(needsExpand)
+    }
+
+    // Scroll after a frame to allow React to re-render expanded nodes
+    const frameId = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-session-row="${CSS.escape(activeSessionPath)}"]`)
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
       }
-    } catch { /* ignore */ }
-    return new Set()
-  })
-  const handleToggleCollapsed = useCallback((sessionPath: string) => {
-    setCollapsedPaths(prev => {
-      const next = new Set(prev)
-      if (next.has(sessionPath)) {
-        next.delete(sessionPath)
-      } else {
-        next.add(sessionPath)
-      }
-      try {
-        localStorage.setItem('xi-session-collapsed-paths', JSON.stringify([...next]))
-      } catch { /* ignore */ }
-      return next
     })
-  }, [])
+
+    return () => cancelAnimationFrame(frameId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionPath, root, sessionScrollTrigger])
 
   // Drag state
   const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
   const [dropTargetInfo, setDropTargetInfo] = useState<{ path: string; position: DropPosition } | null>(null)
   const [dragDescendantPaths, setDragDescendantPaths] = useState<Set<string>>(new Set())
-
-  const projects = sessions?.projects ?? []
-  const root = projects[0]?.root ?? null
 
   // Build session map for looking up parent paths
   const sessionMap = useCallback(() => {
