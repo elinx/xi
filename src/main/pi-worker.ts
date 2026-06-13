@@ -54,8 +54,8 @@ function createSearchSessionsTool(cwd: string) {
     required: ['query'],
   }
   return {
-    name: 'searchSessions',
-    label: 'searchSessions',
+    name: 'search_sessions',
+    label: 'search_sessions',
     description:
       'Search sessions in the current project by name or content. ' +
       'Returns matching session names, file paths, and relevant message excerpts. ' +
@@ -258,7 +258,7 @@ async function init(data: WorkerInit): Promise<void> {
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'searchSessions'],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions'],
         customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd)],
       })),
       services,
