@@ -1130,10 +1130,13 @@ function TurnCard({
   const agentTextContent = agentTextBlocks.map((b) => b.content).join('\n')
   const firstAgentMsg = turn.assistantMessages[0]
 
+  const isUserStreaming = isStreaming && streamingMessageId != null && turn.userMessage.id === streamingMessageId
+  const isAgentStreaming = isStreaming && (streamingMessageId != null ? turn.assistantMessages.some(m => m.id === streamingMessageId) : true)
+
   const userActions = (
     <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
       <CopyButton blocks={allUserBlocks} />
-      {onQuoteMessage && !isStreaming && (
+      {onQuoteMessage && !isUserStreaming && (
         <button
           onClick={() => onQuoteMessage(turn.userMessage.id, 'user', userTextContent, turn.userMessage.timestamp ?? Date.now())}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1144,7 +1147,7 @@ function TurnCard({
           </svg>
         </button>
       )}
-      {onForwardClick && sessions && !isStreaming && (
+      {onForwardClick && sessions && !isUserStreaming && (
         <button
           onClick={() => onForwardClick(turn.userMessage.id, 'user', userTextContent)}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1155,7 +1158,7 @@ function TurnCard({
           </svg>
         </button>
       )}
-      {captureEnabled && !isStreaming && onInspect && (
+      {captureEnabled && !isUserStreaming && onInspect && (
         <button
           onClick={() => onInspect(turn.userMessage.id)}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1186,9 +1189,9 @@ function TurnCard({
   )
 
   const agentActions = (
-    <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-      <CopyButton blocks={allAgentBlocks} />
-      {onQuoteMessage && !isStreaming && firstAgentMsg && (
+    <div className={`relative flex items-center gap-0.5 transition-opacity flex-shrink-0 mt-0.5 ${isAgentStreaming ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
+      {!isAgentStreaming && <CopyButton blocks={allAgentBlocks} />}
+      {onQuoteMessage && !isAgentStreaming && firstAgentMsg && (
         <button
           onClick={() => onQuoteMessage(firstAgentMsg.id, 'assistant', agentTextContent, firstAgentMsg.timestamp ?? Date.now())}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1199,7 +1202,7 @@ function TurnCard({
           </svg>
         </button>
       )}
-      {onForwardClick && sessions && !isStreaming && firstAgentMsg && (
+      {onForwardClick && sessions && !isAgentStreaming && firstAgentMsg && (
         <button
           onClick={() => onForwardClick(firstAgentMsg.id, 'assistant', agentTextContent)}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1210,7 +1213,7 @@ function TurnCard({
           </svg>
         </button>
       )}
-      {firstAgentMsg && (
+      {firstAgentMsg && !isAgentStreaming && (
         <button
           onClick={() => onForkClick(firstAgentMsg.id, firstAgentMsg.piEntryId)}
           className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1221,7 +1224,7 @@ function TurnCard({
           </svg>
         </button>
       )}
-      {firstAgentMsg && forkInputMessageId === firstAgentMsg.id && forkEntryId && (
+      {firstAgentMsg && !isAgentStreaming && forkInputMessageId === firstAgentMsg.id && forkEntryId && (
         <ForkNameInput
           onForkAtEntry={onForkAtEntry}
           onClose={onForkClose}
@@ -1633,11 +1636,12 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               const msgForkPoints = forkPoints.filter((fp) => group.msgs.some((m) => m.piEntryId === fp.entryId))
               const msgTextBlocks = allBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
               const msgTextContent = msgTextBlocks.map((b) => b.content).join('\n')
+              const isGroupStreaming = isStreaming && (streamingMessageId != null ? group.msgs.some(m => m.id === streamingMessageId) : !isUser)
 
               const actions = (
-                <div className="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-                  <CopyButton blocks={allBlocks} />
-                  {onQuoteMessage && !isStreaming && (
+                <div className={`relative flex items-center gap-0.5 transition-opacity flex-shrink-0 mt-0.5 ${isGroupStreaming ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
+                  {!isGroupStreaming && <CopyButton blocks={allBlocks} />}
+                  {onQuoteMessage && !isGroupStreaming && (
                     <button
                       onClick={() => onQuoteMessage(firstMsg.id, isUser ? 'user' : 'assistant', msgTextContent, firstMsg.timestamp ?? Date.now())}
                       className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1648,7 +1652,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       </svg>
                     </button>
                   )}
-                  {onForwardMessage && sessions && !isStreaming && (
+                  {onForwardMessage && sessions && !isGroupStreaming && (
                     <button
                       onClick={() => setForwardingMessage({ id: firstMsg.id, role: isUser ? 'user' : 'assistant', content: msgTextContent })}
                       className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1659,7 +1663,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       </svg>
                     </button>
                   )}
-                  {isUser && captureEnabled && !isStreaming && (
+                  {isUser && captureEnabled && !isGroupStreaming && (
                     <button
                       onClick={() => handleInspect(firstMsg.id)}
                       className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1670,6 +1674,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       </svg>
                     </button>
                   )}
+                  {!isGroupStreaming && (
                   <button
                     onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
                     className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1679,7 +1684,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 001.5 0zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
                     </svg>
                   </button>
-                  {forkInputMessageId === firstMsg.id && forkEntryId && (
+                  )}
+                  {!isGroupStreaming && forkInputMessageId === firstMsg.id && forkEntryId && (
                     <ForkNameInput
                       onForkAtEntry={onForkAtEntry}
                       onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
@@ -1866,7 +1872,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             y={contextMenu.y}
             messageBlocks={contextMenu.messageBlocks}
             messageRole={contextMenu.messageRole}
-            isStreaming={isStreaming}
+            isStreaming={isStreaming && (streamingMessageId != null ? contextMenu.messageId === streamingMessageId : contextMenu.messageRole === 'assistant')}
             onQuote={() => {
               if (!onQuoteMessage) return
               const textContent = contextMenu.messageBlocks
