@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
 import { getSessionDisplayName } from '../utils/session-utils'
@@ -21,6 +21,27 @@ function getAncestorPaths(root: SessionTreeNode | null, targetPath: string): str
   }
   walk(root, [])
   return result
+}
+
+/** Get ancestor chain from root to target (inclusive of root, exclusive of target), ordered root → direct parent. */
+function getAncestorChain(
+  root: SessionTreeNode | null,
+  targetPath: string
+): SessionInfo[] {
+  if (!root) return []
+  const result: SessionInfo[] = []
+  function walk(node: SessionTreeNode): boolean {
+    if (node.session.filePath === targetPath) return true
+    for (const child of node.children) {
+      if (walk(child)) {
+        result.push(node.session)
+        return true
+      }
+    }
+    return false
+  }
+  walk(root)
+  return result.reverse()
 }
 
 interface SessionSidebarProps {
@@ -711,6 +732,46 @@ function SessionNode({
   )
 }
 
+function FloatingParentStack({
+  ancestors,
+  onSwitch,
+}: {
+  ancestors: SessionInfo[]
+  onSwitch: (path: string) => void
+}) {
+  if (ancestors.length === 0) return null
+
+  const ROW_H = 26
+
+  return (
+    <div className="absolute left-0 right-0 top-0 z-10 flex flex-col shadow-sm">
+      {ancestors.map((ancestor, i) => {
+        const isDirectParent = i === ancestors.length - 1
+        return (
+          <div
+            key={ancestor.filePath}
+            className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors ${
+              isDirectParent
+                ? 'bg-white border-b border-gray-200/80 text-gray-700 font-medium hover:bg-gray-50'
+                : 'bg-white/95 border-b border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            }`}
+            style={{ height: ROW_H, paddingLeft: 8 + i * 16, paddingRight: 8 }}
+            onClick={() => onSwitch(ancestor.filePath)}
+            title={getSessionDisplayName(ancestor)}
+          >
+            <span
+              className={`flex-shrink-0 h-1.5 w-1.5 rounded-full bg-gray-300`}
+            />
+            <span className="truncate">
+              {ancestor.isMain ? 'main' : getSessionDisplayName(ancestor)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function SessionSidebar({
   sessions,
   currentSession,
@@ -751,6 +812,45 @@ function SessionSidebar({
 
   // Auto-scroll to active session: expand ancestors + scroll into view
   const activeSessionPath = displayedSessionPath ?? currentSession?.filePath ?? null
+
+  // Floating parent stack: compute ancestor chain for active session
+  const ancestorChain = useMemo(() => {
+    if (!activeSessionPath || !root) return []
+    return getAncestorChain(root, activeSessionPath)
+  }, [activeSessionPath, root])
+
+  // Track whether ancestor nodes are scrolled out of the scroll viewport
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [ancestorsHidden, setAncestorsHidden] = useState(false)
+
+  useEffect(() => {
+    if (ancestorChain.length === 0 || !scrollRef.current) {
+      setAncestorsHidden(false)
+      return
+    }
+    const container = scrollRef.current
+    const ancestorPaths = ancestorChain.map(a => a.filePath)
+
+    const check = () => {
+      const containerRect = container.getBoundingClientRect()
+      const anyHidden = ancestorPaths.some(p => {
+        const el = container.querySelector(`[data-session-row="${CSS.escape(p)}"]`) as HTMLElement | null
+        if (!el) return true
+        const elRect = el.getBoundingClientRect()
+        return elRect.bottom < containerRect.top || elRect.top > containerRect.bottom
+      })
+      setAncestorsHidden(anyHidden)
+    }
+
+    // Initial check after DOM is ready
+    const frameId = requestAnimationFrame(check)
+    container.addEventListener('scroll', check, { passive: true })
+    return () => {
+      cancelAnimationFrame(frameId)
+      container.removeEventListener('scroll', check)
+    }
+  }, [ancestorChain])
+
   useEffect(() => {
     if (!activeSessionPath || !root) return
 
@@ -909,7 +1009,7 @@ function SessionSidebar({
 
   return (
     <div
-      className="relative flex flex-col bg-gray-50 overflow-hidden"
+      className="relative flex flex-col bg-gray-50 overflow-hidden h-full"
       style={{ width: `${width}px` }}
     >
       {moveUnderTarget && (
@@ -926,21 +1026,28 @@ function SessionSidebar({
           </button>
         </div>
       )}
-      <div
-        className="flex-1 overflow-y-auto py-2"
-        onDragOver={(e) => {
-          // Allow drop on background (empty area)
-          if (dragSourcePath) {
+      {/* Scroll area wrapper — provides positioning context for floating overlay */}
+      <div className="relative flex-1 min-h-0">
+        {/* Floating parent stack — absolute overlay on top of scroll area */}
+        {!moveUnderTarget && ancestorChain.length > 0 && ancestorsHidden && (
+          <FloatingParentStack ancestors={ancestorChain} onSwitch={onSwitchSession} />
+        )}
+        <div
+          ref={scrollRef}
+          className="h-full overflow-y-auto py-2"
+          onDragOver={(e) => {
+            // Allow drop on background (empty area)
+            if (dragSourcePath) {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+            }
+          }}
+          onDrop={(e) => {
             e.preventDefault()
-            e.dataTransfer.dropEffect = 'move'
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault()
-          // Only handle background drops (session nodes stopPropagation)
-          handleDropOnBackground()
-        }}
-      >
+            // Only handle background drops (session nodes stopPropagation)
+            handleDropOnBackground()
+          }}
+        >
         {projects.length === 0 || !root ? (
           <div className="px-3 py-6 text-center text-xs text-gray-600">
             No sessions found
@@ -980,6 +1087,7 @@ function SessionSidebar({
           />
         )}
       </div>
+      </div>{/* end scroll area wrapper */}
 
       {/* Background drop hint when dragging */}
       {dragSourcePath && (
