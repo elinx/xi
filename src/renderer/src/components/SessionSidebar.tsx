@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
 import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
 import { getSessionDisplayName } from '../utils/session-utils'
@@ -45,7 +45,32 @@ function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): bool
   return node.children.some((child) => isDescendantOf(child, sessionPath))
 }
 
+/** Find a tree node by session file path. */
+function findNodeInTree(root: SessionTreeNode | null, path: string): SessionTreeNode | null {
+  if (!root) return null
+  if (root.session.filePath === path) return root
+  for (const child of root.children) {
+    const found = findNodeInTree(child, path)
+    if (found) return found
+  }
+  return null
+}
 
+/** Collect all descendant file paths of a tree node (not including the node itself). */
+function computeDescendantPaths(node: SessionTreeNode): Set<string> {
+  const paths = new Set<string>()
+  const walk = (n: SessionTreeNode) => {
+    for (const child of n.children) {
+      paths.add(child.session.filePath)
+      walk(child)
+    }
+  }
+  walk(node)
+  return paths
+}
+
+/** Drop position within a target row. */
+type DropPosition = 'before' | 'child' | 'after'
 
 function SessionNode({
   node,
@@ -69,6 +94,14 @@ function SessionNode({
   onMoveUnderTargetChange,
   onMoveUnderConfirm,
   onMoveUnderCancel,
+  // Drag props
+  dragSourcePath,
+  dropTargetInfo,
+  dragDescendantPaths,
+  onDragSessionStart,
+  onDragSessionEnd,
+  onDropTargetChange,
+  onDropOnSession,
 }: {
   node: SessionTreeNode
   ancestorLines: { hasLine: boolean; highlight: boolean; branchActive: boolean }[]
@@ -87,10 +120,18 @@ function SessionNode({
   onRenameTriggered: () => void
   triggerForkPath: string | null
   onForkTriggered: () => void
-  moveUnderTarget: string | null  // session path being moved in 'move under' mode
+  moveUnderTarget: string | null
   onMoveUnderTargetChange: (path: string | null) => void
   onMoveUnderConfirm: (sessionPath: string, newParentPath: string) => void
   onMoveUnderCancel: () => void
+  // Drag props
+  dragSourcePath: string | null
+  dropTargetInfo: { path: string; position: DropPosition } | null
+  dragDescendantPaths: Set<string>
+  onDragSessionStart: (path: string) => void
+  onDragSessionEnd: () => void
+  onDropTargetChange: (info: { path: string; position: DropPosition } | null) => void
+  onDropOnSession: (sourcePath: string, targetPath: string, position: DropPosition) => void
 }): React.ReactElement {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -103,6 +144,15 @@ function SessionNode({
   const isCompleted = node.session.status === 'completed'
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
+
+  // Auto-expand timer for drag hover
+  const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (triggerRenamePath === node.session.filePath) {
@@ -150,23 +200,117 @@ function SessionNode({
   const isMoveUnderMode = moveUnderTarget !== null
   const isMoveUnderDropTarget = isMoveUnderMode && moveUnderTarget !== node.session.filePath
 
+  // Drag state
+  const canDrag = !node.session.isMain && !isRenaming && !isMoveUnderMode && !isForking && !isCreatingChild
+  const isDragging = dragSourcePath === node.session.filePath
+  const isCurrentDropTarget = dropTargetInfo?.path === node.session.filePath
+  const isInvalidDropTarget = dragSourcePath !== null &&
+    dragSourcePath !== node.session.filePath &&
+    dragDescendantPaths.has(node.session.filePath)
+
+  // Compute drop position from cursor Y relative to row
+  const computeDropPosition = useCallback((clientY: number, rect: DOMRect): DropPosition | null => {
+    const y = clientY - rect.top
+    const h = rect.height
+    if (y < h / 3) return 'before'
+    if (y > h * 2 / 3) return 'after'
+    return 'child'
+  }, [])
+
+  // Is this a valid drop? (not self, not descendant, not dropping before/after main)
+  const isValidDrop = useCallback((position: DropPosition): boolean => {
+    if (!dragSourcePath) return false
+    if (dragSourcePath === node.session.filePath) return false
+    if (isInvalidDropTarget) return false
+    // Can't insert as sibling of main (main has no parent)
+    if (node.session.isMain && position !== 'child') return false
+    return true
+  }, [dragSourcePath, node.session.filePath, node.session.isMain, isInvalidDropTarget])
+
+  // Clear auto-expand timer helper
+  const clearAutoExpandTimer = useCallback(() => {
+    if (autoExpandTimerRef.current) {
+      clearTimeout(autoExpandTimerRef.current)
+      autoExpandTimerRef.current = null
+    }
+  }, [])
+
+  const dropPosition = isCurrentDropTarget ? dropTargetInfo.position : null
+
   return (
-    <div>
+    <div className="relative">
+      {/* Drop indicator line - before */}
+      {dropPosition === 'before' && (
+        <div className="absolute top-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full z-10" style={{ marginTop: '-1px' }} />
+      )}
+
       <div
+        data-session-row={node.session.filePath}
+        draggable={canDrag}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', node.session.filePath)
+          onDragSessionStart(node.session.filePath)
+        }}
+        onDragOver={(e) => {
+          e.stopPropagation()
+          const pos = computeDropPosition(e.clientY, e.currentTarget.getBoundingClientRect())
+          if (!pos || !isValidDrop(pos)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          // Only update if changed
+          if (dropTargetInfo?.path !== node.session.filePath || dropTargetInfo?.position !== pos) {
+            onDropTargetChange({ path: node.session.filePath, position: pos })
+          }
+          // Auto-expand collapsed nodes after 500ms hover
+          if (!isExpanded && hasChildren && autoExpandTimerRef.current === null) {
+            autoExpandTimerRef.current = setTimeout(() => {
+              setIsExpanded(true)
+              autoExpandTimerRef.current = null
+            }, 500)
+          }
+        }}
+        onDragLeave={(e) => {
+          const relatedTarget = e.relatedTarget as Node | null
+          if (relatedTarget && e.currentTarget.contains(relatedTarget)) return
+          if (isCurrentDropTarget) {
+            onDropTargetChange(null)
+          }
+          clearAutoExpandTimer()
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          clearAutoExpandTimer()
+          if (dragSourcePath && isCurrentDropTarget && dropTargetInfo) {
+            onDropOnSession(dragSourcePath, dropTargetInfo.path, dropTargetInfo.position)
+          }
+        }}
+        onDragEnd={() => {
+          onDragSessionEnd()
+          clearAutoExpandTimer()
+        }}
         className={`group flex items-center rounded cursor-pointer transition-colors ${
-          isMoveUnderMode && isMoveUnderDropTarget
-            ? 'hover:bg-blue-100 hover:text-blue-900 ring-1 ring-blue-300 hover:ring-blue-500'
-            : isActive
-              ? isCompleted
-                ? 'bg-gray-100 text-gray-400'
-                : 'bg-gray-100 text-gray-900'
-              : isCompleted
-                ? 'text-gray-400 hover:bg-gray-100/60 hover:text-gray-500'
-                : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
+          isDragging
+            ? 'opacity-40'
+            : isCurrentDropTarget && dropPosition === 'child'
+              ? 'bg-blue-50 ring-2 ring-blue-400 text-blue-900'
+              : isCurrentDropTarget && (dropPosition === 'before' || dropPosition === 'after')
+                ? isActive
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'bg-gray-50/60 text-gray-700'
+                : isMoveUnderMode && isMoveUnderDropTarget
+                  ? 'hover:bg-blue-100 hover:text-blue-900 ring-1 ring-blue-300 hover:ring-blue-500'
+                  : isActive
+                    ? isCompleted
+                      ? 'bg-gray-100 text-gray-400'
+                      : 'bg-gray-100 text-gray-900'
+                    : isCompleted
+                      ? 'text-gray-400 hover:bg-gray-100/60 hover:text-gray-500'
+                      : 'text-gray-600 hover:bg-gray-100/60 hover:text-gray-800'
         }`}
         onClick={() => {
           if (isMoveUnderMode && isMoveUnderDropTarget) {
-            console.log('[MoveUnder] confirm:', moveUnderTarget, '->', node.session.filePath)
             onMoveUnderConfirm(moveUnderTarget!, node.session.filePath)
           } else {
             onSwitch(node.session.filePath)
@@ -177,6 +321,23 @@ function SessionNode({
       >
         <TreeGraphRow guides={guides}>
           <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
+          {/* Drag handle grip icon */}
+          {canDrag && (
+            <span className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 hover:text-gray-600 transition-opacity cursor-grab active:cursor-grabbing">
+              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="5" cy="3" r="1.5" />
+                <circle cx="11" cy="3" r="1.5" />
+                <circle cx="5" cy="8" r="1.5" />
+                <circle cx="11" cy="8" r="1.5" />
+                <circle cx="5" cy="13" r="1.5" />
+                <circle cx="11" cy="13" r="1.5" />
+              </svg>
+            </span>
+          )}
+          {/* Main session spacer to align with drag handle */}
+          {!canDrag && dragSourcePath !== null && (
+            <span className="flex-shrink-0 w-3" />
+          )}
           {isRenaming ? (
             <input
               autoFocus
@@ -313,6 +474,11 @@ function SessionNode({
           </div>
         </TreeGraphRow>
       </div>
+
+      {/* Drop indicator line - after */}
+      {dropPosition === 'after' && (
+        <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full z-10" style={{ marginBottom: '-1px' }} />
+      )}
 
       {isForking && (
         <div
@@ -472,6 +638,13 @@ function SessionNode({
                 onMoveUnderTargetChange={onMoveUnderTargetChange}
                 onMoveUnderConfirm={onMoveUnderConfirm}
                 onMoveUnderCancel={onMoveUnderCancel}
+                dragSourcePath={dragSourcePath}
+                dropTargetInfo={dropTargetInfo}
+                dragDescendantPaths={dragDescendantPaths}
+                onDragSessionStart={onDragSessionStart}
+                onDragSessionEnd={onDragSessionEnd}
+                onDropTargetChange={onDropTargetChange}
+                onDropOnSession={onDropOnSession}
               />
             )
           })}
@@ -508,18 +681,87 @@ function SessionSidebar({
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
   const [moveUnderTarget, setMoveUnderTarget] = useState<string | null>(null)
 
+  // Drag state
+  const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
+  const [dropTargetInfo, setDropTargetInfo] = useState<{ path: string; position: DropPosition } | null>(null)
+  const [dragDescendantPaths, setDragDescendantPaths] = useState<Set<string>>(new Set())
+
+  const projects = sessions?.projects ?? []
+  const root = projects[0]?.root ?? null
+
+  // Build session map for looking up parent paths
+  const sessionMap = useCallback(() => {
+    const map = new Map<string, SessionInfo>()
+    if (sessions?.projects) {
+      for (const p of sessions.projects) {
+        for (const s of p.allSessions) {
+          map.set(s.filePath, s)
+        }
+      }
+    }
+    return map
+  }, [sessions])
+
   const handleMoveUnderConfirm = useCallback(async (sessionPath: string, newParentPath: string) => {
-    console.log('[MoveUnder] handleMoveUnderConfirm:', sessionPath, '->', newParentPath)
     const ok = await onReparentSession(sessionPath, newParentPath)
-    console.log('[MoveUnder] result:', ok)
     setMoveUnderTarget(null)
     if (!ok) {
       // TODO: show error toast
     }
   }, [onReparentSession])
 
-  const projects = sessions?.projects ?? []
-  const root = projects[0]?.root ?? null
+  // Drag callbacks
+  const handleDragSessionStart = useCallback((path: string) => {
+    setDragSourcePath(path)
+    setDropTargetInfo(null)
+    if (root) {
+      const sourceNode = findNodeInTree(root, path)
+      if (sourceNode) {
+        setDragDescendantPaths(computeDescendantPaths(sourceNode))
+      }
+    }
+  }, [root])
+
+  const handleDragSessionEnd = useCallback(() => {
+    setDragSourcePath(null)
+    setDropTargetInfo(null)
+    setDragDescendantPaths(new Set())
+  }, [])
+
+  const handleDropTargetChange = useCallback((info: { path: string; position: DropPosition } | null) => {
+    setDropTargetInfo(info)
+  }, [])
+
+  const handleDropOnSession = useCallback(async (sourcePath: string, targetPath: string, position: DropPosition) => {
+    let newParentPath: string | null
+    if (position === 'child') {
+      newParentPath = targetPath
+    } else {
+      // 'before' or 'after': become sibling of target (same parent as target)
+      const sMap = sessionMap()
+      const targetSession = sMap.get(targetPath)
+      newParentPath = targetSession?.parentSessionPath ?? null
+    }
+
+    // Skip if no change
+    const sMap = sessionMap()
+    const sourceSession = sMap.get(sourcePath)
+    if (sourceSession && sourceSession.parentSessionPath === newParentPath && position === 'child') {
+      // Already a child of the target, no-op
+      handleDragSessionEnd()
+      return
+    }
+
+    await onReparentSession(sourcePath, newParentPath)
+    handleDragSessionEnd()
+  }, [onReparentSession, sessionMap, handleDragSessionEnd])
+
+  const handleDropOnBackground = useCallback(async () => {
+    if (dragSourcePath) {
+      await onReparentSession(dragSourcePath, null)
+      handleDragSessionEnd()
+    }
+  }, [dragSourcePath, onReparentSession, handleDragSessionEnd])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, session: SessionInfo) => {
     e.preventDefault()
@@ -595,7 +837,21 @@ function SessionSidebar({
           </button>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto py-2">
+      <div
+        className="flex-1 overflow-y-auto py-2"
+        onDragOver={(e) => {
+          // Allow drop on background (empty area)
+          if (dragSourcePath) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          // Only handle background drops (session nodes stopPropagation)
+          handleDropOnBackground()
+        }}
+      >
         {projects.length === 0 || !root ? (
           <div className="px-3 py-6 text-center text-xs text-gray-600">
             No sessions found
@@ -623,9 +879,23 @@ function SessionSidebar({
             onMoveUnderTargetChange={setMoveUnderTarget}
             onMoveUnderConfirm={handleMoveUnderConfirm}
             onMoveUnderCancel={() => setMoveUnderTarget(null)}
+            dragSourcePath={dragSourcePath}
+            dropTargetInfo={dropTargetInfo}
+            dragDescendantPaths={dragDescendantPaths}
+            onDragSessionStart={handleDragSessionStart}
+            onDragSessionEnd={handleDragSessionEnd}
+            onDropTargetChange={handleDropTargetChange}
+            onDropOnSession={handleDropOnSession}
           />
         )}
       </div>
+
+      {/* Background drop hint when dragging */}
+      {dragSourcePath && (
+        <div className="px-3 py-1.5 text-[10px] text-gray-400 text-center border-t border-dashed border-gray-200 flex-shrink-0">
+          Drop on empty area to detach from parent
+        </div>
+      )}
 
       <div
         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:w-1.5 hover:bg-blue-500/30 transition-all z-10"
@@ -693,7 +963,6 @@ function SessionSidebar({
             <button
               className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
               onClick={() => {
-                console.log('[MoveUnder] starting move-under for:', contextMenu.session.filePath)
                 setMoveUnderTarget(contextMenu.session.filePath)
                 setContextMenu(null)
               }}
