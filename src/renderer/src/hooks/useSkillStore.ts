@@ -58,17 +58,17 @@ export function inferHarness(filePath: string, _baseDir: string): string {
 }
 
 /** Harness label config for UI rendering */
-export const HARNESS_CONFIG: Record<string, { label: string; className: string; icon: string; order: number; border: string; bg: string; text: string }> = {
-  xi:       { label: 'Xi',       className: 'bg-violet-50 text-violet-600', icon: 'ξ', order: 0, border: 'border-violet-400', bg: 'bg-violet-50/50', text: 'text-violet-700' },
-  pi:       { label: 'Xi',       className: 'bg-violet-50 text-violet-600', icon: 'ξ', order: 0, border: 'border-violet-400', bg: 'bg-violet-50/50', text: 'text-violet-700' },
-  claude:   { label: 'Claude',   className: 'bg-orange-50 text-orange-600', icon: 'C', order: 1, border: 'border-orange-400', bg: 'bg-orange-50/50', text: 'text-orange-700' },
-  codex:    { label: 'Codex',    className: 'bg-green-50 text-green-600',   icon: '◆', order: 2, border: 'border-green-400', bg: 'bg-green-50/50',  text: 'text-green-700' },
-  opencode: { label: 'OpenCode', className: 'bg-teal-50 text-teal-600',     icon: '◎', order: 3, border: 'border-teal-400',  bg: 'bg-teal-50/50',   text: 'text-teal-700' },
-  agents:   { label: 'Agents',   className: 'bg-gray-100 text-gray-500',    icon: '⚡', order: 4, border: 'border-gray-400',  bg: 'bg-gray-50/50',   text: 'text-gray-700' },
-  npm:      { label: 'npm',      className: 'bg-red-50 text-red-600',       icon: '📦', order: 5, border: 'border-red-400',   bg: 'bg-red-50/50',    text: 'text-red-700' },
-  git:      { label: 'git',      className: 'bg-amber-50 text-amber-600',   icon: '📦', order: 6, border: 'border-amber-400', bg: 'bg-amber-50/50',  text: 'text-amber-700' },
-  cli:      { label: 'CLI',      className: 'bg-amber-50 text-amber-600',   icon: '>',  order: 7, border: 'border-amber-400', bg: 'bg-amber-50/50',  text: 'text-amber-700' },
-  unknown:  { label: 'Other',    className: 'bg-gray-100 text-gray-500',    icon: '?',  order: 8, border: 'border-gray-300',  bg: 'bg-gray-50/50',   text: 'text-gray-700' },
+export const HARNESS_CONFIG: Record<string, { label: string; className: string; icon: string; order: number; border: string; bg: string; text: string; mutedBg: string; mutedBorder: string; mutedText: string }> = {
+  xi:       { label: 'Xi',       className: 'bg-violet-50 text-violet-600', icon: 'ξ', order: 0, border: 'border-violet-400', bg: 'bg-violet-50/50', text: 'text-violet-700', mutedBg: 'bg-violet-50/30', mutedBorder: 'border-violet-300', mutedText: 'text-violet-500' },
+  pi:       { label: 'Xi',       className: 'bg-violet-50 text-violet-600', icon: 'ξ', order: 0, border: 'border-violet-400', bg: 'bg-violet-50/50', text: 'text-violet-700', mutedBg: 'bg-violet-50/30', mutedBorder: 'border-violet-300', mutedText: 'text-violet-500' },
+  claude:   { label: 'Claude',   className: 'bg-amber-50 text-amber-700',  icon: 'C', order: 1, border: 'border-amber-400', bg: 'bg-amber-50/50', text: 'text-amber-700', mutedBg: 'bg-amber-50/30', mutedBorder: 'border-amber-300', mutedText: 'text-amber-600' },
+  codex:    { label: 'Codex',    className: 'bg-sky-50 text-sky-700',   icon: '◆', order: 2, border: 'border-sky-400', bg: 'bg-sky-50/50',  text: 'text-sky-700',   mutedBg: 'bg-sky-50/30', mutedBorder: 'border-sky-300', mutedText: 'text-sky-600' },
+  opencode: { label: 'OpenCode', className: 'bg-teal-50 text-teal-600',     icon: '◎', order: 3, border: 'border-teal-400',  bg: 'bg-teal-50/50',   text: 'text-teal-700',   mutedBg: 'bg-teal-50/30',   mutedBorder: 'border-teal-300',   mutedText: 'text-teal-500' },
+  agents:   { label: 'Agents',   className: 'bg-gray-100 text-gray-500',    icon: '⚡', order: 4, border: 'border-gray-400',  bg: 'bg-gray-50/50',   text: 'text-gray-700',   mutedBg: 'bg-gray-100/50',   mutedBorder: 'border-gray-300',   mutedText: 'text-gray-500' },
+  npm:      { label: 'npm',      className: 'bg-red-50 text-red-600',       icon: '📦', order: 5, border: 'border-red-400',   bg: 'bg-red-50/50',    text: 'text-red-700',    mutedBg: 'bg-red-50/30',    mutedBorder: 'border-red-300',    mutedText: 'text-red-500' },
+  git:      { label: 'git',      className: 'bg-amber-50 text-amber-600',   icon: '📦', order: 6, border: 'border-amber-400', bg: 'bg-amber-50/50',  text: 'text-amber-700',  mutedBg: 'bg-amber-50/30',  mutedBorder: 'border-amber-300',  mutedText: 'text-amber-500' },
+  cli:      { label: 'CLI',      className: 'bg-amber-50 text-amber-600',   icon: '>',  order: 7, border: 'border-amber-400', bg: 'bg-amber-50/50',  text: 'text-amber-700',  mutedBg: 'bg-amber-50/30',  mutedBorder: 'border-amber-300',  mutedText: 'text-amber-500' },
+  unknown:  { label: 'Other',    className: 'bg-gray-100 text-gray-500',    icon: '?',  order: 8, border: 'border-gray-300',  bg: 'bg-gray-50/50',   text: 'text-gray-700',   mutedBg: 'bg-gray-100/50',   mutedBorder: 'border-gray-300',   mutedText: 'text-gray-500' },
 }
 
 /** Get a normalized harness key for grouping (xi and pi both → 'xi') */

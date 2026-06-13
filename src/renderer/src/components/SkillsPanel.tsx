@@ -101,13 +101,16 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
   }
 
   if (error) {
+    const isWorkerError = error.includes('Worker not connected')
     return (
-      <div className="p-3 text-xs text-red-500">
-        <div className="font-medium mb-1">Failed to load skills</div>
-        <div className="text-red-400">{error}</div>
+      <div className={`p-3 text-xs ${isWorkerError ? 'text-gray-400' : 'text-red-500'}`}>
+        <div className={`font-medium mb-1 ${isWorkerError ? 'text-gray-500' : ''}`}>
+          {isWorkerError ? 'Waiting for worker...' : 'Failed to load skills'}
+        </div>
+        {!isWorkerError && <div className="text-red-400">{error}</div>}
         <button
           onClick={fetchSkills}
-          className="mt-2 text-blue-500 hover:text-blue-600"
+          className={`mt-2 ${isWorkerError ? 'text-gray-500 hover:text-gray-600' : 'text-blue-500 hover:text-blue-600'}`}
         >
           Retry
         </button>
@@ -193,11 +196,11 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
           <div key={harness} className="">
             {/* Group header */}
             <button
-              className="w-full px-3 py-2 flex items-center gap-2 text-left"
+              className={`w-full px-3 py-2 flex items-center gap-2 text-left border-l-[3px] ${cfg.mutedBorder} ${cfg.mutedBg} hover:brightness-95 transition-colors`}
               onClick={() => toggleGroup(harness)}
             >
               <svg
-                className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isCollapsed ? '' : 'rotate-90'}`}
+                className={`w-3 h-3 ${cfg.mutedText} transition-transform flex-shrink-0 ${isCollapsed ? '' : 'rotate-90'}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -205,8 +208,8 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
               <span className={`w-5 h-5 rounded text-[11px] font-bold flex items-center justify-center flex-shrink-0 ${cfg.className}`}>
                 {cfg.icon}
               </span>
-              <span className="text-[13px] font-semibold tracking-tight text-gray-800">{cfg.label}</span>
-              <span className="text-[11px] text-gray-400">{groupSkills.length}</span>
+              <span className={`text-[13px] font-semibold tracking-tight ${cfg.mutedText}`}>{cfg.label}</span>
+              <span className={`text-[11px] ${cfg.mutedText} opacity-70`}>{groupSkills.length}</span>
             </button>
 
             {/* Skills in group */}
@@ -223,7 +226,7 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <span className="text-[12px] text-gray-800 truncate leading-tight">{skill.name}</span>
+                  <span className="text-[12px] text-gray-800 font-semibold truncate leading-tight">{skill.name}</span>
                   {skill.disableModelInvocation && (
                     <span title="Only invokable via /skill:name" className="text-gray-400 text-[10px]">🔒</span>
                   )}
@@ -236,9 +239,7 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
                     ▶ Use
                   </button>
                 </div>
-                {skill.description && (
-                  <div className="pl-10 pr-3 pb-1.5 text-[11px] text-gray-500 leading-relaxed">{skill.description}</div>
-                )}
+                <div className="pl-10 pr-3 pb-1.5 text-[11px] text-gray-500 leading-relaxed truncate">{skill.description || ''}</div>
                 {expandedSkill === skill.filePath && (
                   <div className="pl-9 pr-3 pb-2">
                     {detailLoading ? (

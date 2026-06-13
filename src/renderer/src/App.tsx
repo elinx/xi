@@ -588,6 +588,12 @@ function App(): React.ReactElement {
   }, [isConnected, currentSession?.filePath, loadForkPoints])
 
   useEffect(() => {
+    if (isConnected) {
+      useSkillStore.getState().fetchSkills()
+    }
+  }, [isConnected])
+
+  useEffect(() => {
     if (isConnected && !welcomeCheckDone.current) {
       welcomeCheckDone.current = true
       getProviderAuthStatus().then((status) => {
