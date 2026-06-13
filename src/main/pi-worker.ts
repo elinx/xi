@@ -258,7 +258,7 @@ async function init(data: WorkerInit): Promise<void> {
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'searchSessions'],
         customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd)],
       })),
       services,
