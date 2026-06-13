@@ -43,6 +43,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
 
   return (
     <div className="border-t border-gray-200 bg-gray-50 px-4 pt-2 pb-1">
+      <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
       {/* Queue section */}
       {hasQueue && (
         <>
@@ -153,6 +154,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
