@@ -54,6 +54,13 @@ function TabIcon({ type }: { type: TabType }) {
           <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4" />
         </svg>
       )
+    case 'skill':
+      return (
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 1.5a4.5 4.5 0 014.5 4.5c0 1.5-.8 2.8-2 3.6V13a1 1 0 01-1 1h-3a1 1 0 01-1-1V9.6C4.3 8.8 3.5 7.5 3.5 6A4.5 4.5 0 018 1.5z" />
+          <path d="M6.5 14h3" />
+        </svg>
+      )
   }
 }
 

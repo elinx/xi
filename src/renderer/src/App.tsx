@@ -16,6 +16,7 @@ import DiffViewer from './components/DiffViewer'
 import TerminalPane from './components/TerminalPane'
 import WelcomeDialog from './components/WelcomeDialog'
 import SettingsPanel from './components/SettingsPanel'
+import SkillViewer from './components/SkillViewer'
 import CommandPalette from './components/CommandPalette'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage, TextBlock } from './types/message'
@@ -1031,6 +1032,9 @@ function App(): React.ReactElement {
             )}
             {activeTab?.type === 'diff' && (
               <DiffViewer filePath={activeTab.meta.filePath as string} commitHash={activeTab.meta.commitHash as string | undefined} />
+            )}
+            {activeTab?.type === 'skill' && (
+              <SkillViewer skillFilePath={activeTab.meta.skillFilePath as string} />
             )}
             {tabs.filter(t => t.type === 'terminal').map(t => (
               <div key={t.id} className={activeTab?.id === t.id ? 'h-full' : 'hidden'}>

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type TabType = 'session' | 'file' | 'diff' | 'terminal' | 'settings'
+export type TabType = 'session' | 'file' | 'diff' | 'terminal' | 'settings' | 'skill'
 
 export interface TabInfo {
   id: string
@@ -45,7 +45,10 @@ export const useTabStore = create<TabState>()(
 
       addTab: (tab) => {
         const id = tab.id ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        const existing = get().findTabByMeta(tab.type, 'filePath', tab.meta.filePath)
+        // Determine dedup key based on tab type
+        const dedupKey = tab.type === 'skill' ? 'skillFilePath' : 'filePath'
+        const dedupValue = tab.type === 'skill' ? tab.meta.skillFilePath : tab.meta.filePath
+        const existing = dedupValue ? get().findTabByMeta(tab.type, dedupKey, dedupValue) : undefined
         if (existing) {
           set((state) => ({
             tabs: state.tabs.map((t) =>

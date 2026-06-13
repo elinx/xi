@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSkillStore, HARNESS_CONFIG, SCOPE_CONFIG, normalizeHarness, type SkillInfo } from '../hooks/useSkillStore'
+import { useTabStore } from '../hooks/useTabStore'
 import type { SkillDiagnostic } from '../hooks/useSkillStore'
 
 interface SkillsPanelProps {
@@ -53,11 +54,20 @@ function DiagnosticsDialog({ diagnostics, onClose }: { diagnostics: SkillDiagnos
   )
 }
 
+function openSkillTab(skill: SkillInfo) {
+  const addTab = useTabStore.getState().addTab
+  addTab({
+    type: 'skill',
+    title: skill.name,
+    closable: true,
+    meta: { skillFilePath: skill.filePath, skillName: skill.name },
+  })
+}
+
 export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
   const {
     skills, diagnostics, loading, error,
-    expandedSkill, skillDetail, detailLoading,
-    fetchSkills, expandSkill,
+    fetchSkills,
   } = useSkillStore()
 
   const [showDiagnostics, setShowDiagnostics] = useState(false)
@@ -216,10 +226,8 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
             {!isCollapsed && groupSkills.map(skill => (
               <div
                 key={skill.name}
-                className={`cursor-pointer transition-colors ${
-                  expandedSkill === skill.filePath ? 'bg-gray-50' : 'hover:bg-gray-50'
-                }`}
-                onClick={() => expandSkill(skill.filePath)}
+                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => openSkillTab(skill)}
               >
                 <div className="pl-10 pr-3 py-[7px] flex items-center gap-1.5">
                   <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -240,21 +248,6 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
                   </button>
                 </div>
                 <div className="pl-10 pr-3 pb-1.5 text-[11px] text-gray-500 leading-relaxed truncate">{skill.description || ''}</div>
-                {expandedSkill === skill.filePath && (
-                  <div className="pl-9 pr-3 pb-2">
-                    {detailLoading ? (
-                      <div className="text-gray-400 py-1">Loading...</div>
-                    ) : skillDetail ? (
-                      <div className="mt-1 p-2 bg-white rounded border border-gray-200 max-h-[300px] overflow-y-auto">
-                        <pre className="whitespace-pre-wrap text-[11px] text-gray-700 leading-relaxed font-mono">
-                          {skillDetail.content}
-                        </pre>
-                      </div>
-                    ) : (
-                      <div className="text-gray-400 py-1">Failed to load skill content</div>
-                    )}
-                  </div>
-                )}
               </div>
             ))}
           </div>

@@ -95,6 +95,7 @@ interface SkillState {
 
   fetchSkills: () => Promise<void>
   expandSkill: (filePath: string) => Promise<void>
+  loadSkillDetail: (filePath: string) => Promise<void>
   collapseSkill: () => void
 }
 
@@ -137,6 +138,26 @@ export const useSkillStore = create<SkillState>()((set, get) => ({
       return
     }
     set({ expandedSkill: filePath, detailLoading: true, skillDetail: null })
+    try {
+      const result = await window.api.readSkill(filePath)
+      if (result.ok && result.data) {
+        set({
+          skillDetail: {
+            ...result.data,
+            harness: inferHarness(result.data.filePath, result.data.baseDir),
+          },
+          detailLoading: false,
+        })
+      } else {
+        set({ skillDetail: null, detailLoading: false })
+      }
+    } catch {
+      set({ skillDetail: null, detailLoading: false })
+    }
+  },
+
+  loadSkillDetail: async (filePath: string) => {
+    set({ detailLoading: true, skillDetail: null })
     try {
       const result = await window.api.readSkill(filePath)
       if (result.ok && result.data) {
