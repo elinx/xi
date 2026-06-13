@@ -226,7 +226,7 @@ export default function SkillsPanel({ onInvokeSkill }: SkillsPanelProps) {
             {!isCollapsed && groupSkills.map(skill => (
               <div
                 key={skill.name}
-                className="cursor-pointer border-l-[3px] border-l-transparent hover:border-l-blue-400 hover:bg-blue-50/60 transition-all"
+                className="cursor-pointer hover:bg-blue-50/60 transition-colors"
                 onClick={() => openSkillTab(skill)}
               >
                 <div className="pl-10 pr-3 py-[7px] flex items-center gap-1.5">
