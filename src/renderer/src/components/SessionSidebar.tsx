@@ -469,21 +469,6 @@ function SessionNode({
             {formatRelativeTime(node.session.createdAt)}
           </span>
 
-          {node.session.parentSessionPath && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onSwitch(node.session.parentSessionPath!)
-              }}
-              className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
-              title="Go to parent session"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-              </svg>
-            </button>
-          )}
-
           <button
             onClick={(e) => {
               e.stopPropagation()
