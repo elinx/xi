@@ -321,22 +321,20 @@ function SessionNode({
       >
         <TreeGraphRow guides={guides}>
           <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
-          {/* Drag handle grip icon */}
+          {/* Drag handle grip icon — w-0 when idle, expands on hover */}
           {canDrag && (
-            <span className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 hover:text-gray-600 transition-opacity cursor-grab active:cursor-grabbing">
-              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
-                <circle cx="5" cy="3" r="1.5" />
-                <circle cx="11" cy="3" r="1.5" />
-                <circle cx="5" cy="8" r="1.5" />
-                <circle cx="11" cy="8" r="1.5" />
-                <circle cx="5" cy="13" r="1.5" />
-                <circle cx="11" cy="13" r="1.5" />
-              </svg>
+            <span className="flex-shrink-0 w-0 overflow-hidden group-hover:w-3.5 transition-[width] duration-150">
+              <span className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 hover:text-gray-600 transition-opacity cursor-grab active:cursor-grabbing flex items-center">
+                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="5" cy="3" r="1.5" />
+                  <circle cx="11" cy="3" r="1.5" />
+                  <circle cx="5" cy="8" r="1.5" />
+                  <circle cx="11" cy="8" r="1.5" />
+                  <circle cx="5" cy="13" r="1.5" />
+                  <circle cx="11" cy="13" r="1.5" />
+                </svg>
+              </span>
             </span>
-          )}
-          {/* Main session spacer to align with drag handle */}
-          {!canDrag && dragSourcePath !== null && (
-            <span className="flex-shrink-0 w-3" />
           )}
           {isRenaming ? (
             <input
