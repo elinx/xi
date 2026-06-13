@@ -25,6 +25,7 @@ interface LeftPanelProps {
   onSetSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<boolean>
   onReparentSession: (sessionPath: string, newParentPath: string | null) => Promise<boolean>
   onForkFromEnd: (sessionPath: string, name: string) => void
+  onInvokeSkill?: (name: string) => void
 }
 
 function ChatIcon({ className }: { className?: string }) {
@@ -80,6 +81,7 @@ export default function LeftPanel({
   onSetSessionStatus,
   onReparentSession,
   onForkFromEnd,
+  onInvokeSkill,
 }: LeftPanelProps) {
   if (collapsed) return null
 
@@ -128,7 +130,7 @@ export default function LeftPanel({
           />
         )}
         {view === 'skills' && (
-          <SkillsPanel />
+          <SkillsPanel onInvokeSkill={onInvokeSkill} />
         )}
         {view === 'mcp' && (
           <McpPanel />

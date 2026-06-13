@@ -3,10 +3,13 @@ import type { PiModelInfo, SessionInfo } from '../types/session'
 import type { FileEntry } from '../hooks/useFileIndex'
 import { useFileMention, type MentionItem } from '../hooks/useFileMention'
 import { useSessionMention } from '../hooks/useSessionMention'
+import { useSkillMention } from '../hooks/useSkillMention'
+import type { SkillInfo } from '../hooks/useSkillStore'
 import type { WorkerStatus } from '../hooks/useSessionCache'
 import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
 import SessionMentionDropdown from './SessionMentionDropdown'
+import SkillMentionDropdown from './SkillMentionDropdown'
 import QuoteCard, { type QuotedMessage } from './QuoteCard'
 import { TokenUsageRing } from './TokenUsageRing'
 
@@ -32,9 +35,10 @@ interface InputBarProps {
   onClearQueue?: () => void
   onRemoveQueuedAt?: (index: number) => void
   onSendQueued?: (index: number) => void
+  skills?: SkillInfo[]
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued, skills = [] }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -45,6 +49,29 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
 
   const mention = useFileMention(files)
   const sessionMention = useSessionMention(sessions)
+  const skillMention = useSkillMention(skills)
+
+  // Listen for skill invocation events from SkillsPanel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { name } = (e as CustomEvent).detail as { name: string }
+      const command = `/skill:${name} `
+      setEditorText(command)
+      setTimeout(() => {
+        if (editorRef.current) {
+          const range = document.createRange()
+          range.selectNodeContents(editorRef.current)
+          range.collapse(false)
+          const sel = window.getSelection()
+          sel?.removeAllRanges()
+          sel?.addRange(range)
+          editorRef.current.focus()
+        }
+      }, 0)
+    }
+    window.addEventListener('xi:invoke-skill', handler)
+    return () => window.removeEventListener('xi:invoke-skill', handler)
+  }, [])
 
   const showStop = isStreaming
   const noModel = isConnected && (!currentModel || (currentModel.id === 'unknown' && currentModel.provider === 'unknown'))
@@ -226,6 +253,30 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
         return
       }
     }
+    // Skill mention (/skill:)
+    if (skillMention.visible) {
+      const skillResult = skillMention.onKeyDown(e)
+      if (skillResult) {
+        if (typeof skillResult === 'string') {
+          // Replace /skill:query with /skill:name
+          const text = getPlainText()
+          const newText = text.replace(/\/skill:[a-z0-9-]*$/, `/skill:${skillResult} `)
+          setEditorText(newText)
+          // Move cursor to end
+          setTimeout(() => {
+            if (editorRef.current) {
+              const range = document.createRange()
+              range.selectNodeContents(editorRef.current)
+              range.collapse(false)
+              const sel = window.getSelection()
+              sel?.removeAllRanges()
+              sel?.addRange(range)
+            }
+          }, 0)
+        }
+        return
+      }
+    }
     // History navigation
     if (sentMessages.length > 0) {
       if (e.key === 'ArrowUp') {
@@ -288,6 +339,12 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     }
     mention.onTextInput(cursorText, cursorOffset)
     sessionMention.onTextInput(cursorText, cursorOffset)
+
+    // Skill mention detection (/skill:)
+    const fullText = getPlainText()
+    // Calculate cursor position in full text
+    // For simplicity, use the full text length for cursor position approximation
+    skillMention.handleTextChange(fullText, fullText.length)
   }
 
   const handleMentionSelect = useCallback((file: FileEntry) => {
@@ -522,6 +579,27 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
             selectedIndex={sessionMention.selectedIndex}
             onSelect={handleSessionMentionSelect}
             visible={sessionMention.open}
+          />
+          <SkillMentionDropdown
+            items={skillMention.items}
+            selectedIndex={skillMention.selectedIndex}
+            onSelect={(item) => {
+              const text = getPlainText()
+              const newText = text.replace(/\/skill:[a-z0-9-]*$/, `/skill:${item.name} `)
+              setEditorText(newText)
+              skillMention.close()
+              setTimeout(() => {
+                if (editorRef.current) {
+                  const range = document.createRange()
+                  range.selectNodeContents(editorRef.current)
+                  range.collapse(false)
+                  const sel = window.getSelection()
+                  sel?.removeAllRanges()
+                  sel?.addRange(range)
+                }
+              }, 0)
+            }}
+            visible={skillMention.visible}
           />
         </div>
         {showStop ? (

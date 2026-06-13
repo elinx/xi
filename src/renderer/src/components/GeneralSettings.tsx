@@ -8,9 +8,10 @@ interface GeneralSettingsProps {
   setCaptureEnabled?: (enabled: boolean) => Promise<boolean>
   clearSnapshots?: () => Promise<number>
   getCaptureStatus?: () => Promise<{ enabled: boolean; snapshotCount: number }>
+  onSkillsSettingsChanged?: () => void
 }
 
-function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, getCaptureStatus }: GeneralSettingsProps): React.ReactElement {
+function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, getCaptureStatus, onSkillsSettingsChanged }: GeneralSettingsProps): React.ReactElement {
   const [fontSize, setFontSize] = useState(() => {
     return Number(localStorage.getItem('xi-settings-font-size')) || 14
   })
@@ -34,6 +35,36 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   })
   const [snapshotCount, setSnapshotCount] = useState(0)
   const [clearing, setClearing] = useState(false)
+
+  // Skill sources state
+  const [harnessDirs, setHarnessDirs] = useState<Array<{ id: string; label: string; dir: string; skillCount: number }>>([])
+  const [enabledHarnessIds, setEnabledHarnessIds] = useState<Set<string>>(new Set())
+  const [skillSettingsLoading, setSkillSettingsLoading] = useState(true)
+  const [skillSettingsSaving, setSkillSettingsSaving] = useState(false)
+
+  // Load harness dirs + current settings on mount
+  useEffect(() => {
+    Promise.all([
+      window.api.skillsDiscoverHarnessDirs(),
+      window.api.skillsGetSettings(),
+    ]).then(([dirsResult, settingsResult]) => {
+      if (dirsResult.ok && dirsResult.data) setHarnessDirs(dirsResult.data)
+      if (settingsResult.ok && settingsResult.data) {
+        const paths = settingsResult.data.skillsPaths
+        // Map paths back to harness IDs
+        const enabledIds = new Set<string>()
+        for (const dir of dirsResult.data ?? []) {
+          if (paths.some(p => p.includes(`/.${dir.id}/skills`))) {
+            enabledIds.add(dir.id)
+          }
+        }
+        setEnabledHarnessIds(enabledIds)
+      }
+      setSkillSettingsLoading(false)
+    }).catch(() => {
+      setSkillSettingsLoading(false)
+    })
+  }, [])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--xi-font-size', `${fontSize}px`)
@@ -113,6 +144,28 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const handleHarnessToggle = async (harnessId: string) => {
+    const next = new Set(enabledHarnessIds)
+    if (next.has(harnessId)) {
+      next.delete(harnessId)
+    } else {
+      next.add(harnessId)
+    }
+    setEnabledHarnessIds(next)
+    setSkillSettingsSaving(true)
+
+    // Build the skills paths array from enabled harnesses
+    const skillsPaths = harnessDirs
+      .filter(h => next.has(h.id))
+      .map(h => h.dir)
+
+    try {
+      await window.api.skillsUpdateSettings(skillsPaths)
+      onSkillsSettingsChanged?.()
+    } catch {}
+    setSkillSettingsSaving(false)
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -188,6 +241,53 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
             className="w-16 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
         </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Skill Sources</h3>
+        {skillSettingsLoading ? (
+          <div className="text-xs text-gray-400 py-2">Loading...</div>
+        ) : harnessDirs.length === 0 ? (
+          <div className="text-xs text-gray-400 py-2">
+            No other agent tool skill directories found on this machine.
+            <br />
+            <span className="text-[10px]">
+              Detected paths: ~/.claude/skills, ~/.codex/skills, ~/.opencode/skills, ~/.config/opencode/skills, ~/.agents/skills
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {harnessDirs.map(harness => (
+              <div key={harness.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleHarnessToggle(harness.id)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
+                      enabledHarnessIds.has(harness.id) ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                    disabled={skillSettingsSaving}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${
+                        enabledHarnessIds.has(harness.id) ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`}
+                    />
+                  </button>
+                  <div>
+                    <span className="text-xs text-gray-700">{harness.label}</span>
+                    <span className="text-[10px] text-gray-400 ml-1.5">{harness.skillCount} skill{harness.skillCount !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-gray-400 font-mono truncate max-w-[50%]" title={harness.dir}>
+                  {harness.dir.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~')}
+                </span>
+              </div>
+            ))}
+            {skillSettingsSaving && (
+              <div className="text-[10px] text-blue-500">Saving & reloading...</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>

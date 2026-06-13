@@ -13,7 +13,8 @@ export type ContentBlock =
   | HtmlBlock
   | ToolCallBlock
   | ToolResultBlock
-  | ActionBlock;
+  | ActionBlock
+  | SkillBlock;
 
 export interface TextBlock {
   type: 'text';
@@ -62,6 +63,14 @@ export interface ActionBlock {
   actionType: 'select' | 'confirm' | 'input';
   label: string;
   options?: { id: string; label: string; description?: string }[];
+}
+
+export interface SkillBlock {
+  type: 'skill';
+  name: string;
+  location: string;
+  content: string;
+  userMessage?: string;
 }
 
 export interface Annotation {

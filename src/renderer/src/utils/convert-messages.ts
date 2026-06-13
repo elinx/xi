@@ -59,6 +59,69 @@ export interface ConvertResult {
  */
 export function splitUserContentIntoBlocks(content: string): ContentBlock[] {
   const blocks: ContentBlock[] = []
+
+  // First, detect <skill> XML blocks
+  const skillBlockRe = /<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/gm
+  let skillMatch: RegExpExecArray | null
+  const skillRegions: Array<{ start: number; end: number; block: ContentBlock }> = []
+  while ((skillMatch = skillBlockRe.exec(content)) !== null) {
+    skillRegions.push({
+      start: skillMatch.index,
+      end: skillMatch.index + skillMatch[0].length,
+      block: {
+        type: 'skill',
+        name: skillMatch[1],
+        location: skillMatch[2],
+        content: skillMatch[3],
+        userMessage: skillMatch[4]?.trim() || undefined,
+      },
+    })
+  }
+
+  // Build blocks from non-skill regions, then insert skill blocks in order
+  const allRegions: Array<{ start: number; end: number; block: ContentBlock | null }> = []
+  for (const sr of skillRegions) {
+    allRegions.push({ start: sr.start, end: sr.end, block: sr.block })
+  }
+  allRegions.sort((a, b) => a.start - b.start)
+
+  let pos = 0
+  for (const region of allRegions) {
+    if (region.start > pos) {
+      const between = content.slice(pos, region.start).trim()
+      if (between) {
+        // Process this text region for quotes
+        const subBlocks = splitTextWithQuotes(between)
+        blocks.push(...subBlocks)
+      }
+    }
+    if (region.block) {
+      blocks.push(region.block)
+    }
+    pos = region.end
+  }
+  // Remaining text after last skill region
+  if (pos < content.length) {
+    const remaining = content.slice(pos).trim()
+    if (remaining) {
+      const subBlocks = splitTextWithQuotes(remaining)
+      blocks.push(...subBlocks)
+    }
+  }
+
+  // If no skill blocks found, fall through to original quote logic
+  if (skillRegions.length === 0) {
+    return splitTextWithQuotes(content)
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({ type: 'text', content })
+  }
+  return blocks
+}
+
+function splitTextWithQuotes(content: string): ContentBlock[] {
+  const blocks: ContentBlock[] = []
   const quoteRe = /^> \[(Quoted|Forwarded) (user|assistant) message(?: from "([^"]*)")?\]:\n((?:> .*\n)*> .*$|(?:> .*\n)*)/gm
   let quoteMatch: RegExpExecArray | null
   let lastEnd = 0

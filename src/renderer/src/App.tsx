@@ -23,6 +23,7 @@ import type { ForkPoint, SessionTreeNode } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
+import { useSkillStore } from './hooks/useSkillStore'
 import type { MentionItem } from './hooks/useFileMention'
 
 interface QueuedMessage {
@@ -178,6 +179,9 @@ function App(): React.ReactElement {
   const { files: indexedFiles, loading: filesLoading, refresh: refreshFileIndex } = useFileIndex()
   const commands = useCommandRegistry()
 
+  const skillStoreSkills = useSkillStore(s => s.skills)
+  const fetchSkills = useSkillStore(s => s.fetchSkills)
+
   const handleLeftResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setIsLeftResizing(true)
@@ -290,6 +294,7 @@ function App(): React.ReactElement {
     resetTabs()
     await refresh()
     refreshFileIndex(true)
+    fetchSkills()
     const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
     try { await fsApi.watchStop?.() } catch {}
     try { await fsApi.watchStart?.() } catch {}
@@ -504,6 +509,15 @@ function App(): React.ReactElement {
       await abort(sessionPath)
     }
   }, [abort])
+
+  const inputBarRef = useRef<{ setEditorText: (text: string) => void; focus: () => void } | null>(null)
+
+  const handleInvokeSkill = useCallback((name: string) => {
+    // We need to set the InputBar editor text. Since InputBar is a function component,
+    // we use a different approach: set a ref that InputBar will check.
+    // Instead, we'll use a simple global event approach.
+    window.dispatchEvent(new CustomEvent('xi:invoke-skill', { detail: { name } }))
+  }, [])
 
   useEffect(() => {
     if (isConnected) {
@@ -965,6 +979,7 @@ function App(): React.ReactElement {
             onSetSessionStatus={setSessionStatus}
             onReparentSession={reparentSession}
             onForkFromEnd={handleForkFromEnd}
+            onInvokeSkill={handleInvokeSkill}
           />
 
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -1078,6 +1093,7 @@ function App(): React.ReactElement {
                   }
                 }
               }}
+              skills={skillStoreSkills}
             />
           )}
         </div>

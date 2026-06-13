@@ -13,6 +13,7 @@ import type {
   Annotation,
 } from '../types/message'
 import ChatContextMenu from './ChatContextMenu'
+import SkillBlockRenderer from './SkillBlockRenderer'
 import type { ForkableMessage, ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
@@ -946,6 +947,8 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
       )
     case 'action':
       return <div className="text-xs text-yellow-600">[Action: {block.actionType}]</div>
+    case 'skill':
+      return <SkillBlockRenderer name={block.name} location={block.location} content={block.content} userMessage={block.userMessage} />
     case 'html':
       return <HtmlBlockRenderer block={block} />
     default:

@@ -27,7 +27,11 @@ window.api = new Proxy({}, {
       if (prop === 'getProviderAuthStatus') return { ok: true, data: {} };
       if (prop === 'readDirectory') return { ok: true, entries: [] };
       if (prop === 'readFile') return { ok: false, error: 'Not available' };
-      if (prop === 'listSkills') return { ok: true, data: [] };
+      if (prop === 'listSkills') return { ok: true, data: [], diagnostics: [] };
+      if (prop === 'readSkill') return { ok: false, error: 'Not available' };
+      if (prop === 'skillsDiscoverHarnessDirs') return { ok: true, data: [] };
+      if (prop === 'skillsGetSettings') return { ok: true, data: { skillsPaths: [] } };
+      if (prop === 'skillsUpdateSettings') return { ok: true };
       if (prop === 'listMcpServers') return { ok: true, data: [] };
       if (prop === 'mcpPing') return { ok: true, connected: false };
       if (prop === 'getProjectPath') return process.cwd?.() ?? '.';

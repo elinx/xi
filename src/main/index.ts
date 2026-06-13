@@ -1851,47 +1851,118 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('skills:list', async () => {
     try {
-      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
-      const skillsDirs = [
-        { dir: join(homeDir, '.pi', 'agent', 'skills'), scope: 'global' },
-        { dir: join(homeDir, '.agents', 'skills'), scope: 'global' },
-        { dir: join(process.cwd(), '.pi', 'skills'), scope: 'project' },
-        { dir: join(process.cwd(), '.agents', 'skills'), scope: 'project' },
-      ]
-      const skills: Array<{ name: string; description: string; source: string; scope: string }> = []
-      for (const { dir, scope } of skillsDirs) {
-        if (!existsSync(dir)) continue
-        const entries = readdirSync(dir, { withFileTypes: true })
-        for (const entry of entries) {
-          if (entry.name.startsWith('.')) continue
-          const fullPath = join(dir, entry.name)
-          let skillFile = ''
-          if (entry.isDirectory()) {
-            const candidate = join(fullPath, 'SKILL.md')
-            if (existsSync(candidate)) skillFile = candidate
-          } else if (entry.name === 'SKILL.md') {
-            skillFile = fullPath
-          }
-          if (!skillFile) continue
-          try {
-            const content = readFileSync(skillFile, 'utf-8')
-            const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
-            const name = entry.isDirectory() ? entry.name : 'skill'
-            let description = ''
-            if (fmMatch) {
-              const frontmatter = fmMatch[1]
-              const nameMatch = frontmatter.match(/^name:\s*(.+)$/m)
-              const descMatch = frontmatter.match(/^description:\s*(.+)$/m)
-              if (nameMatch) skills.push({ name: nameMatch[1].trim(), description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath), scope })
-              else skills.push({ name, description: descMatch?.[1]?.trim() ?? '', source: dirname(fullPath), scope })
-            } else {
-              skills.push({ name, description: '', source: dirname(fullPath), scope })
-            }
-          } catch {}
-        }
+      const primary = workerManager?.getPrimary()
+      if (!primary?.bridge.isConnected) {
+        return { ok: false, error: 'Worker not connected' }
       }
-      const seen = new Set<string>()
-      return { ok: true, data: skills.filter(s => { if (seen.has(s.name)) return false; seen.add(s.name); return true }) }
+      const data = await primary.bridge.sendRpcCommand({ type: 'get_skills' }) as {
+        skills: Array<{
+          name: string
+          description: string
+          filePath: string
+          baseDir: string
+          source: string
+          scope: string
+          origin: string
+          disableModelInvocation: boolean
+        }>
+        diagnostics: Array<{
+          type: string
+          message: string
+          path?: string
+          collision?: { resourceType: string; name: string; winnerPath: string; loserPath: string }
+        }>
+      }
+      return { ok: true, data: data.skills, diagnostics: data.diagnostics }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('skills:read', async (_event, filePath: string) => {
+    try {
+      const primary = workerManager?.getPrimary()
+      if (!primary?.bridge.isConnected) {
+        return { ok: false, error: 'Worker not connected' }
+      }
+      const data = await primary.bridge.sendRpcCommand({ type: 'read_skill', filePath })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Discover available harness skill directories on this machine
+  ipcMain.handle('skills:discoverHarnessDirs', async () => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const knownHarnesses = [
+        { id: 'claude', label: 'Claude Code', dir: join(homeDir, '.claude', 'skills') },
+        { id: 'codex', label: 'OpenAI Codex', dir: join(homeDir, '.codex', 'skills') },
+        { id: 'opencode', label: 'OpenCode', dir: join(homeDir, '.opencode', 'skills') },
+        { id: 'opencode-config', label: 'OpenCode', dir: join(homeDir, '.config', 'opencode', 'skills') },
+        { id: 'agents', label: 'Agent Skills', dir: join(homeDir, '.agents', 'skills') },
+      ]
+      const discovered = knownHarnesses
+        .filter(h => existsSync(h.dir))
+        .map(h => ({
+          id: h.id,
+          label: h.label,
+          dir: h.dir,
+          skillCount: readdirSync(h.dir, { withFileTypes: true })
+            .filter(e => !e.name.startsWith('.')).length,
+        }))
+      return { ok: true, data: discovered }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Get current skills config from settings.json
+  ipcMain.handle('skills:getSettings', async () => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(homeDir, '.xi')
+      const settingsPath = join(agentDir, 'settings.json')
+      let skillsPaths: string[] = []
+      if (existsSync(settingsPath)) {
+        try {
+          const content = readFileSync(settingsPath, 'utf-8')
+          const settings = JSON.parse(content)
+          skillsPaths = settings.skills ?? []
+        } catch {}
+      }
+      return { ok: true, data: { skillsPaths } }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // Update skills config in settings.json
+  ipcMain.handle('skills:updateSettings', async (_event, skillsPaths: string[]) => {
+    try {
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(homeDir, '.xi')
+      const settingsPath = join(agentDir, 'settings.json')
+      let settings: Record<string, unknown> = {}
+      if (existsSync(settingsPath)) {
+        try {
+          const content = readFileSync(settingsPath, 'utf-8')
+          settings = JSON.parse(content)
+        } catch {}
+      }
+      settings.skills = skillsPaths
+      writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n')
+
+      // Tell worker to reload resources so new skills take effect
+      try {
+        const primary = workerManager?.getPrimary()
+        if (primary?.bridge.isConnected) {
+          await primary.bridge.sendRpcCommand({ type: 'reload_skills' })
+        }
+      } catch {}
+
+      return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

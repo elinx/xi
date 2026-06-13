@@ -268,10 +268,59 @@ const api = {
 
   listSkills: (): Promise<{
     ok: boolean
-    data?: Array<{ name: string; description: string; source: string; scope: string }>
+    data?: Array<{
+      name: string
+      description: string
+      filePath: string
+      baseDir: string
+      source: string
+      scope: string
+      origin: string
+      disableModelInvocation: boolean
+    }>
+    diagnostics?: Array<{
+      type: string
+      message: string
+      path?: string
+      collision?: { resourceType: string; name: string; winnerPath: string; loserPath: string }
+    }>
     error?: string
   }> =>
     ipcRenderer.invoke('skills:list'),
+
+  readSkill: (filePath: string): Promise<{
+    ok: boolean
+    data?: {
+      name: string
+      description: string
+      filePath: string
+      baseDir: string
+      source: string
+      scope: string
+      origin: string
+      disableModelInvocation: boolean
+      content: string
+    }
+    error?: string
+  }> =>
+    ipcRenderer.invoke('skills:read', filePath),
+
+  skillsDiscoverHarnessDirs: (): Promise<{
+    ok: boolean
+    data?: Array<{ id: string; label: string; dir: string; skillCount: number }>
+    error?: string
+  }> =>
+    ipcRenderer.invoke('skills:discoverHarnessDirs'),
+
+  skillsGetSettings: (): Promise<{
+    ok: boolean
+    data?: { skillsPaths: string[] }
+    error?: string
+  }> =>
+    ipcRenderer.invoke('skills:getSettings'),
+
+  skillsUpdateSettings: (skillsPaths: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('skills:updateSettings', skillsPaths),
 
   listMcpServers: (): Promise<{
     ok: boolean

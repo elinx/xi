@@ -81,6 +81,13 @@ function SettingsPanel({
           setCaptureEnabled={setCaptureEnabled}
           clearSnapshots={clearSnapshots}
           getCaptureStatus={getCaptureStatus}
+          onSkillsSettingsChanged={() => {
+            // Refresh skills after settings change
+            // Use dynamic import to avoid ESM/CJS issues
+            import('../hooks/useSkillStore').then(({ useSkillStore }) => {
+              useSkillStore.getState().fetchSkills()
+            })
+          }}
         />
       </div>
 

@@ -21,7 +21,11 @@ if (typeof window !== 'undefined' && !window.api) {
       if (prop === 'getAvailableModels') return okData({ models: [] })
       if (prop === 'getProviderAuthStatus') return okData({})
       if (prop === 'readDirectory') return okData({ entries: [] })
-      if (prop === 'listSkills') return okData([])
+      if (prop === 'listSkills') return okData({ skills: [], diagnostics: [] })
+      if (prop === 'readSkill') return async () => ({ ok: false, error: 'Not available' })
+      if (prop === 'skillsDiscoverHarnessDirs') return okData([])
+      if (prop === 'skillsGetSettings') return okData({ skillsPaths: [] })
+      if (prop === 'skillsUpdateSettings') return async () => ({ ok: true })
       if (prop === 'listMcpServers') return okData([])
       if (prop === 'mcpPing') return async () => ({ ok: true, connected: false })
       if (prop === 'getProjectPath') return async () => '/'

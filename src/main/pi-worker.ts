@@ -672,6 +672,77 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
         break
       }
 
+      case 'reload_skills': {
+        await runtime!.services.resourceLoader.reload()
+        send({ channel: 'response', id: cmd.id, command: 'reload_skills', success: true })
+        break
+      }
+
+      case 'get_skills': {
+        const services = runtime!.services
+        const { skills, diagnostics } = services.resourceLoader.getSkills()
+        const data = skills.map(s => ({
+          name: s.name,
+          description: s.description,
+          filePath: s.filePath,
+          baseDir: s.baseDir,
+          source: s.sourceInfo?.source ?? 'local',
+          scope: s.sourceInfo?.scope ?? 'temporary',
+          origin: s.sourceInfo?.origin ?? 'top-level',
+          disableModelInvocation: s.disableModelInvocation,
+        }))
+        const diags = diagnostics.map(d => ({
+          type: d.type,
+          message: d.message,
+          path: d.path,
+          collision: d.collision ? {
+            resourceType: d.collision.resourceType,
+            name: d.collision.name,
+            winnerPath: d.collision.winnerPath,
+            loserPath: d.collision.loserPath,
+          } : undefined,
+        }))
+        send({
+          channel: 'response', id: cmd.id, command: 'get_skills', success: true,
+          data: { skills: data, diagnostics: diags },
+        })
+        break
+      }
+
+      case 'read_skill': {
+        const filePath = cmd.filePath as string
+        const { skills } = runtime!.services.resourceLoader.getSkills()
+        const skill = skills.find(s => s.filePath === filePath)
+        if (!skill) {
+          send({ channel: 'response', id: cmd.id, command: 'read_skill', success: false, error: 'Skill not found' })
+          break
+        }
+        try {
+          const content = fsSync.readFileSync(skill.filePath, 'utf-8')
+          const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim()
+          send({
+            channel: 'response', id: cmd.id, command: 'read_skill', success: true,
+            data: {
+              name: skill.name,
+              description: skill.description,
+              filePath: skill.filePath,
+              baseDir: skill.baseDir,
+              source: skill.sourceInfo?.source ?? 'local',
+              scope: skill.sourceInfo?.scope ?? 'temporary',
+              origin: skill.sourceInfo?.origin ?? 'top-level',
+              disableModelInvocation: skill.disableModelInvocation,
+              content: body,
+            },
+          })
+        } catch (err: unknown) {
+          send({
+            channel: 'response', id: cmd.id, command: 'read_skill', success: false,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+        break
+      }
+
       default:
         send({ channel: 'response', id: cmd.id, command: cmd.type, success: false, error: `Unknown command: ${cmd.type}` })
     }
