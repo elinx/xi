@@ -733,6 +733,50 @@ function registerIpcHandlers(): void {
     } catch {}
   })
 
+  ipcMain.handle('pi:getPromptSnapshot', async (_event, sessionPath: string | null, messageTimestamp: number) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    try {
+      const data = await worker.bridge.sendRpcCommand({ type: 'get_prompt_snapshot', messageTimestamp })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:setCaptureEnabled', async (_event, sessionPath: string | null, enabled: boolean) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    try {
+      const data = await worker.bridge.sendRpcCommand({ type: 'set_capture_enabled', enabled })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:clearSnapshots', async (_event, sessionPath: string | null) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    try {
+      const data = await worker.bridge.sendRpcCommand({ type: 'clear_snapshots' })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:getCaptureStatus', async (_event, sessionPath: string | null) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+    try {
+      const data = await worker.bridge.sendRpcCommand({ type: 'get_capture_status' })
+      return { ok: true, data }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('pi:start', async () => {
     if (!workerManager) {
       let mainSession = sessionService.findMainSession(process.cwd())

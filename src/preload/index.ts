@@ -110,6 +110,15 @@ const api = {
   setApiKey: (sessionPath: string | null, provider: string, apiKey: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:setApiKey', sessionPath, provider, apiKey),
 
+  getPromptSnapshot: (sessionPath: string | null, messageTimestamp: number): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:getPromptSnapshot', sessionPath, messageTimestamp),
+  setCaptureEnabled: (sessionPath: string | null, enabled: boolean): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:setCaptureEnabled', sessionPath, enabled),
+  clearSnapshots: (sessionPath: string | null): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:clearSnapshots', sessionPath),
+  getCaptureStatus: (sessionPath: string | null): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('pi:getCaptureStatus', sessionPath),
+
   removeAuth: (sessionPath: string | null, provider: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pi:removeAuth', sessionPath, provider),
 

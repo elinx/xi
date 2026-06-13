@@ -139,12 +139,35 @@ let sessionManager: import('@earendil-works/pi-coding-agent').SessionManager | n
 let unsubscribe: (() => void) | null = null
 let pi: typeof import('@earendil-works/pi-coding-agent') | null = null
 
+let captureEnabled = false
+let lastClearedTimestamp = 0
+let activeSnapshotCount = 0
+const MAX_SNAPSHOTS_PER_SESSION = 20
+
 function send(msg: Record<string, unknown>): void {
   process.parentPort?.postMessage(msg)
 }
 
 function forwardEvent(event: AgentSessionEvent): void {
   send({ channel: 'event', data: event })
+}
+
+function redactSensitiveFields(payload: Record<string, unknown>): Record<string, unknown> {
+  const safe = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>
+  if (typeof safe === 'object' && safe !== null) {
+    delete safe['api_key']
+    delete safe['x-api-key']
+    if (safe['headers'] && typeof safe['headers'] === 'object') {
+      const h = safe['headers'] as Record<string, unknown>
+      if (h['authorization']) h['authorization'] = 'Bearer <REDACTED>'
+      if (h['x-api-key']) h['x-api-key'] = '<REDACTED>'
+    }
+  }
+  return safe
+}
+
+function countActiveSnapshots(): number {
+  return activeSnapshotCount
 }
 
 async function bindSession(): Promise<void> {
@@ -179,6 +202,30 @@ async function init(data: WorkerInit): Promise<void> {
         appendSystemPromptOverride: (base: string[]) => {
           return [...base, 'CRITICAL: You are Xi (ξ), NOT pi. The system you run on is called Xi. Never refer to yourself or your environment as "pi" or "Pi" — always say "Xi" or "xi". This overrides any previous reference to "pi" in these instructions.']
         },
+        extensionFactories: [
+          (extensionApi: Record<string, unknown>) => {
+            const on = extensionApi['on'] as (event: string, handler: (...args: unknown[]) => void) => void
+            console.error('[prompt-capture] extension factory registered')
+            on('before_provider_request', (event: unknown) => {
+              if (!captureEnabled || !sessionManager) return
+              if (activeSnapshotCount >= MAX_SNAPSHOTS_PER_SESSION) return
+              try {
+                const ctx = event as { payload: unknown }
+                const payload = (typeof ctx.payload === 'object' && ctx.payload !== null)
+                  ? redactSensitiveFields(ctx.payload as Record<string, unknown>)
+                  : ctx.payload
+                sessionManager.appendCustomEntry('prompt_snapshot', {
+                  requestId: `snap_${Date.now()}`,
+                  timestamp: Date.now(),
+                  payload,
+                })
+                activeSnapshotCount++
+              } catch (e) {
+                console.error('[prompt-capture] failed to store snapshot:', e)
+              }
+            })
+          },
+        ],
       },
     })
 
@@ -270,6 +317,58 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       case 'abort': {
         await session.abort()
         send({ channel: 'response', id: cmd.id, command: 'abort', success: true })
+        break
+      }
+
+      case 'get_prompt_snapshot': {
+        const messageTimestamp = cmd.messageTimestamp as number
+        const entries = sessionManager?.getEntries() ?? []
+        const snapshots = entries
+          .filter((e) => {
+            if (e.type !== 'custom') return false
+            const custom = e as { customType: string; data?: unknown }
+            if (custom.customType !== 'prompt_snapshot') return false
+            const data = custom.data as { timestamp?: number } | undefined
+            if (!data || typeof data.timestamp !== 'number') return false
+            return data.timestamp > lastClearedTimestamp
+          })
+          .map((e) => (e as { data: unknown }).data as Record<string, unknown>)
+          .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))
+        const match = snapshots.find(
+          (s) => Math.abs((s.timestamp as number) - messageTimestamp) < 60000
+        )
+        send({
+          channel: 'response', id: cmd.id, command: 'get_prompt_snapshot', success: true,
+          data: match ?? null,
+        })
+        break
+      }
+
+      case 'clear_snapshots': {
+        const count = activeSnapshotCount
+        lastClearedTimestamp = Date.now()
+        activeSnapshotCount = 0
+        send({
+          channel: 'response', id: cmd.id, command: 'clear_snapshots', success: true,
+          data: { deleted: count },
+        })
+        break
+      }
+
+      case 'set_capture_enabled': {
+        captureEnabled = cmd.enabled === true
+        send({
+          channel: 'response', id: cmd.id, command: 'set_capture_enabled', success: true,
+          data: { enabled: captureEnabled },
+        })
+        break
+      }
+
+      case 'get_capture_status': {
+        send({
+          channel: 'response', id: cmd.id, command: 'get_capture_status', success: true,
+          data: { enabled: captureEnabled, snapshotCount: countActiveSnapshots() },
+        })
         break
       }
 
