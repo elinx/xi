@@ -736,7 +736,7 @@ function FloatingParentStack({
   ancestors,
   onSwitch,
 }: {
-  ancestors: SessionInfo[]
+  ancestors: { session: SessionInfo; originalIndex: number }[]
   onSwitch: (path: string) => void
 }) {
   if (ancestors.length === 0) return null
@@ -745,25 +745,23 @@ function FloatingParentStack({
 
   return (
     <div className="absolute left-0 right-0 top-0 z-10 flex flex-col shadow-sm">
-      {ancestors.map((ancestor, i) => {
+      {ancestors.map((entry, i) => {
         const isDirectParent = i === ancestors.length - 1
         return (
           <div
-            key={ancestor.filePath}
+            key={entry.session.filePath}
             className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors ${
               isDirectParent
                 ? 'bg-white border-b border-gray-200/80 text-gray-700 font-medium hover:bg-gray-50'
                 : 'bg-white/95 border-b border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
             }`}
-            style={{ height: ROW_H, paddingLeft: 8 + i * 16, paddingRight: 8 }}
-            onClick={() => onSwitch(ancestor.filePath)}
-            title={getSessionDisplayName(ancestor)}
+            style={{ height: ROW_H, paddingLeft: 8 + entry.originalIndex * 16, paddingRight: 8 }}
+            onClick={() => onSwitch(entry.session.filePath)}
+            title={getSessionDisplayName(entry.session)}
           >
-            <span
-              className={`flex-shrink-0 h-1.5 w-1.5 rounded-full bg-gray-300`}
-            />
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-gray-300" />
             <span className="truncate">
-              {ancestor.isMain ? 'main' : getSessionDisplayName(ancestor)}
+              {entry.session.isMain ? 'main' : getSessionDisplayName(entry.session)}
             </span>
           </div>
         )
@@ -819,13 +817,13 @@ function SessionSidebar({
     return getAncestorChain(root, activeSessionPath)
   }, [activeSessionPath, root])
 
-  // Track whether ancestor nodes are scrolled out of the scroll viewport
+  // Track which ancestor nodes are scrolled out of the scroll viewport (per-ancestor)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [ancestorsHidden, setAncestorsHidden] = useState(false)
+  const [hiddenAncestorPaths, setHiddenAncestorPaths] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (ancestorChain.length === 0 || !scrollRef.current) {
-      setAncestorsHidden(false)
+      setHiddenAncestorPaths(new Set())
       return
     }
     const container = scrollRef.current
@@ -833,13 +831,21 @@ function SessionSidebar({
 
     const check = () => {
       const containerRect = container.getBoundingClientRect()
-      const anyHidden = ancestorPaths.some(p => {
+      const hidden = new Set<string>()
+      for (const p of ancestorPaths) {
         const el = container.querySelector(`[data-session-row="${CSS.escape(p)}"]`) as HTMLElement | null
-        if (!el) return true
+        if (!el) {
+          hidden.add(p)
+          continue
+        }
         const elRect = el.getBoundingClientRect()
-        return elRect.bottom < containerRect.top || elRect.top > containerRect.bottom
-      })
-      setAncestorsHidden(anyHidden)
+        // Only float ancestors that scrolled ABOVE the viewport (elRect.bottom < containerRect.top)
+        // Ancestors below the viewport (scrolled up past them) should NOT float
+        if (elRect.bottom < containerRect.top) {
+          hidden.add(p)
+        }
+      }
+      setHiddenAncestorPaths(hidden)
     }
 
     // Initial check after DOM is ready
@@ -1028,10 +1034,15 @@ function SessionSidebar({
       )}
       {/* Scroll area wrapper — provides positioning context for floating overlay */}
       <div className="relative flex-1 min-h-0">
-        {/* Floating parent stack — absolute overlay on top of scroll area */}
-        {!moveUnderTarget && ancestorChain.length > 0 && ancestorsHidden && (
-          <FloatingParentStack ancestors={ancestorChain} onSwitch={onSwitchSession} />
-        )}
+        {/* Floating parent stack — only show ancestors that are scrolled out */}
+        {!moveUnderTarget && (() => {
+          const hiddenEntries = ancestorChain
+            .map((session, originalIndex) => ({ session, originalIndex }))
+            .filter(entry => hiddenAncestorPaths.has(entry.session.filePath))
+          return hiddenEntries.length > 0 ? (
+            <FloatingParentStack ancestors={hiddenEntries} onSwitch={onSwitchSession} />
+          ) : null
+        })()}
         <div
           ref={scrollRef}
           className="h-full overflow-y-auto py-2"
