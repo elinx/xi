@@ -9,6 +9,7 @@ import type {
   PiAssistantMessage,
   PiToolResultMessage,
   PiContentBlock,
+  PromptSnapshot,
 } from '../types/pi-events'
 import type { ForkPoint, PiModelInfo } from '../types/session'
 import { convertPiMessagesToChatMessages, splitUserContentIntoBlocks, inferContextWindow, type TokenUsage } from '../utils/convert-messages'
@@ -54,6 +55,11 @@ interface UsePiRpcReturn {
   testProvider: (provider: string, overrides?: { baseUrl?: string; apiKey?: string }) => Promise<{ ok: boolean; error?: string; latencyMs?: number }>
   getProviderConfig: (provider: string) => Promise<{ ok: boolean; config?: Record<string, unknown>; error?: string }>
   refreshModelInfo: () => void
+  getPromptSnapshot: (messageTimestamp: number) => Promise<PromptSnapshot | null>
+  setCaptureEnabled: (enabled: boolean) => Promise<boolean>
+  clearSnapshots: () => Promise<number>
+  getCaptureStatus: () => Promise<{ enabled: boolean; snapshotCount: number }>
+  captureEnabled: boolean
 }
 
 function inferContextWindow(model: string): number {
@@ -79,6 +85,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const [currentModel, setCurrentModel] = useState<PiModelInfo | null>(null)
   const [thinkingLevel, setThinkingLevel] = useState<string | null>(null)
   const [pendingUiRequests, setPendingUiRequests] = useState<Array<{ id: string; method: string; [key: string]: unknown }>>([])
+  const [captureEnabled, setCaptureEnabledState] = useState(false)
 
   const currentModelRef = useRef<PiModelInfo | null>(null)
   const displayedSessionPathRef = useRef<string | null>(displayedSessionPath)
@@ -641,6 +648,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       cache.toolCallArgsBuffer.clear()
       cache.pendingToolCallArgs.clear()
       cache.countedResponseIds.clear()
+      promptSnapshotsRef.current.clear()
     }
   }, [onSessionMessagesUpdate, onSessionForkPointsUpdate, onSessionTokenUsageUpdate, updateCache, getCache])
 
@@ -719,6 +727,71 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       return true
     }
     return false
+  }, [])
+
+  const promptSnapshotsRef = useRef<Map<number, PromptSnapshot>>(new Map())
+
+  const getPromptSnapshot = useCallback(async (messageTimestamp: number): Promise<PromptSnapshot | null> => {
+    if (promptSnapshotsRef.current.has(messageTimestamp)) {
+      return promptSnapshotsRef.current.get(messageTimestamp)!
+    }
+    const sessionPath = displayedSessionPathRef.current
+    type ApiWithCapture = typeof window.api & { getPromptSnapshot: (sp: string | null, ts: number) => Promise<{ ok: boolean; data?: PromptSnapshot | null; error?: string }> }
+    try {
+      const result = await (window.api as ApiWithCapture).getPromptSnapshot(sessionPath, messageTimestamp)
+      if (result.ok && result.data) {
+        promptSnapshotsRef.current.set(messageTimestamp, result.data)
+        return result.data
+      }
+      return null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const setCaptureEnabled = useCallback(async (enabled: boolean): Promise<boolean> => {
+    const sessionPath = displayedSessionPathRef.current
+    type ApiWithCapture = typeof window.api & { setCaptureEnabled: (sp: string | null, e: boolean) => Promise<{ ok: boolean; data?: { enabled: boolean }; error?: string }> }
+    try {
+      const result = await (window.api as ApiWithCapture).setCaptureEnabled(sessionPath, enabled)
+      if (result.ok) {
+        setCaptureEnabledState(result.data?.enabled ?? enabled)
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }, [])
+
+  const clearSnapshots = useCallback(async (): Promise<number> => {
+    const sessionPath = displayedSessionPathRef.current
+    type ApiWithCapture = typeof window.api & { clearSnapshots: (sp: string | null) => Promise<{ ok: boolean; data?: { deleted: number }; error?: string }> }
+    try {
+      const result = await (window.api as ApiWithCapture).clearSnapshots(sessionPath)
+      if (result.ok) {
+        promptSnapshotsRef.current.clear()
+        return result.data?.deleted ?? 0
+      }
+      return 0
+    } catch {
+      return 0
+    }
+  }, [])
+
+  const getCaptureStatus = useCallback(async (): Promise<{ enabled: boolean; snapshotCount: number }> => {
+    const sessionPath = displayedSessionPathRef.current
+    type ApiWithCapture = typeof window.api & { getCaptureStatus: (sp: string | null) => Promise<{ ok: boolean; data?: { enabled: boolean; snapshotCount: number }; error?: string }> }
+    try {
+      const result = await (window.api as ApiWithCapture).getCaptureStatus(sessionPath)
+      if (result.ok && result.data) {
+        setCaptureEnabledState(result.data.enabled)
+        return result.data
+      }
+      return { enabled: false, snapshotCount: 0 }
+    } catch {
+      return { enabled: false, snapshotCount: 0 }
+    }
   }, [])
 
   const getProviderAuthStatus = useCallback(async (): Promise<Record<string, { configured: boolean; source?: string }>> => {
@@ -810,5 +883,5 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     return result
   }, [refreshModelInfo])
 
-  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, deleteCustomProvider: deleteCustomProviderFn, removeModelFromProvider: removeModelFromProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, listCustomProviders: listCustomProvidersFn, refreshModelInfo }
+  return { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, onAgentEnd: onAgentEndRef.current, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey: setApiKeyFn, removeAuth: removeAuthFn, registerCustomProvider: registerCustomProviderFn, deleteCustomProvider: deleteCustomProviderFn, removeModelFromProvider: removeModelFromProviderFn, testProvider: testProviderFn, getProviderConfig: getProviderConfigFn, listCustomProviders: listCustomProvidersFn, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled }
 }

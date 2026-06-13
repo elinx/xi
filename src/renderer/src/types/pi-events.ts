@@ -262,3 +262,9 @@ export interface PiToolResultMessage {
 }
 
 export type PiMessage = PiUserMessage | PiAssistantMessage | PiToolResultMessage
+
+export interface PromptSnapshot {
+  requestId: string
+  timestamp: number
+  payload: Record<string, unknown>
+}
