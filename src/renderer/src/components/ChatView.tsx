@@ -1155,6 +1155,17 @@ function TurnCard({
           </svg>
         </button>
       )}
+      {captureEnabled && !isStreaming && onInspect && (
+        <button
+          onClick={() => onInspect(turn.userMessage.id)}
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          title="Inspect prompt"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+        </button>
+      )}
       <button
         onClick={() => onForkClick(turn.userMessage.id, turn.userMessage.piEntryId)}
         className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -1196,17 +1207,6 @@ function TurnCard({
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-          </svg>
-        </button>
-      )}
-      {captureEnabled && !isStreaming && firstAgentMsg && onInspect && (
-        <button
-          onClick={() => onInspect(firstAgentMsg.id)}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-          title="Inspect prompt"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
         </button>
       )}
@@ -1659,7 +1659,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       </svg>
                     </button>
                   )}
-                  {!isUser && captureEnabled && !isStreaming && (
+                  {isUser && captureEnabled && !isStreaming && (
                     <button
                       onClick={() => handleInspect(firstMsg.id)}
                       className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
