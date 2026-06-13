@@ -484,16 +484,15 @@ function SessionNode({
             </button>
           )}
 
-          {isActive && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsForking(true)
-                setForkName('')
-              }}
-              className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
-              title="Fork"
-            >
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsForking(true)
+              setForkName('')
+            }}
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
+            title="Fork"
+          >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h4m6 0h4M12 5v4m0 6v4" />
                 <circle cx="5" cy="12" r="2" />
@@ -501,8 +500,7 @@ function SessionNode({
                 <circle cx="12" cy="5" r="2" />
                 <circle cx="12" cy="19" r="2" />
               </svg>
-            </button>
-          )}
+          </button>
 
           <button
             onClick={(e) => {
