@@ -3,7 +3,14 @@ import { useState, useEffect } from 'react'
 type Theme = 'system' | 'light' | 'dark'
 type StartupSession = 'last' | 'main'
 
-function GeneralSettings(): React.ReactElement {
+interface GeneralSettingsProps {
+  captureEnabled?: boolean
+  setCaptureEnabled?: (enabled: boolean) => Promise<boolean>
+  clearSnapshots?: () => Promise<number>
+  getCaptureStatus?: () => Promise<{ enabled: boolean; snapshotCount: number }>
+}
+
+function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, getCaptureStatus }: GeneralSettingsProps): React.ReactElement {
   const [fontSize, setFontSize] = useState(() => {
     return Number(localStorage.getItem('xi-settings-font-size')) || 14
   })
@@ -22,10 +29,41 @@ function GeneralSettings(): React.ReactElement {
   const [workerMaxSecondaries, setWorkerMaxSecondaries] = useState(() => {
     return Number(localStorage.getItem('xi-settings-worker-max-secondaries')) || 8
   })
+  const [isCaptureOn, setIsCaptureOn] = useState(() => {
+    return localStorage.getItem('xi-prompt-capture-enabled') === 'true'
+  })
+  const [snapshotCount, setSnapshotCount] = useState(0)
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     document.documentElement.style.setProperty('--xi-font-size', `${fontSize}px`)
   }, [fontSize])
+
+  useEffect(() => {
+    // On mount, sync localStorage preference TO the worker (worker starts with captureEnabled=false)
+    const storedPref = localStorage.getItem('xi-prompt-capture-enabled') === 'true'
+    if (storedPref && setCaptureEnabled) {
+      setCaptureEnabled(true).then(() => {
+        getCaptureStatus?.().then((status) => {
+          setIsCaptureOn(status.enabled)
+          setSnapshotCount(status.snapshotCount)
+        })
+      })
+    } else {
+      getCaptureStatus?.().then((status) => {
+        setIsCaptureOn(status.enabled)
+        setSnapshotCount(status.snapshotCount)
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isCaptureOn) return
+    const interval = setInterval(() => {
+      getCaptureStatus?.().then(status => setSnapshotCount(status.snapshotCount))
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [isCaptureOn, getCaptureStatus])
 
   const handleFontSizeChange = (value: number) => {
     const clamped = Math.min(24, Math.max(10, value))
@@ -149,6 +187,59 @@ function GeneralSettings(): React.ReactElement {
             onChange={(e) => handleWorkerMaxSecondariesChange(Number(e.target.value))}
             className="w-16 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Debug</h3>
+        <div className="flex items-center justify-between h-9">
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-700">Prompt Capture</span>
+            <span className="text-[10px] text-gray-400">
+              Record full API request payloads for debugging.
+              Payloads may contain sensitive data. Stored locally only.
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              const next = !isCaptureOn
+              setIsCaptureOn(next)
+              localStorage.setItem('xi-prompt-capture-enabled', String(next))
+              await setCaptureEnabled?.(next)
+              if (next) {
+                const status = await getCaptureStatus?.()
+                if (status) setSnapshotCount(status.snapshotCount)
+              }
+            }}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
+              isCaptureOn ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${
+                isCaptureOn ? 'translate-x-[18px]' : 'translate-x-[3px]'
+              }`}
+            />
+          </button>
+        </div>
+        <div className="flex items-center justify-between h-8 mt-1">
+          <span className="text-[10px] text-gray-400">
+            Status: {isCaptureOn ? 'ON' : 'OFF'} · {snapshotCount} snapshot{snapshotCount !== 1 ? 's' : ''} stored
+          </span>
+          {snapshotCount > 0 && (
+            <button
+              onClick={async () => {
+                setClearing(true)
+                const deleted = await clearSnapshots?.() ?? 0
+                if (deleted > 0) setSnapshotCount(0)
+                setClearing(false)
+              }}
+              disabled={clearing}
+              className="text-[10px] text-red-500 hover:text-red-700 disabled:opacity-40"
+            >
+              {clearing ? 'Clearing...' : 'Clear all snapshots'}
+            </button>
+          )}
         </div>
       </div>
 

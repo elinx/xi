@@ -21,6 +21,10 @@ interface SettingsPanelProps {
   onSetModel?: (modelId: string, provider?: string) => Promise<{ success: boolean; error?: string }>
   onAuthChange?: () => void
   currentModel?: { provider: string; id: string } | null
+  captureEnabled?: boolean
+  setCaptureEnabled?: (enabled: boolean) => Promise<boolean>
+  clearSnapshots?: () => Promise<number>
+  getCaptureStatus?: () => Promise<{ enabled: boolean; snapshotCount: number }>
 }
 
 function SettingsPanel({
@@ -38,6 +42,10 @@ function SettingsPanel({
   onSetModel,
   onAuthChange,
   currentModel,
+  captureEnabled,
+  setCaptureEnabled,
+  clearSnapshots,
+  getCaptureStatus,
 }: SettingsPanelProps): React.ReactElement {
   const [showProviderDialog, setShowProviderDialog] = useState(false)
 
@@ -68,7 +76,12 @@ function SettingsPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <GeneralSettings />
+        <GeneralSettings
+          captureEnabled={captureEnabled}
+          setCaptureEnabled={setCaptureEnabled}
+          clearSnapshots={clearSnapshots}
+          getCaptureStatus={getCaptureStatus}
+        />
       </div>
 
       {showProviderDialog && (

@@ -82,7 +82,7 @@ function App(): React.ReactElement {
     updateCache: sessionCache.updateCache,
   }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, ensureCacheSync, sessionCache.updateCache])
 
-  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo } = usePiRpc(piRpcOptions)
+  const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, getForkMessages, clearSession, refresh } = useSessionManager(isConnected)
 
   const displayedMessages = sessionCache.displayedMessages
@@ -422,6 +422,12 @@ function App(): React.ReactElement {
       return next
     })
   }, [sessions])
+
+  const handleInspectPrompt = useCallback(async (messageId: string) => {
+    const targetMsg = displayedMessages.find(m => m.id === messageId)
+    if (!targetMsg) return null
+    return getPromptSnapshot(targetMsg.timestamp ?? Date.now())
+  }, [displayedMessages, getPromptSnapshot])
 
   const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => {
     let finalText = text
@@ -937,6 +943,8 @@ function App(): React.ReactElement {
                 onForwardMessage={handleForwardMessage}
                 currentSessionPath={activeSessionPath}
                 sessions={sessions?.projects?.flatMap(p => p.allSessions).map(s => ({ filePath: s.filePath, name: s.name, isMain: s.isMain }))}
+                onInspectPrompt={handleInspectPrompt}
+                captureEnabled={captureEnabled}
               />
             </div>
             {activeTab?.type === 'file' && (
@@ -965,6 +973,10 @@ function App(): React.ReactElement {
                 getAvailableModels={() => getAvailableModels(activeSessionPath)}
                 onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
                 onAuthChange={() => { getAvailableModels(null); refreshModelInfo() }}
+                captureEnabled={captureEnabled}
+                setCaptureEnabled={setCaptureEnabled}
+                clearSnapshots={clearSnapshots}
+                getCaptureStatus={getCaptureStatus}
                 currentModel={currentModel}
               />
             )}
