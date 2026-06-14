@@ -8,13 +8,7 @@ import { WorkerManager } from './worker-manager'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
-/** Prompt template for auto-generating session summaries. */
-const SUMMARY_PROMPT = `请为当前会话生成一段摘要，涵盖以下方面（如果适用）：
-1. 用户意图：用户想要完成什么
-2. 主要操作：做了哪些关键实现或修改
-3. 涉及文件：修改或创建了哪些文件
-4. 已知问题：未解决的问题或待办事项
-请保持简洁，200字以内。只输出摘要内容，不要使用工具。`
+import { DEFAULT_SUMMARY_PROMPT } from '../shared/summary-prompt'
 
 // Override app name & dock icon so macOS shows "Xi" instead of "Electron"
 app.setName('Xi')
@@ -1102,7 +1096,7 @@ function registerIpcHandlers(): void {
               // Fire-and-forget: send summary prompt without awaiting
               worker.bridge.sendRpcCommand({
                 type: 'prompt',
-                message: SUMMARY_PROMPT,
+                message: DEFAULT_SUMMARY_PROMPT,
               }).catch(() => {
                 // Silently ignore — user can manually /summary later
               })

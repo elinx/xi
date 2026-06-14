@@ -447,7 +447,7 @@ function App(): React.ReactElement {
     return getPromptSnapshot(targetMsg.timestamp ?? Date.now())
   }, [displayedMessages, getPromptSnapshot])
 
-  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => {
+  const handleSendPrompt = useCallback(async (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[], isSummaryCommand?: boolean) => {
     let finalText = text
     if (quotes && quotes.length > 0) {
       const quotedText = quotes.map(q => {
@@ -497,8 +497,7 @@ function App(): React.ReactElement {
 
     sendPrompt(sessionPath, finalText, images, mentions)
 
-    // Detect summary prompt and set pending flag
-    if (finalText.startsWith('请为当前会话生成一段摘要')) {
+    if (isSummaryCommand) {
       pendingSummaryRef.current = true
     }
 

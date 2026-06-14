@@ -12,9 +12,10 @@ import SessionMentionDropdown from './SessionMentionDropdown'
 import SkillMentionDropdown from './SkillMentionDropdown'
 import QuoteCard, { type QuotedMessage } from './QuoteCard'
 import { TokenUsageRing } from './TokenUsageRing'
+import { getSummaryPrompt } from '../../../shared/summary-prompt'
 
 interface InputBarProps {
-  onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[]) => void
+  onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[], isSummaryCommand?: boolean) => void
   disabled: boolean
   isConnected: boolean
   isStreaming?: boolean
@@ -191,13 +192,14 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     if (disabled) return
     const allMentions = [...mention.mentions, ...sessionMention.sessionMentions]
    
-    // Intercept /summary command: replace with summary prompt
     let finalText = text
+    let isSummaryCommand = false
     if (text === '/summary') {
-      finalText = '请为当前会话生成一段摘要，涵盖以下方面（如果适用）：\n1. 用户意图：用户想要完成什么\n2. 主要操作：做了哪些关键实现或修改\n3. 涉及文件：修改或创建了哪些文件\n4. 已知问题：未解决的问题或待办事项\n请保持简洁，200字以内。只输出摘要内容，不要使用工具。'
+      finalText = getSummaryPrompt()
+      isSummaryCommand = true
     }
     
-    onSend(finalText, pastedImages.length > 0 ? pastedImages : undefined, allMentions.length > 0 ? allMentions : undefined, quotes.length > 0 ? quotes : undefined)
+    onSend(finalText, pastedImages.length > 0 ? pastedImages : undefined, allMentions.length > 0 ? allMentions : undefined, quotes.length > 0 ? quotes : undefined, isSummaryCommand)
     if (quotes.length > 0) onClearQuotes()
     if (editorRef.current) {
       editorRef.current.innerHTML = ''
