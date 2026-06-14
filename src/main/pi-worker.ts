@@ -200,6 +200,25 @@ let lastClearedTimestamp = 0
 let activeSnapshotCount = 0
 const MAX_SNAPSHOTS_PER_SESSION = 20
 
+/**
+ * Read promptCaptureEnabled from ~/.xi/settings.json.
+ * This is the "bootstrap" mechanism — workers read their initial state
+ * from the persisted config on startup, without waiting for GUI to push.
+ */
+function readCaptureEnabledFromConfig(): boolean {
+  try {
+    const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+    const agentDir = process.env.PI_CODING_AGENT_DIR || join(homeDir, '.xi')
+    const settingsPath = join(agentDir, 'settings.json')
+    if (fsSync.existsSync(settingsPath)) {
+      const content = fsSync.readFileSync(settingsPath, 'utf-8')
+      const settings = JSON.parse(content)
+      return settings.promptCaptureEnabled === true
+    }
+  } catch {}
+  return false
+}
+
 function send(msg: Record<string, unknown>): void {
   process.parentPort?.postMessage(msg)
 }
@@ -243,6 +262,10 @@ async function bindSession(): Promise<void> {
 
 async function init(data: WorkerInit): Promise<void> {
   pi = await import('@earendil-works/pi-coding-agent')
+
+  // Bootstrap captureEnabled from persisted config (source of truth)
+  captureEnabled = readCaptureEnabledFromConfig()
+
   const agentDir = pi.getAgentDir()
 
   const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: sm, sessionStartEvent }) => {
@@ -254,24 +277,49 @@ async function init(data: WorkerInit): Promise<void> {
       cwd,
       agentDir,
       resourceLoaderOptions: {
+        // By returning a non-undefined value from systemPromptOverride, we force
+        // the SDK's buildSystemPrompt() to take the `if (customPrompt)` branch,
+        // completely skipping the default "You are an expert coding assistant operating
+        // inside pi..." template with all its pi docs references.
+        // If the user has a SYSTEM.md file, use it (with pi→xi replacements);
+        // otherwise, provide our own lean prompt.
         systemPromptOverride: (base: string | undefined) => {
           if (base) return base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi')
-          return undefined
-        },
-        appendSystemPromptOverride: (base: string[]) => {
-          const parts = [...base, `You are Xi (ξ), NOT pi. The system you run on is called Xi. Never refer to yourself or your environment as "pi" or "Pi" — always say "Xi" or "xi".
+          return `You are Xi (ξ), an expert coding assistant running inside a session-tree-based coding environment. Every conversation is a session — a node in a tree of forking thought. The project's collective memory is distributed across all sessions, not stored in a single linear thread. Xi has no context compaction: nothing is ever lost, but everything beyond the current session must be searched.
 
-Xi is a session-tree-based coding environment. Every conversation is a session — a node in a tree of forking thought. The project's collective memory is distributed across all sessions, not stored in a single linear thread. Xi has no context compaction: nothing is ever lost, but everything beyond the current session must be searched.
+Available tools:
+- read: Read file contents
+- bash: Execute bash commands (ls, grep, find, etc.)
+- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call
+- write: Create or overwrite files
+- grep: Search file contents for patterns (respects .gitignore)
+- find: Find files by glob pattern (respects .gitignore)
+- ls: List directory contents
+- search_sessions: Search conversations from other sessions — recovers past decisions, design rationale, and failed approaches that the filesystem cannot provide
 
-Key session features you should know about:
+In addition to the tools above, you may have access to other custom tools depending on the project.
+
+Guidelines:
+- Use read to examine files instead of cat or sed.
+- Use edit for precise changes (edits[].oldText must match exactly).
+- When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls.
+- Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.
+- Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.
+- Use write only for new files or complete rewrites.
+- Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
+- Be concise in your responses.
+- Show file paths clearly when working with files.
+
+Session features:
 - Fork: branch a new session from any point in any conversation
 - Parallel: multiple sessions can run simultaneously, each with its own agent worker
 - Forward: send a message from one session to another
 - Quote: reference a message from any session in your reply
 - Reparent: drag to reorganize the tree, changing a session's parent
-- Summary: sessions can have a summary (stored as a dedicated metadata field, written in English). Summaries are generated when a session is marked completed or when the user requests one. They are automatically injected into child sessions as ancestor context.
-
-The session tree is your long-term memory. Past decisions, design rationale, failed approaches, and evolving understanding live in other sessions — they will not appear in the code itself. Consider searching session history when you need to understand not just what exists, but why it exists.`]
+- Summary: sessions can have a summary (stored as a dedicated metadata field, written in English). Summaries are generated when a session is marked completed or when the user requests one. They are automatically injected into child sessions as ancestor context.`
+        },
+        appendSystemPromptOverride: (base: string[]) => {
+          const parts = [...base]
           if (ancestorPreamble) parts.push(ancestorPreamble)
           return parts
         },
