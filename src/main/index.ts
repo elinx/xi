@@ -1914,6 +1914,8 @@ function registerIpcHandlers(): void {
       if (!primary?.bridge.isConnected) {
         return { ok: false, error: 'Worker not connected' }
       }
+      // Reload resources from disk so newly added skills are discovered
+      await primary.bridge.sendRpcCommand({ type: 'reload_skills' })
       const data = await primary.bridge.sendRpcCommand({ type: 'get_skills' }) as {
         skills: Array<{
           name: string
