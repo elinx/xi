@@ -81,8 +81,12 @@ function buildAncestorPreamble(sessionFilePath: string): string {
   // Reverse to show root → parent order
   chain.reverse()
 
-  const lines = chain.map((item, i) => `${i + 1}. "${item.name}": ${item.summary}`)
-  return `\n\n## Ancestor Session History\nYou are continuing work from previous sessions. Here is what was done before:\n${lines.join('\n')}`
+  const items = chain.map((item, i) => {
+    const summary = item.summary
+    return `<ancestor-session index="${i + 1}" name="${item.name}">\n${summary}\n</ancestor-session>`
+  }).join('\n\n')
+
+  return `<ancestor-context>\nYou are continuing work from a previous session. Below are summaries of ancestor sessions — work that was done before this session started. Use this context to maintain continuity, but do not re-do work that is already completed.\n\n${items}\n</ancestor-context>`
 }
 
 function createSearchSessionsTool(cwd: string) {
