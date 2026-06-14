@@ -498,6 +498,27 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           break
         }
 
+        case 'entry_id': {
+          // Worker sends this after appendMessage() completes, providing the
+          // entry ID for the message that just ended. We update piEntryId on
+          // the last ChatMessage with matching role that doesn't have one yet.
+          const entryId = (event as Record<string, unknown>).entryId as string | undefined
+          const entryRole = (event as Record<string, unknown>).role as string | undefined
+          if (entryId && entryRole) {
+            onSessionMessagesUpdate(sessionPath, (prev) => {
+              for (let i = prev.length - 1; i >= 0; i--) {
+                if (prev[i].role === entryRole && !prev[i].piEntryId) {
+                  const updated = [...prev]
+                  updated[i] = { ...updated[i], piEntryId: entryId }
+                  return updated
+                }
+              }
+              return prev
+            })
+          }
+          break
+        }
+
         default:
           break
       }
@@ -628,7 +649,10 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const clearMessages = useCallback((sessionPath: string | null) => {
     if (!sessionPath) return
     onSessionMessagesUpdate(sessionPath, () => [])
-    onSessionForkPointsUpdate(sessionPath, [])
+    // Note: do NOT clear forkPoints here — they are file-level metadata
+    // independent of the message list, and loadHistory() calls clearMessages()
+    // before reloading messages. Clearing them would erase fork point markers
+    // that were loaded by displaySession().
     onSessionTokenUsageUpdate(sessionPath, () => ({
       inputTokens: 0,
       outputTokens: 0,

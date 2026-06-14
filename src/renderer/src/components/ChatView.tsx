@@ -1110,9 +1110,10 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
   const lines = fullText.split('\n').filter(l => l.trim())
   const needCollapse = lines.length > 3 || fullText.length > 150
 
-  // Collect fork points for the last assistant message
+  // Collect fork points — match against the user message's entry ID,
+  // since Pi SDK only creates fork_points with user message entry IDs.
   const lastAssistantMsg = turn.assistantMessages[turn.assistantMessages.length - 1]
-  const msgForkPoints = forkPoints.filter((fp) => turn.assistantMessages.some((m) => m.piEntryId === fp.entryId))
+  const userForkPoints = forkPoints.filter((fp) => turn.userMessage.piEntryId === fp.entryId)
 
   return (
     <>
@@ -1150,9 +1151,9 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
             {isExpanded ? '收起' : '展开'}
           </button>
         )}
-        {msgForkPoints.length > 0 && (
+        {userForkPoints.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {msgForkPoints.map((fp, idx) => (
+            {userForkPoints.map((fp, idx) => (
               <span
                 key={idx}
                 className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"

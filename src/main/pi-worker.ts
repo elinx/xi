@@ -352,6 +352,27 @@ async function bindSession(): Promise<void> {
   await session.bindExtensions({})
 
   unsubscribe = session.subscribe((event) => {
+    // Inject entry ID into message_end events so the GUI can set piEntryId
+    // on the corresponding ChatMessage. We use queueMicrotask because
+    // Pi SDK's _handleAgentEvent emits the event BEFORE calling
+    // sessionManager.appendMessage(). By queuing a microtask, we defer
+    // the getLeafId() call until after appendMessage() has executed
+    // and the leaf ID has been updated.
+    if (event.type === 'message_end' && sessionManager) {
+      const role = (event as Record<string, unknown>).message
+        ? ((event as Record<string, unknown>).message as Record<string, unknown>).role
+        : undefined
+      queueMicrotask(() => {
+        const leafId = sessionManager!.getLeafId()
+        if (leafId) {
+          send({
+            channel: 'event',
+            data: { type: 'entry_id', entryId: leafId, role, sessionPath: session?.sessionFile },
+          })
+        }
+      })
+    }
+
     forwardEvent(event)
 
     if (event.type === 'agent_end') {
@@ -636,20 +657,50 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
 
       case 'get_messages': {
         let messages = session.messages
-        if (messages.length === 0 && sessionManager) {
+        if (sessionManager) {
           try {
+            // Always inject entry IDs from session entries into messages.
+            // Pi SDK's session.messages (agent.state.messages) does not include
+            // the entry ID — it's a property of the SessionEntry, not the message object.
+            // We need piEntryId on each message for fork point matching in the GUI.
             const entries = sessionManager.getEntries()
-            const messageEntries = entries.filter((e) => e.type === 'message' && (e as Record<string, unknown>).message)
-            messages = messageEntries.map((e) => {
-              const entry = e as Record<string, unknown>
-              const msg = { ...(entry.message as Record<string, unknown>) }
-              if (!msg.id && typeof entry.id === 'string') {
-                msg.id = entry.id
-              }
-              return msg
-            }) as unknown as AgentSession['messages']
+            if (messages.length === 0) {
+              // No messages in agent state — rebuild from entries (original behavior)
+              const messageEntries = entries.filter((e) => e.type === 'message' && (e as Record<string, unknown>).message)
+              messages = messageEntries.map((e) => {
+                const entry = e as Record<string, unknown>
+                const msg = { ...(entry.message as Record<string, unknown>) }
+                if (!msg.id && typeof entry.id === 'string') {
+                  msg.id = entry.id
+                }
+                return msg
+              }) as unknown as AgentSession['messages']
+            } else {
+              // Messages exist — inject entry IDs by matching entries in order.
+              // session.messages comes from buildSessionContext() which may include
+              // synthetic messages (compaction summary, branch summary) that don't
+              // have corresponding message entries. We only inject IDs for entries
+              // with type 'message', advancing through them sequentially.
+              const messageEntries = entries.filter((e) => e.type === 'message' && (e as Record<string, unknown>).message)
+              const injected = messages.map((msg) => {
+                const msgRecord = msg as Record<string, unknown>
+                if (msgRecord.id) return msg // Already has an ID
+                // Find the next message entry with matching role
+                for (let i = 0; i < messageEntries.length; i++) {
+                  const entry = messageEntries[i] as Record<string, unknown>
+                  const entryMsg = entry.message as Record<string, unknown> | undefined
+                  if (entryMsg && entryMsg.role === msgRecord.role && typeof entry.id === 'string') {
+                    // Remove matched entry to handle sequential matching
+                    messageEntries.splice(i, 1)
+                    return { ...msgRecord, id: entry.id }
+                  }
+                }
+                return msg
+              })
+              messages = injected as unknown as AgentSession['messages']
+            }
           } catch {
-            // getEntries failed — return empty messages
+            // getEntries or injection failed — fall through to session.messages as-is
           }
         }
         send({
