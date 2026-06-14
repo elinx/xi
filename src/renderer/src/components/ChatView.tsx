@@ -1621,6 +1621,14 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
   const isNearBottomRef = useRef(true)
   const savedScrollTopRef = useRef<number>(0)
   const userScrolledUpRef = useRef(false)
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map())
+  // Track whether user was at the bottom when leaving a session/tab
+  // so we can auto-scroll to the new bottom on return if they were at bottom
+  const wasAtBottomRef = useRef<Map<string, boolean>>(new Map())
+  const prevSessionPathRef = useRef<string | undefined>(currentSessionPath)
+  const isRestoringScrollRef = useRef(false)
+  const currentSessionPathRef = useRef(currentSessionPath)
+  currentSessionPathRef.current = currentSessionPath
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [annotatingTarget, setAnnotatingTarget] = useState<{
     messageId: string
@@ -1726,6 +1734,14 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     savedScrollTopRef.current = el.scrollTop
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     isNearBottomRef.current = nearBottom
+    // Continuously save scroll position per-session so it's available
+    // even when the browser resets scrollTop on display:none
+    const sp = currentSessionPathRef.current
+    if (sp) {
+      scrollPositionsRef.current.set(sp, el.scrollTop)
+      // Continuously track near-bottom state per-session
+      wasAtBottomRef.current.set(sp, nearBottom)
+    }
     if (nearBottom) {
       userScrolledUpRef.current = false
     } else {
@@ -1739,13 +1755,133 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
 
   const scrollToBottom = useCallback(() => {
     const el = scrollContainerRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el) {
+      el.scrollTop = el.scrollHeight
+      const sp = currentSessionPathRef.current
+      if (sp) {
+        scrollPositionsRef.current.set(sp, el.scrollTop)
+      }
+    }
     isNearBottomRef.current = true
     userScrolledUpRef.current = false
     setShowScrollToBottom(false)
   }, [])
 
+  // Save/restore scroll position when switching sessions
   useEffect(() => {
+    if (currentSessionPath === prevSessionPathRef.current) return
+
+    const el = scrollContainerRef.current
+
+    // Save previous session's scroll position
+    // Prefer the continuously-updated scrollPositionsRef (from handleScroll),
+    // fall back to savedScrollTopRef / el.scrollTop
+    if (prevSessionPathRef.current != null) {
+      if (!scrollPositionsRef.current.has(prevSessionPathRef.current) && el) {
+        scrollPositionsRef.current.set(prevSessionPathRef.current, el.scrollTop || savedScrollTopRef.current)
+      }
+      // Remember if user was at bottom for this session
+      wasAtBottomRef.current.set(prevSessionPathRef.current, isNearBottomRef.current)
+    }
+
+    // Mark that we're restoring to prevent auto-scroll interference
+    isRestoringScrollRef.current = true
+
+    const saved = currentSessionPath ? scrollPositionsRef.current.get(currentSessionPath) : undefined
+    const wasAtBottom = currentSessionPath ? wasAtBottomRef.current.get(currentSessionPath) : undefined
+
+    const rafId = requestAnimationFrame(() => {
+      isRestoringScrollRef.current = false
+      const el = scrollContainerRef.current
+      if (!el) return
+      // If user was at the bottom when they left this session, scroll to the
+      // new bottom (content may have changed while away)
+      if (wasAtBottom) {
+        el.scrollTop = el.scrollHeight
+        isNearBottomRef.current = true
+      } else if (saved != null) {
+        el.scrollTop = saved
+        isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      } else {
+        el.scrollTop = el.scrollHeight
+        isNearBottomRef.current = true
+      }
+      setShowScrollToBottom(!isNearBottomRef.current)
+    })
+
+    prevSessionPathRef.current = currentSessionPath
+    return () => {
+      cancelAnimationFrame(rafId)
+      isRestoringScrollRef.current = false
+    }
+  }, [currentSessionPath])
+
+  // Handle tab visibility changes (display:none ↔ display:block)
+  // When the container becomes display:none, the browser resets scrollTop to 0.
+  // So we rely on handleScroll to continuously save positions — we only need
+  // to restore here when the container becomes visible again.
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    let wasVisible = el.clientHeight > 0
+    let pendingRaf: number | null = null
+
+    const observer = new ResizeObserver(() => {
+      const isVisible = el.clientHeight > 0
+      if (isVisible && !wasVisible) {
+        // Became visible — restore scroll position for current session
+        const sp = currentSessionPathRef.current
+        const saved = sp ? scrollPositionsRef.current.get(sp) : undefined
+        const wasAtBottom = sp ? wasAtBottomRef.current.get(sp) : undefined
+
+        // Guard against auto-scroll overwriting our restore
+        isRestoringScrollRef.current = true
+
+        // Cancel any previous pending restore
+        if (pendingRaf !== null) cancelAnimationFrame(pendingRaf)
+
+        // Use double-rAF to ensure the browser has finished layout after
+        // switching from display:none to display:block
+        requestAnimationFrame(() => {
+          pendingRaf = requestAnimationFrame(() => {
+            pendingRaf = null
+            isRestoringScrollRef.current = false
+            // If user was at the bottom when they left, scroll to new bottom
+            if (wasAtBottom) {
+              el.scrollTop = el.scrollHeight
+              isNearBottomRef.current = true
+            } else if (saved != null) {
+              el.scrollTop = saved
+              isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+            } else {
+              el.scrollTop = el.scrollHeight
+              isNearBottomRef.current = true
+            }
+            setShowScrollToBottom(!isNearBottomRef.current)
+          })
+        })
+      }
+      // No need to save on hidden — handleScroll already saves continuously
+      wasVisible = isVisible
+    })
+
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      if (pendingRaf !== null) cancelAnimationFrame(pendingRaf)
+      isRestoringScrollRef.current = false
+    }
+  }, [])
+
+  // Auto-scroll on new messages (respects session-switch restoration)
+  useEffect(() => {
+    // Don't auto-scroll while restoring scroll position from session switch
+    if (isRestoringScrollRef.current) return
+    // Don't auto-scroll when hidden (display: none)
+    const el = scrollContainerRef.current
+    if (el && el.clientHeight === 0) return
+
     const lastMsg = messages[messages.length - 1]
     if (lastMsg?.role === 'user') {
       userScrolledUpRef.current = false
