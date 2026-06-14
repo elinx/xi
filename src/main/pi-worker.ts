@@ -98,15 +98,65 @@ function buildAncestorPreamble(sessionFilePath: string): string {
   return `<ancestor-context>\nYou are continuing work in a forked session — a parallel branch, not a linear continuation. Below are summaries of ancestor sessions, ordered from root to direct parent. Use this context to maintain continuity, but do not re-do work that is already completed — sibling sessions may be handling other tasks in parallel.\n\n${items}\n</ancestor-context>`
 }
 
-function createSearchSessionsTool(cwd: string) {
+function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
   const schema = {
     type: 'object' as const,
     properties: {
-      query: { type: 'string' as const, description: 'Search query — matches against session names and message content' },
+      query: { type: 'string' as const, description: 'Search query — matches against session names, summaries, and message content' },
       limit: { type: 'number' as const, description: 'Max results to return (default 10)', default: 10 },
     },
     required: ['query'],
   }
+
+  /** Extract plain text from a message.content value (string or array of content blocks) */
+  function extractText(msgContent: unknown): string {
+    if (typeof msgContent === 'string') return msgContent
+    if (!Array.isArray(msgContent)) return ''
+    const parts: string[] = []
+    for (const block of msgContent) {
+      if (!block || typeof block !== 'object') continue
+      // text blocks: { type: "text", text: "..." }
+      if (block.type === 'text' && typeof block.text === 'string') {
+        parts.push(block.text)
+      }
+      // toolCall blocks: { type: "toolCall", name: "...", arguments: {...} }
+      else if (block.type === 'toolCall' && typeof block.name === 'string') {
+        const args = block.arguments
+        // Only index key arguments from common tools for searchability
+        if (args && typeof args === 'object') {
+          const keyFields = ['command', 'pattern', 'path', 'query', 'content']
+          for (const key of keyFields) {
+            if (typeof args[key] === 'string') parts.push(`${block.name} ${key}: ${args[key]}`)
+          }
+        }
+      }
+      // toolResult blocks: { type: "toolResult", content: [...] }
+      else if (block.type === 'toolResult' && Array.isArray(block.content)) {
+        for (const sub of block.content) {
+          if (sub?.type === 'text' && typeof sub.text === 'string') parts.push(sub.text)
+        }
+      }
+    }
+    return parts.join('\n')
+  }
+
+  /** Create a readable excerpt from text, highlighting around the query match */
+  function excerpt(text: string, query: string, maxLen = 300): string {
+    const lower = text.toLowerCase()
+    const idx = lower.indexOf(query)
+    if (idx === -1) {
+      return text.length > maxLen ? text.substring(0, maxLen) + '...' : text
+    }
+    // Start excerpt a bit before the match for context
+    const contextBefore = 40
+    const start = Math.max(0, idx - contextBefore)
+    const end = Math.min(text.length, start + maxLen)
+    let result = text.substring(start, end)
+    if (start > 0) result = '...' + result
+    if (end < text.length) result = result + '...'
+    return result
+  }
+
   return {
     name: 'search_sessions',
     label: 'search_sessions',
@@ -115,7 +165,7 @@ function createSearchSessionsTool(cwd: string) {
       'Xi never compacts context — every message is preserved — but only the current session is directly visible. ' +
       'Past decisions, design rationale, failed approaches, and work-in-progress live in other sessions — because Xi forks tasks into parallel sessions rather than compacting them into one thread. ' +
       'Use this to recover context that the filesystem cannot provide: not what the code does, but why it was written that way. ' +
-      'Searches session names, summaries, and message content.',
+      'Searches session names, compaction summaries, and message content.',
     parameters: schema,
     execute: async (_toolCallId: string, params: { query: string; limit?: number }, _signal: AbortSignal | undefined) => {
       const limit = params.limit ?? 10
@@ -126,48 +176,98 @@ function createSearchSessionsTool(cwd: string) {
       }
       let files: string[]
       try {
-        files = fsSync.readdirSync(sessionsDir).filter(f => f.endsWith('.jsonl')).map(f => join(sessionsDir, f))
+        files = fsSync.readdirSync(sessionsDir)
+          .filter(f => f.endsWith('.jsonl'))
+          .sort()  // deterministic order: oldest first by filename timestamp
+          .map(f => join(sessionsDir, f))
+          .filter(f => !currentSessionFile || f !== currentSessionFile)  // exclude current session
       } catch {
         return { content: [{ type: 'text' as const, text: 'Could not read sessions directory.' }] }
       }
-      const results: Array<{ name: string; path: string; matches: string[] }> = []
+
+      interface SearchResult {
+        name: string
+        path: string
+        matches: string[]
+        score: number  // higher = more relevant
+      }
+
+      const results: SearchResult[] = []
       for (const filePath of files) {
-        if (results.length >= limit) break
         try {
           const content = fsSync.readFileSync(filePath, 'utf-8')
           const lines = content.split('\n')
           const matches: string[] = []
           let sessionName = ''
+          let score = 0
+          let sessionSummary = ''
+
           for (const line of lines) {
             if (!line.trim()) continue
-            try {
-              const entry = JSON.parse(line)
-              if (entry.type === 'session' && entry.name) sessionName = entry.name
-              if (entry.type === 'message' && entry.message?.content) {
-                const msgContent = typeof entry.message.content === 'string'
-                  ? entry.message.content
-                  : JSON.stringify(entry.message.content)
-                if (msgContent.toLowerCase().includes(query)) {
-                  const excerpt = msgContent.length > 200 ? msgContent.substring(0, 200) + '...' : msgContent
-                  matches.push(excerpt)
-                  if (matches.length >= 3) break
-                }
+            let entry: Record<string, unknown>
+            try { entry = JSON.parse(line) } catch { continue }
+
+            // Session name and summary are in session_info entries (last-wins semantics)
+            if (entry.type === 'session_info') {
+              if (typeof entry.name === 'string') sessionName = entry.name as string
+              if (typeof entry.summary === 'string') sessionSummary = entry.summary as string
+            }
+
+            // Compaction summaries (Pi SDK auto-compaction when context overflows)
+            if (entry.type === 'compaction' && typeof entry.summary === 'string') {
+              const compactionSummary = entry.summary as string
+              if (compactionSummary.toLowerCase().includes(query)) {
+                score += 10
+                matches.push(excerpt(compactionSummary, query))
+                if (matches.length >= 3) break
               }
-            } catch { continue }
+            }
+
+            // Search message content
+            if (entry.type === 'message' && (entry.message as Record<string, unknown>)?.content) {
+              const plainText = extractText((entry.message as Record<string, unknown>).content)
+              if (plainText.toLowerCase().includes(query)) {
+                score += 1
+                matches.push(excerpt(plainText, query))
+                if (matches.length >= 3) break
+              }
+            }
           }
-          if (matches.length > 0 || sessionName.toLowerCase().includes(query)) {
+
+          // Session name match is highly relevant
+          if (sessionName.toLowerCase().includes(query)) {
+            score += 5
+          }
+
+          // Session summary (user/AI-generated via session_info) is the highest quality context
+          if (sessionSummary && sessionSummary.toLowerCase().includes(query)) {
+            score += 10
+            if (matches.length < 3) {
+              matches.unshift(excerpt(sessionSummary, query))  // put summary excerpt first
+            }
+          }
+
+          if (matches.length > 0 || sessionName.toLowerCase().includes(query) || (sessionSummary && sessionSummary.toLowerCase().includes(query))) {
             results.push({
               name: sessionName || filePath.split('/').pop() || filePath,
               path: filePath,
               matches,
+              score: score + (sessionSummary ? 2 : 0),  // boost sessions with summaries
             })
           }
         } catch { continue }
       }
-      if (results.length === 0) {
+
+      // Sort by relevance score (descending), then by name for deterministic order
+      results.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+
+      // Apply limit after sorting (not during scan) to ensure best results surface
+      const limited = results.slice(0, limit)
+
+      if (limited.length === 0) {
         return { content: [{ type: 'text' as const, text: `No sessions found matching "${params.query}".` }] }
       }
-      const output = results.map(r => {
+      const output = limited.map(r => {
         const header = `## ${r.name}\nPath: ${r.path}`
         const body = r.matches.length > 0 ? r.matches.map((m, i) => `  ${i + 1}. "${m}"`).join('\n') : '  (name match only)'
         return header + '\n' + body
@@ -380,7 +480,7 @@ Session features:
         sessionManager: sm,
         sessionStartEvent,
         tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions'],
-        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd)],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile())],
       })),
       services,
       diagnostics: services.diagnostics,
