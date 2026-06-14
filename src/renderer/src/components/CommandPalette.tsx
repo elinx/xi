@@ -121,8 +121,8 @@ export default function CommandPalette({
       onOpenChange={onOpenChange}
       label="Command Palette"
       loop
-      overlayClassName="fixed inset-0 bg-black/40 backdrop-blur-sm"
-      contentClassName="fixed top-[15vh] left-1/2 -translate-x-1/2 w-[560px] max-h-[min(480px,60vh)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+      overlayClassName="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+      contentClassName="fixed top-[15vh] left-1/2 -translate-x-1/2 w-[560px] max-h-[min(480px,60vh)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50"
     >
         <VisuallyHidden>
           <Title>Command Palette</Title>
