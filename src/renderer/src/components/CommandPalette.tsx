@@ -140,7 +140,7 @@ export default function CommandPalette({
           />
         </div>
 
-        <Command.List className="flex-1 overflow-y-auto py-1">
+        <Command.List className="overflow-y-auto py-1" style={{ maxHeight: 'min(340px, 50vh)' }}>
           <Command.Empty className="px-4 py-8 text-center text-sm text-gray-400">
             {filesLoading ? 'Loading files...' : 'No results found'}
           </Command.Empty>
