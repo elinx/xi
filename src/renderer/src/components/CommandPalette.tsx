@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Command } from 'cmdk'
+import { Title, Description } from '@radix-ui/react-dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import type { FileEntry } from '../hooks/useFileIndex'
 import type { CommandItem } from '../hooks/useCommandRegistry'
 
@@ -122,6 +124,10 @@ export default function CommandPalette({
       overlayClassName="fixed inset-0 bg-black/40 backdrop-blur-sm"
       contentClassName="fixed top-[15vh] left-1/2 -translate-x-1/2 w-[560px] max-h-[min(480px,60vh)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
     >
+        <VisuallyHidden>
+          <Title>Command Palette</Title>
+          <Description>Search files, sessions, and commands</Description>
+        </VisuallyHidden>
         <div className="flex items-center border-b border-gray-200 px-4">
           <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
