@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -36,6 +36,7 @@ interface ChatViewProps {
   forkPoints: ForkPoint[]
   viewMode: ViewMode
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
   onForwardMessage?: (messageId: string, role: 'user' | 'assistant', content: string, targetSessionPath: string) => void
   currentSessionPath?: string
@@ -128,7 +129,7 @@ const mdComponentsInline = {
   a: LinkComponent,
 }
 
-function TextBlockRenderer({ block, isStreaming, onFileSelect, isUser }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void; isUser?: boolean }): React.ReactElement {
+function TextBlockRenderer({ block, isStreaming, onFileSelect, onSessionSelect, sessionNames, isUser }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void; onSessionSelect?: (sessionName: string) => void; sessionNames?: Set<string>; isUser?: boolean }): React.ReactElement {
   if (block.subtype === 'thinking') {
     return <ThinkingBlockRenderer content={block.content} isStreaming={isStreaming} />
   }
@@ -153,8 +154,8 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect, isUser }: { block
     )
   }
 
-  if (onFileSelect) {
-    const segments = splitByMentions(block.content)
+  if (onFileSelect || onSessionSelect) {
+    const segments = splitByMentions(block.content, sessionNames)
     if (segments.length === 1 && segments[0].type === 'text') {
       return (
         <div className="prose prose-sm max-w-none">
@@ -167,8 +168,10 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect, isUser }: { block
         <p>
           {segments.map((seg, i) =>
             seg.type === 'mention'
-              ? <MentionPill key={i} filePath={seg.value} onClick={() => onFileSelect(seg.value)} />
-              : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>
+              ? <MentionPill key={i} filePath={seg.value} onClick={() => onFileSelect?.(seg.value)} />
+              : seg.type === 'session-mention'
+                ? <SessionMentionPill key={i} sessionName={seg.value} onClick={() => onSessionSelect?.(seg.value)} />
+                : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={mdComponentsInline}>{seg.value}</ReactMarkdown>
           )}
         </p>
       </div>
@@ -182,27 +185,73 @@ function TextBlockRenderer({ block, isStreaming, onFileSelect, isUser }: { block
   )
 }
 
-const MENTION_RE = /@([\w][\w-]*(?:[\/.][\w./-]+)+)/g
+const FILE_MENTION_RE = /@([\w][\w-]*(?:[\/.][\w./-]+)+)/g
 
 interface TextSegment { type: 'text'; value: string }
-interface MentionSegment { type: 'mention'; value: string }
-type Segment = TextSegment | MentionSegment
+interface FileMentionSegment { type: 'mention'; value: string }
+interface SessionMentionSegment { type: 'session-mention'; value: string }
+type Segment = TextSegment | FileMentionSegment | SessionMentionSegment
 
-function splitByMentions(text: string): Segment[] {
+function splitByMentions(text: string, sessionNames?: Set<string>): Segment[] {
   const segments: Segment[] = []
   let lastIndex = 0
-  let match: RegExpExecArray | null
-  const re = new RegExp(MENTION_RE.source, 'g')
-  while ((match = re.exec(text)) !== null) {
+
+  // Pre-compute inline code spans to skip mentions inside them
+  const codeSpans: [number, number][] = []
+  const codeRe = /`[^`]*`/g
+  let cm: RegExpExecArray | null
+  while ((cm = codeRe.exec(text)) !== null) {
+    codeSpans.push([cm.index, codeRe.lastIndex])
+  }
+  function isInCodeSpan(start: number, end: number): boolean {
+    for (const [cs, ce] of codeSpans) {
+      if (start >= cs && end <= ce) return true
+    }
+    return false
+  }
+
+  // Collect all matches from both patterns
+  const matches: { index: number; endIndex: number; segType: 'mention' | 'session-mention'; value: string }[] = []
+
+  const fileRe = new RegExp(FILE_MENTION_RE.source, 'g')
+  let m: RegExpExecArray | null
+  while ((m = fileRe.exec(text)) !== null) {
+    if (!isInCodeSpan(m.index, fileRe.lastIndex)) {
+      matches.push({ index: m.index, endIndex: fileRe.lastIndex, segType: 'mention', value: m[1] })
+    }
+  }
+
+  // Session mention: match against actual session names instead of a fixed regex.
+  // This handles names with colons, spaces, etc. (e.g. "bugfix: nothing got").
+  // Build a single alternation pattern sorted by length desc so longer names match first.
+  if (sessionNames && sessionNames.size > 0) {
+    const sortedNames = [...sessionNames].sort((a, b) => b.length - a.length)
+    const alternation = sortedNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+    const backtick = '`'
+    const sessionRe = new RegExp(`(${backtick}?)\\$(${alternation})\\1`, 'g')
+    while ((m = sessionRe.exec(text)) !== null) {
+      if (isInCodeSpan(m.index, sessionRe.lastIndex)) continue
+      // Avoid overlapping matches with file mentions
+      if (matches.some(existing => m.index < existing.endIndex && sessionRe.lastIndex > existing.index)) continue
+      matches.push({ index: m.index, endIndex: sessionRe.lastIndex, segType: 'session-mention', value: m[2] })
+    }
+  }
+
+  // Sort by position
+  matches.sort((a, b) => a.index - b.index)
+
+  for (const match of matches) {
     if (match.index > lastIndex) {
       segments.push({ type: 'text', value: text.slice(lastIndex, match.index) })
     }
-    segments.push({ type: 'mention', value: match[1] })
-    lastIndex = re.lastIndex
+    segments.push({ type: match.segType, value: match.value } as Segment)
+    lastIndex = match.endIndex
   }
+
   if (lastIndex < text.length) {
     segments.push({ type: 'text', value: text.slice(lastIndex) })
   }
+
   return segments.length > 0 ? segments : [{ type: 'text', value: text }]
 }
 
@@ -216,6 +265,20 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
       {filePath}
+    </button>
+  )
+}
+
+function SessionMentionPill({ sessionName, onClick }: { sessionName: string; onClick: () => void }): React.ReactElement {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-purple-100 text-purple-700 text-[13px] leading-5 align-baseline hover:bg-purple-200 transition-colors cursor-pointer border-0"
+    >
+      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      {sessionName}
     </button>
   )
 }
@@ -793,6 +856,8 @@ function MergedBlocksRenderer({
   onExitAnnotation,
   onSendFeedback,
   onFileSelect,
+  onSessionSelect,
+  sessionNames,
 }: {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -802,6 +867,8 @@ function MergedBlocksRenderer({
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
 }): React.ReactElement {
   // Flatten all blocks, track which message each came from
   const allBlocks: { block: ContentBlock; msgId: string; blockIdx: number; isUser: boolean }[] = []
@@ -867,6 +934,8 @@ function MergedBlocksRenderer({
         onExitAnnotation={onExitAnnotation}
         onSendFeedback={onSendFeedback}
         onFileSelect={onFileSelect}
+        onSessionSelect={onSessionSelect}
+        sessionNames={sessionNames}
         isUser={allBlocks[j].isUser}
       />
     )
@@ -889,6 +958,8 @@ function MessageBlocksRenderer({
   onExitAnnotation,
   onSendFeedback,
   onFileSelect,
+  onSessionSelect,
+  sessionNames,
 }: {
   msg: ChatMessage
   isStreaming: boolean
@@ -898,6 +969,8 @@ function MessageBlocksRenderer({
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
 }): React.ReactElement {
   const toolResultById = new Map<string, number>()
   for (let j = 0; j < msg.blocks.length; j++) {
@@ -953,6 +1026,8 @@ function MessageBlocksRenderer({
         onExitAnnotation={onExitAnnotation}
         onSendFeedback={onSendFeedback}
         onFileSelect={onFileSelect}
+        onSessionSelect={onSessionSelect}
+        sessionNames={sessionNames}
         isUser={msg.role === 'user'}
       />
     )
@@ -982,6 +1057,8 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   onExitAnnotation,
   onSendFeedback,
   onFileSelect,
+  onSessionSelect,
+  sessionNames,
   isUser,
 }: {
   block: ContentBlock
@@ -993,11 +1070,13 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
   isUser?: boolean
 }): React.ReactElement | null {
   switch (block.type) {
     case 'text':
-      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={isUser ? onFileSelect : undefined} isUser={isUser} />
+      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={onFileSelect} onSessionSelect={onSessionSelect} sessionNames={sessionNames} isUser={isUser} />
     case 'quote':
       return <QuoteBlockRenderer block={block} />
     case 'image':
@@ -1086,7 +1165,7 @@ function ForkNameInput({
 }
 
 /** Collapsible agent content within Turn mode */
-function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingTarget, onEnterAnnotation, onExitAnnotation, onSendFeedback, onFileSelect, isStreaming, streamingMessageId, forkPoints, onForkClick, forkInputMessageId, forkEntryId, onForkClose, onForkAtEntry, onQuoteMessage, onForwardClick, sessions }: {
+function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingTarget, onEnterAnnotation, onExitAnnotation, onSendFeedback, onFileSelect, onSessionSelect, sessionNames, isStreaming, streamingMessageId, forkPoints, onForkClick, forkInputMessageId, forkEntryId, onForkClose, onForkAtEntry, onQuoteMessage, onForwardClick, sessions }: {
   turn: ConversationTurn
   isExpanded: boolean
   onToggleExpand: () => void
@@ -1095,6 +1174,8 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
   onExitAnnotation: () => void
   onSendFeedback: (description: string, imageData: string) => void
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
   isStreaming: boolean
   streamingMessageId: string | null
   forkPoints: ForkPoint[]
@@ -1130,6 +1211,8 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
             onExitAnnotation={onExitAnnotation}
             onSendFeedback={onSendFeedback}
             onFileSelect={onFileSelect}
+            onSessionSelect={onSessionSelect}
+            sessionNames={sessionNames}
           />
         ) : (
           <div className="relative max-h-[4.8em] overflow-hidden">
@@ -1142,6 +1225,8 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
               onExitAnnotation={onExitAnnotation}
               onSendFeedback={onSendFeedback}
               onFileSelect={onFileSelect}
+              onSessionSelect={onSessionSelect}
+              sessionNames={sessionNames}
             />
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent" />
           </div>
@@ -1190,6 +1275,8 @@ function TurnCard({
   isStreaming,
   streamingMessageId,
   onFileSelect,
+  onSessionSelect,
+  sessionNames,
   onQuoteMessage,
   onForwardClick,
   sessions,
@@ -1214,6 +1301,8 @@ function TurnCard({
   isStreaming: boolean
   streamingMessageId: string | null
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
   onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
@@ -1348,6 +1437,8 @@ function TurnCard({
             onExitAnnotation={onExitAnnotation}
             onSendFeedback={onSendFeedback}
             onFileSelect={onFileSelect}
+            onSessionSelect={onSessionSelect}
+            sessionNames={sessionNames}
           />
         </div>
         <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-blue-500">
@@ -1370,6 +1461,8 @@ function TurnCard({
             onExitAnnotation={onExitAnnotation}
             onSendFeedback={onSendFeedback}
             onFileSelect={onFileSelect}
+            onSessionSelect={onSessionSelect}
+            sessionNames={sessionNames}
             isStreaming={isStreaming}
             streamingMessageId={streamingMessageId}
             forkPoints={forkPoints}
@@ -1418,6 +1511,8 @@ function OutlineRow({
   isStreaming,
   streamingMessageId,
   onFileSelect,
+  onSessionSelect,
+  sessionNames,
   onQuoteMessage,
   onForwardClick,
   sessions,
@@ -1440,6 +1535,8 @@ function OutlineRow({
   isStreaming: boolean
   streamingMessageId: string | null
   onFileSelect?: (filePath: string) => void
+  onSessionSelect?: (sessionName: string) => void
+  sessionNames?: Set<string>
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
   onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
@@ -1619,7 +1716,9 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onSessionSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary }: ChatViewProps): React.ReactElement {
+  // Pre-compute session name set for mention validation
+  const sessionNames = useMemo(() => new Set((sessions ?? []).map(s => s.name).filter(Boolean) as string[]), [sessions])
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
@@ -2046,6 +2145,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       onExitAnnotation={handleExitAnnotation}
                       onSendFeedback={handleSendFeedback}
                       onFileSelect={onFileSelect}
+                      onSessionSelect={onSessionSelect}
+                      sessionNames={sessionNames}
                     />
                     {msgForkPoints.length > 0 && (
                       <div className="mt-1 flex flex-wrap justify-end gap-1.5">
@@ -2087,6 +2188,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       onExitAnnotation={handleExitAnnotation}
                       onSendFeedback={handleSendFeedback}
                       onFileSelect={onFileSelect}
+                      onSessionSelect={onSessionSelect}
+                      sessionNames={sessionNames}
                     />
                     {msgForkPoints.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -2132,6 +2235,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
               onFileSelect={onFileSelect}
+              onSessionSelect={onSessionSelect}
+              sessionNames={sessionNames}
               onQuoteMessage={onQuoteMessage}
               onForwardClick={(id, role, content) => setForwardingMessage({ id, role, content })}
               sessions={sessions}
@@ -2162,6 +2267,8 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               isStreaming={isStreaming}
               streamingMessageId={streamingMessageId}
               onFileSelect={onFileSelect}
+              onSessionSelect={onSessionSelect}
+              sessionNames={sessionNames}
               onQuoteMessage={onQuoteMessage}
               onForwardClick={(id, role, content) => setForwardingMessage({ id, role, content })}
               sessions={sessions}

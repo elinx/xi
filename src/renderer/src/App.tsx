@@ -1063,6 +1063,10 @@ function App(): React.ReactElement {
                 forkPoints={displayedForkPoints}
                 viewMode={viewMode}
                 onFileSelect={(p) => handleFileSelect(p)}
+                onSessionSelect={(sessionName: string) => {
+                  const session = sessions?.projects?.flatMap(p => p.allSessions).find(s => s.name === sessionName)
+                  if (session) handleSwitchSession(session.filePath)
+                }}
                 onQuoteMessage={handleQuoteMessage}
                 onForwardMessage={handleForwardMessage}
                 currentSessionPath={activeSessionPath}
