@@ -205,6 +205,24 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
   )
 }
 
+/** Clickable file-path pill used inside tool call headers and details.
+ *  Default: inherits the surrounding gray text color — blends in completely.
+ *  Hover: surfaces a subtle blue tint + underline to signal clickability. */
+function ToolPathPill({ filePath, onClick }: { filePath: string; onClick: () => void }): React.ReactElement {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      className="inline-flex items-center gap-0.5 px-0.5 py-px rounded text-inherit text-[11px] font-mono leading-4 align-baseline hover:text-blue-600 hover:bg-blue-50 hover:underline underline-offset-2 transition-colors cursor-pointer border-0 max-w-[280px] truncate"
+      title={filePath}
+    >
+      <svg className="w-2.5 h-2.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+      <span className="truncate">{filePath}</span>
+    </button>
+  )
+}
+
 function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 'assistant'; content: string; sourceSessionName?: string } }): React.ReactElement {
   const [open, setOpen] = useState(false)
   const isForward = !!block.sourceSessionName
@@ -278,7 +296,7 @@ function extractHtmlFromResult(result: ToolResultBlock | undefined): HtmlBlock[]
   return result.content.filter((c): c is HtmlBlock => c.type === 'html')
 }
 
-const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { block: ToolCallBlock; result?: ToolResultBlock }): React.ReactElement {
+const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
 
@@ -296,7 +314,12 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
   const icon = toolIcon[block.toolName] ?? '🔧'
 
   // Build header summary based on tool type
-  let headerSummary = ''
+  // If the tool has a file path and onFileSelect is provided, render the path as a clickable pill
+  const filePath = ['write', 'edit', 'read', 'ls', 'find'].includes(block.toolName) && block.args.path
+    ? String(block.args.path)
+    : null
+
+  let headerSummary: React.ReactNode = ''
   switch (block.toolName) {
     case 'bash':
       headerSummary = block.args.command
@@ -306,22 +329,37 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
         : ''
       break
     case 'read': {
-      const parts = [block.args.path ? String(block.args.path) : '']
-      if (block.args.offset) parts.push(`L${block.args.offset}`)
-      if (block.args.limit) parts.push(`limit ${block.args.limit}`)
-      headerSummary = parts.filter(Boolean).join(' ')
+      const pathEl = filePath && onFileSelect
+        ? <ToolPathPill key="path" filePath={filePath} onClick={() => onFileSelect(filePath)} />
+        : filePath
+      const suffixParts: string[] = []
+      if (block.args.offset) suffixParts.push(`L${block.args.offset}`)
+      if (block.args.limit) suffixParts.push(`limit ${block.args.limit}`)
+      const suffix = suffixParts.length > 0 ? ' ' + suffixParts.join(' ') : ''
+      headerSummary = pathEl
+        ? <>{pathEl}{suffix}</>
+        : suffix || ''
       break
     }
     case 'edit':
     case 'write':
-      headerSummary = block.args.path ? String(block.args.path) : ''
+      headerSummary = filePath && onFileSelect
+        ? <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} />
+        : filePath ?? ''
       break
     case 'ls':
-      headerSummary = block.args.path ? String(block.args.path) : '.'
+      headerSummary = filePath && onFileSelect
+        ? <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} />
+        : filePath ?? '.'
       break
-    case 'find':
-      headerSummary = [block.args.pattern ? String(block.args.pattern) : '', block.args.path ? String(block.args.path) : ''].filter(Boolean).join(' in ')
+    case 'find': {
+      const patternPart = block.args.pattern ? String(block.args.pattern) : ''
+      const inPart = filePath ? (onFileSelect
+        ? <> in <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} /></>
+        : ` in ${filePath}`) : ''
+      headerSummary = patternPart || inPart ? <>{patternPart}{inPart}</> : ''
       break
+    }
     case 'grep':
       headerSummary = block.args.pattern ? String(block.args.pattern) : ''
       break
@@ -375,10 +413,11 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
       >
         <span className="text-[10px]">{icon}</span>
         <span className="font-mono text-[11px]">{block.toolName}</span>
-        {headerSummary && (
+        {headerSummary ? (
           <span className="flex-1 truncate font-mono text-[11px] text-gray-300">{headerSummary}</span>
+        ) : (
+          <span className="flex-1" />
         )}
-        {!headerSummary && <span className="flex-1" />}
         {statusEl}
         <svg
           className={`h-3 w-3 text-gray-300 transition-transform ${expanded ? 'rotate-90' : ''}`}
@@ -397,9 +436,10 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
         <div className="ml-4 border-l-2 border-gray-200 pl-3 py-1">
           {block.toolName === 'edit' ? (
             <div>
-              {block.args.path && (
-                <div className="text-xs text-gray-400 mb-1">{String(block.args.path)}</div>
-              )}
+              {filePath && onFileSelect
+                ? <div className="mb-1"><ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} /></div>
+                : block.args.path ? <div className="text-xs text-gray-400 mb-1">{String(block.args.path)}</div> : null
+              }
               {Array.isArray(block.args.edits) ? (
                 (block.args.edits as Array<{ oldText?: string; newText?: string }>).map((edit, i) => (
                   <div key={i} className={Array.isArray(block.args.edits) && (block.args.edits as unknown[]).length > 1 ? 'mb-2 pb-2 border-b border-gray-200 last:border-b-0' : ''}>
@@ -432,21 +472,34 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result }: { blo
               <BashCopyButton command={String(block.args.command)} />
             </div>
           ) : block.toolName === 'read' && block.args.path ? (
-            <span className="text-xs text-gray-500">{String(block.args.path)}{block.args.offset ? ` (from line ${block.args.offset})` : ''}{block.args.limit ? ` limit ${block.args.limit}` : ''}</span>
+            <span className="text-xs text-gray-500">
+              {filePath && onFileSelect
+                ? <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} />
+                : String(block.args.path)
+              }{block.args.offset ? ` (from line ${block.args.offset})` : ''}{block.args.limit ? ` limit ${block.args.limit}` : ''}
+            </span>
           ) : block.toolName === 'write' && block.args.path ? (
             <div>
-              <span className="text-xs text-gray-400">{String(block.args.path)}</span>
+              {filePath && onFileSelect
+                ? <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} />
+                : <span className="text-xs text-gray-400">{String(block.args.path)}</span>
+              }
               {block.args.content && (
                 <pre className="overflow-x-auto text-xs text-gray-500 mt-1 whitespace-pre-wrap max-h-40">{String(block.args.content).length > 500 ? String(block.args.content).substring(0, 500) + '...' : String(block.args.content)}</pre>
               )}
             </div>
           ) : block.toolName === 'ls' ? (
-            <span className="text-xs text-gray-500">{block.args.path ? String(block.args.path) : '.'}{block.args.limit ? ` (limit ${block.args.limit})` : ''}</span>
+            <span className="text-xs text-gray-500">
+              {filePath && onFileSelect
+                ? <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} />
+                : filePath ?? '.'
+              }{block.args.limit ? ` (limit ${block.args.limit})` : ''}
+            </span>
           ) : block.toolName === 'find' ? (
-            <span className="text-xs text-gray-500">{block.args.pattern ? String(block.args.pattern) : ''}{block.args.path ? ` in ${String(block.args.path)}` : ''}</span>
+            <span className="text-xs text-gray-500">{block.args.pattern ? String(block.args.pattern) : ''}{filePath ? (onFileSelect ? <> in <ToolPathPill filePath={filePath} onClick={() => onFileSelect(filePath)} /></> : ` in ${filePath}`) : ''}</span>
           ) : block.toolName === 'grep' ? (
             <div>
-              <span className="text-xs text-gray-500">{block.args.pattern ? `/${String(block.args.pattern)}/` : ''}{block.args.path ? ` in ${String(block.args.path)}` : ''}{block.args.glob ? ` (${String(block.args.glob)})` : ''}</span>
+              <span className="text-xs text-gray-500">{block.args.pattern ? `/${String(block.args.pattern)}/` : ''}{block.args.path ? (onFileSelect ? <> in <ToolPathPill filePath={String(block.args.path)} onClick={() => onFileSelect(String(block.args.path))} /></> : ` in ${String(block.args.path)}`) : ''}{block.args.glob ? ` (${String(block.args.glob)})` : ''}</span>
             </div>
           ) : block.toolName === 'search_sessions' ? (
             <span className="text-xs text-gray-500">query: {block.args.query ? String(block.args.query) : ''}{block.args.limit ? ` (limit ${block.args.limit})` : ''}</span>
@@ -772,7 +825,7 @@ function MergedBlocksRenderer({
       const resultIdx = toolResultById.get(tcId)
       const result = resultIdx !== undefined ? allBlocks[resultIdx].block as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} />
       )
       continue
     }
@@ -858,7 +911,7 @@ function MessageBlocksRenderer({
       const resultIdx = toolResultById.get(tcId)
       const result = resultIdx !== undefined ? msg.blocks[resultIdx] as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} />
       )
       continue
     }
