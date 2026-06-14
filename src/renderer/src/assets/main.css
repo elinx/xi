@@ -39,6 +39,13 @@
   background-color: #f9fafb;
 }
 
+/* Remove backtick pseudo-elements added by @tailwindcss/typography for inline code.
+   ReactMarkdown already strips markdown backticks, so these are redundant. */
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
+
 .line-flash {
   background-color: rgba(255, 200, 0, 0.15);
   transition: background-color 2s ease-out;
