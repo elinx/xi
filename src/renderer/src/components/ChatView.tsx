@@ -225,16 +225,19 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
  *  Hover: surfaces a subtle blue tint + underline to signal clickability. */
 function ToolPathPill({ filePath, onClick }: { filePath: string; onClick: () => void }): React.ReactElement {
   return (
-    <button
+    <span
+      role="button"
+      tabIndex={0}
       onClick={(e) => { e.stopPropagation(); onClick() }}
-      className="inline-flex items-center gap-0.5 px-0.5 py-px rounded text-inherit text-[11px] font-mono leading-4 align-baseline hover:text-blue-600 hover:bg-blue-50 hover:underline underline-offset-2 transition-colors cursor-pointer border-0 max-w-[280px] truncate"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onClick() } }}
+      className="inline-flex items-center gap-0.5 px-0.5 py-px rounded text-inherit text-[11px] font-mono leading-4 align-baseline hover:text-blue-600 hover:bg-blue-50 hover:underline underline-offset-2 transition-colors cursor-pointer max-w-[280px] truncate"
       title={filePath}
     >
       <svg className="w-2.5 h-2.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
       <span className="truncate">{filePath}</span>
-    </button>
+    </span>
   )
 }
 
