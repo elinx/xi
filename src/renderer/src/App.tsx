@@ -1202,6 +1202,8 @@ function App(): React.ReactElement {
           name: s.name || '',
           filePath: s.filePath,
           isCurrent: s.filePath === currentSession?.filePath,
+          summary: s.summary || '',
+          firstUserMessage: s.firstUserMessage || '',
         }))}
         commands={commands}
         onFileSelect={(filePath) => addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })}

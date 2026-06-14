@@ -10,7 +10,7 @@ interface CommandPaletteProps {
   onOpenChange: (open: boolean) => void
   files: FileEntry[]
   filesLoading: boolean
-  sessions: Array<{ name: string; filePath: string; isCurrent: boolean }>
+  sessions: Array<{ name: string; filePath: string; isCurrent: boolean; summary: string; firstUserMessage: string }>
   commands: CommandItem[]
   onFileSelect: (filePath: string) => void
   onSessionSelect: (sessionPath: string) => void
@@ -151,6 +151,7 @@ export default function CommandPalette({
                 <Command.Item
                   key={s.filePath}
                   value={`session:${s.name}:${s.filePath}`}
+                  keywords={[s.summary, s.firstUserMessage]}
                   onSelect={() => handleSessionSelect(s.filePath)}
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                 >

@@ -103,6 +103,19 @@ export function createSessionFile(
   return filePath
 }
 
+function extractPlainText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
+    if (block.type === 'text' && typeof block.text === 'string') {
+      parts.push(block.text)
+    }
+  }
+  return parts.join('\n')
+}
+
 export function parseSessionFile(filePath: string): SessionInfo | null {
   try {
     const content = readFileSync(filePath, 'utf-8')
@@ -123,6 +136,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
     let status: 'active' | 'completed' | null = null
     let summary: string | null = null
     let parentSessionPath: string | null = header.parentSession ?? null
+    let firstUserMessage: string | null = null
 
     for (let i = 1; i < lines.length; i++) {
       try {
@@ -131,6 +145,9 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           const message = entry.message as Record<string, unknown> | undefined
           if (message && message.role === 'user') {
             messageCount++
+            if (firstUserMessage === null && message.content) {
+              firstUserMessage = extractPlainText(message.content).substring(0, 500)
+            }
           }
         } else if (entry.type === 'session_info') {
           if (typeof entry.name === 'string') {
@@ -158,6 +175,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
       name,
       status,
       summary,
+      firstUserMessage,
       createdAt: header.timestamp,
       cwd: header.cwd,
       parentSessionPath,

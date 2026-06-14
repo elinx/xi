@@ -40,6 +40,8 @@ export interface SessionInfo {
   status: 'active' | 'completed' | null
   /** Session summary (from session_info entries), or null. */
   summary: string | null
+  /** First user message text (truncated), for search/preview. null if no user messages. */
+  firstUserMessage: string | null
 }
 
 /**
