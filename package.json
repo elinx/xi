@@ -28,6 +28,7 @@
     "chokidar": "^5.0.0",
     "cmdk": "^1.1.1",
     "fabric": "^6.9.1",
+    "minisearch": "^7.2.0",
     "node-pty": "^1.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

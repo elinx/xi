@@ -102,11 +102,52 @@ function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
   const schema = {
     type: 'object' as const,
     properties: {
-      query: { type: 'string' as const, description: 'Search query — matches against session names, summaries, and message content' },
+      query: { type: 'string' as const, description: 'Search query — matches against session names, summaries, and message content. Multi-word queries use AND logic: all terms must appear. Supports Chinese and English.' },
       limit: { type: 'number' as const, description: 'Max results to return (default 10)', default: 10 },
     },
     required: ['query'],
   }
+
+  // ── CJK-aware tokenizer using Intl.Segmenter + bigrams ──────────────────
+  // Zero external dependencies. Intl.Segmenter is built-in since Node 16+
+  // with full-icu. For CJK text, we also generate bigrams to improve recall
+  // when the segmenter splits words too finely (e.g. "长江大桥" → ["长江","大","桥"]
+  // misses "长江大桥" but bigrams "长江","江大","大桥" catch it).
+
+  const segmenter = new Intl.Segmenter('zh', { granularity: 'word' })
+  const CJK_PATTERN = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/
+
+  function tokenize(text: string): string[] {
+    if (!text || typeof text !== 'string') return []
+    const tokens: string[] = []
+
+    // Split on whitespace/punctuation first to separate CJK from Latin segments
+    const segments = text.split(/[\n\r\p{Z}\p{P}]+/u)
+    for (const seg of segments) {
+      if (!seg) continue
+      if (CJK_PATTERN.test(seg)) {
+        // CJK segment: use Intl.Segmenter + bigrams
+        const words = [...segmenter.segment(seg)]
+          .filter(s => s.isWordLike)
+          .map(s => s.segment)
+        for (const word of words) {
+          tokens.push(word.toLowerCase())
+          if (word.length >= 3 && CJK_PATTERN.test(word)) {
+            for (let i = 0; i <= word.length - 2; i++) {
+              tokens.push(word.substring(i, i + 2).toLowerCase())
+            }
+          }
+        }
+      } else {
+        // Latin segment: lowercase, skip very short tokens
+        const lower = seg.toLowerCase()
+        if (lower.length >= 1) tokens.push(lower)
+      }
+    }
+    return tokens
+  }
+
+  // ── Text extraction helpers ─────────────────────────────────────────────
 
   /** Extract plain text from a message.content value (string or array of content blocks) */
   function extractText(msgContent: unknown): string {
@@ -115,23 +156,17 @@ function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
     const parts: string[] = []
     for (const block of msgContent) {
       if (!block || typeof block !== 'object') continue
-      // text blocks: { type: "text", text: "..." }
       if (block.type === 'text' && typeof block.text === 'string') {
         parts.push(block.text)
-      }
-      // toolCall blocks: { type: "toolCall", name: "...", arguments: {...} }
-      else if (block.type === 'toolCall' && typeof block.name === 'string') {
+      } else if (block.type === 'toolCall' && typeof block.name === 'string') {
         const args = block.arguments
-        // Only index key arguments from common tools for searchability
         if (args && typeof args === 'object') {
           const keyFields = ['command', 'pattern', 'path', 'query', 'content']
           for (const key of keyFields) {
             if (typeof args[key] === 'string') parts.push(`${block.name} ${key}: ${args[key]}`)
           }
         }
-      }
-      // toolResult blocks: { type: "toolResult", content: [...] }
-      else if (block.type === 'toolResult' && Array.isArray(block.content)) {
+      } else if (block.type === 'toolResult' && Array.isArray(block.content)) {
         for (const sub of block.content) {
           if (sub?.type === 'text' && typeof sub.text === 'string') parts.push(sub.text)
         }
@@ -140,22 +175,39 @@ function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
     return parts.join('\n')
   }
 
-  /** Create a readable excerpt from text, highlighting around the query match */
-  function excerpt(text: string, query: string, maxLen = 300): string {
+  /** Check if text is predominantly code (for excerpt quality filtering) */
+  function isCodeLike(text: string): boolean {
+    const codeIndicators = /^(const |let |var |import |from ['"]|function |class |return |if \(|for \(|while \(|await |async |=> \{|export |interface |type |\$\{|`[^\n]*`)/
+    const lines = text.split('\n').filter(l => l.trim())
+    if (lines.length === 0) return false
+    const codeLines = lines.filter(l => codeIndicators.test(l.trim()))
+    return codeLines.length / lines.length > 0.5
+  }
+
+  /** Create a readable excerpt from text, highlighting around the first matching token */
+  function excerpt(text: string, queryTokens: string[], maxLen = 300): string {
     const lower = text.toLowerCase()
-    const idx = lower.indexOf(query)
-    if (idx === -1) {
+    // Find the first occurrence of any query token
+    let bestIdx = -1
+    for (const token of queryTokens) {
+      const idx = lower.indexOf(token)
+      if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) {
+        bestIdx = idx
+      }
+    }
+    if (bestIdx === -1) {
       return text.length > maxLen ? text.substring(0, maxLen) + '...' : text
     }
-    // Start excerpt a bit before the match for context
     const contextBefore = 40
-    const start = Math.max(0, idx - contextBefore)
+    const start = Math.max(0, bestIdx - contextBefore)
     const end = Math.min(text.length, start + maxLen)
     let result = text.substring(start, end)
     if (start > 0) result = '...' + result
     if (end < text.length) result = result + '...'
     return result
   }
+
+  // ── Main search tool ────────────────────────────────────────────────────
 
   return {
     name: 'search_sessions',
@@ -165,11 +217,15 @@ function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
       'Xi never compacts context — every message is preserved — but only the current session is directly visible. ' +
       'Past decisions, design rationale, failed approaches, and work-in-progress live in other sessions — because Xi forks tasks into parallel sessions rather than compacting them into one thread. ' +
       'Use this to recover context that the filesystem cannot provide: not what the code does, but why it was written that way. ' +
-      'Searches session names, compaction summaries, and message content.',
+      'Searches session names, compaction summaries, and message content. ' +
+      'Multi-word queries use AND logic (all terms must appear). Supports Chinese and English.',
     parameters: schema,
     execute: async (_toolCallId: string, params: { query: string; limit?: number }, _signal: AbortSignal | undefined) => {
       const limit = params.limit ?? 10
-      const query = params.query.toLowerCase()
+      const queryTokens = tokenize(params.query)
+      if (queryTokens.length === 0) {
+        return { content: [{ type: 'text' as const, text: 'Empty query.' }] }
+      }
       const sessionsDir = join(cwd, '.xi', 'sessions')
       if (!fsSync.existsSync(sessionsDir)) {
         return { content: [{ type: 'text' as const, text: 'No sessions directory found.' }] }
@@ -178,100 +234,189 @@ function createSearchSessionsTool(cwd: string, currentSessionFile?: string) {
       try {
         files = fsSync.readdirSync(sessionsDir)
           .filter(f => f.endsWith('.jsonl'))
-          .sort()  // deterministic order: oldest first by filename timestamp
+          .sort()
           .map(f => join(sessionsDir, f))
-          .filter(f => !currentSessionFile || f !== currentSessionFile)  // exclude current session
+          .filter(f => !currentSessionFile || f !== currentSessionFile)
       } catch {
         return { content: [{ type: 'text' as const, text: 'Could not read sessions directory.' }] }
       }
 
-      interface SearchResult {
+      // ── Parse all sessions and collect searchable content ──────────────
+      interface SessionDoc {
+        id: string
+        filePath: string
+        fileName: string
         name: string
-        path: string
-        matches: string[]
-        score: number  // higher = more relevant
+        summary: string
+        parentSessionPath: string
+        firstUserMessage: string
+        userContent: string      // all user message text concatenated
+        assistantContent: string  // all assistant message text concatenated
+        compactionSummary: string
       }
 
-      const results: SearchResult[] = []
+      const sessionDocs: SessionDoc[] = []
+
       for (const filePath of files) {
         try {
           const content = fsSync.readFileSync(filePath, 'utf-8')
           const lines = content.split('\n')
-          const matches: string[] = []
-          let sessionName = ''
-          let score = 0
-          let sessionSummary = ''
+          let name = ''
+          let summary = ''
+          let parentSessionPath = ''
+          const userTexts: string[] = []
+          const assistantTexts: string[] = []
+          const compactionTexts: string[] = []
+          let firstUserMessage = ''
 
           for (const line of lines) {
             if (!line.trim()) continue
             let entry: Record<string, unknown>
             try { entry = JSON.parse(line) } catch { continue }
 
-            // Session name and summary are in session_info entries (last-wins semantics)
+            if (entry.type === 'session' && typeof entry.name === 'string') {
+              name = entry.name as string
+            }
+
             if (entry.type === 'session_info') {
-              if (typeof entry.name === 'string') sessionName = entry.name as string
-              if (typeof entry.summary === 'string') sessionSummary = entry.summary as string
+              if (typeof entry.name === 'string') name = entry.name
+              if (typeof entry.summary === 'string') summary = entry.summary
+              if (typeof entry.parentSession === 'string') parentSessionPath = entry.parentSession
             }
 
-            // Compaction summaries (Pi SDK auto-compaction when context overflows)
             if (entry.type === 'compaction' && typeof entry.summary === 'string') {
-              const compactionSummary = entry.summary as string
-              if (compactionSummary.toLowerCase().includes(query)) {
-                score += 10
-                matches.push(excerpt(compactionSummary, query))
-                if (matches.length >= 3) break
-              }
+              compactionTexts.push(entry.summary as string)
             }
 
-            // Search message content
             if (entry.type === 'message' && (entry.message as Record<string, unknown>)?.content) {
-              const plainText = extractText((entry.message as Record<string, unknown>).content)
-              if (plainText.toLowerCase().includes(query)) {
-                score += 1
-                matches.push(excerpt(plainText, query))
-                if (matches.length >= 3) break
+              const msg = entry.message as Record<string, unknown>
+              const plainText = extractText(msg.content)
+              if (!plainText) continue
+              if (msg.role === 'user') {
+                if (!firstUserMessage) firstUserMessage = plainText
+                userTexts.push(plainText)
+              } else if (msg.role === 'assistant') {
+                assistantTexts.push(plainText)
               }
             }
           }
 
-          // Session name match is highly relevant
-          if (sessionName.toLowerCase().includes(query)) {
-            score += 5
-          }
-
-          // Session summary (user/AI-generated via session_info) is the highest quality context
-          if (sessionSummary && sessionSummary.toLowerCase().includes(query)) {
-            score += 10
-            if (matches.length < 3) {
-              matches.unshift(excerpt(sessionSummary, query))  // put summary excerpt first
-            }
-          }
-
-          if (matches.length > 0 || sessionName.toLowerCase().includes(query) || (sessionSummary && sessionSummary.toLowerCase().includes(query))) {
-            results.push({
-              name: sessionName || filePath.split('/').pop() || filePath,
-              path: filePath,
-              matches,
-              score: score + (sessionSummary ? 2 : 0),  // boost sessions with summaries
-            })
-          }
+          sessionDocs.push({
+            id: filePath,
+            filePath,
+            fileName: filePath.split('/').pop() || filePath,
+            name,
+            summary,
+            parentSessionPath,
+            firstUserMessage,
+            userContent: userTexts.join('\n'),
+            assistantContent: assistantTexts.join('\n'),
+            compactionSummary: compactionTexts.join('\n'),
+          })
         } catch { continue }
       }
 
-      // Sort by relevance score (descending), then by name for deterministic order
-      results.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      // ── Build MiniSearch index with field-level boosting ───────────────
+      // We use MiniSearch for BM25+ scoring, multi-word AND matching,
+      // and automatic IDF-based term frequency normalization.
+      // Fields are indexed with different boost weights at search time.
 
-      // Apply limit after sorting (not during scan) to ensure best results surface
-      const limited = results.slice(0, limit)
+      const MiniSearch = require('minisearch')
 
-      if (limited.length === 0) {
+      const miniSearch = new MiniSearch({
+        fields: ['name', 'summary', 'compactionSummary', 'userContent', 'assistantContent'],
+        storeFields: ['name', 'filePath', 'fileName', 'parentSessionPath', 'firstUserMessage', 'summary', 'userContent', 'compactionSummary'],
+        idField: 'id',
+        tokenize,
+        searchOptions: {
+          tokenize,
+          combineWith: 'AND',
+          boost: {
+            name: 10,
+            summary: 8,
+            compactionSummary: 6,
+            userContent: 3,
+            assistantContent: 1,
+          },
+          // Use prefix search for short terms (helps with CJK bigrams)
+          prefix: true,
+        },
+      })
+
+      miniSearch.addAll(sessionDocs)
+
+      // ── Search ─────────────────────────────────────────────────────────
+      const searchResults = miniSearch.search(params.query, {
+        tokenize,
+        combineWith: 'AND',
+        boost: {
+          name: 10,
+          summary: 8,
+          compactionSummary: 6,
+          userContent: 3,
+          assistantContent: 1,
+        },
+        prefix: true,
+      }) as Array<{ id: string; score: number; name: string; filePath: string; fileName: string; parentSessionPath: string; firstUserMessage: string; summary: string; userContent: string; compactionSummary: string; match: Record<string, string[]> }>
+
+      if (searchResults.length === 0) {
         return { content: [{ type: 'text' as const, text: `No sessions found matching "${params.query}".` }] }
       }
+
+      // ── Fork tree dedup: keep only the best result per parent session ──
+      const seenParents = new Map<string, number>()  // parentPath → index in results
+      const deduped: typeof searchResults = []
+      for (const result of searchResults) {
+        const parentKey = result.parentSessionPath || result.filePath
+        if (seenParents.has(parentKey)) {
+          // Keep the higher-scoring one
+          const existingIdx = seenParents.get(parentKey)!
+          if (result.score > deduped[existingIdx].score) {
+            deduped[existingIdx] = result
+          }
+        } else {
+          seenParents.set(parentKey, deduped.length)
+          deduped.push(result)
+        }
+      }
+
+      // ── Format results with improved excerpts ──────────────────────────
+      const limited = deduped.slice(0, limit)
+
       const output = limited.map(r => {
-        const header = `## ${r.name}\nPath: ${r.path}`
-        const body = r.matches.length > 0 ? r.matches.map((m, i) => `  ${i + 1}. "${m}"`).join('\n') : '  (name match only)'
+        const header = `## ${r.name || r.fileName}`
+        const excerpts: string[] = []
+
+        // 1. Summary excerpt (highest priority context)
+        if (r.summary) {
+          excerpts.push(excerpt(r.summary, queryTokens))
+        }
+        // 2. Compaction summary excerpt
+        if (r.compactionSummary && excerpts.length < 2) {
+          excerpts.push(excerpt(r.compactionSummary, queryTokens))
+        }
+        // 3. User message excerpts (prefer user > assistant for intent)
+        if (r.userContent && excerpts.length < 2) {
+          const userExcerpt = excerpt(r.userContent, queryTokens)
+          // Skip code-like excerpts
+          if (!isCodeLike(userExcerpt)) {
+            excerpts.push(userExcerpt)
+          }
+        }
+        // 4. If no excerpts at all (name-only match), show first user message as context
+        if (excerpts.length === 0 && r.firstUserMessage) {
+          const msgExcerpt = r.firstUserMessage.length > 200
+            ? r.firstUserMessage.substring(0, 200) + '...'
+            : r.firstUserMessage
+          excerpts.push(`(first message) ${msgExcerpt}`)
+        }
+
+        const body = excerpts.length > 0
+          ? excerpts.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')
+          : '  (name match only)'
         return header + '\n' + body
       }).join('\n\n')
+
       return { content: [{ type: 'text' as const, text: output }] }
     },
   }
