@@ -1,7 +1,8 @@
 import type { AgentSession, AgentSessionEvent, AgentSessionRuntime } from '@earendil-works/pi-coding-agent'
-import { resolve, relative, join } from 'node:path'
+import { resolve, relative, join, dirname } from 'node:path'
 import * as fs from 'node:fs/promises'
 import * as fsSync from 'node:fs'
+import { parseSessionFile } from './session-service'
 
 process.on('uncaughtException', (err: Error) => {
   process.parentPort?.postMessage({ channel: 'error', error: `Uncaught: ${err.message}` })
@@ -42,6 +43,46 @@ function validateWritePath(absolutePath: string, cwd: string): void {
       'This directory contains runtime-internal data. Write to the project root or a dedicated folder instead.'
     )
   }
+}
+
+/**
+ * Build a system prompt preamble from ancestor session summaries.
+ * Walks the parentSession chain from the current session upward,
+ * collecting summaries from ancestor sessions.
+ * Returns an empty string if no ancestors have summaries.
+ */
+function buildAncestorPreamble(sessionFilePath: string): string {
+  const chain: Array<{ name: string; summary: string }> = []
+  let currentPath: string | null = sessionFilePath
+  const visited = new Set<string>()
+  const MAX_DEPTH = 5
+  const MAX_SUMMARY_CHARS = 500
+
+  while (currentPath && chain.length < MAX_DEPTH) {
+    if (visited.has(currentPath)) break // prevent cycles
+    visited.add(currentPath)
+
+    const info = parseSessionFile(currentPath)
+    if (!info) break
+
+    // Skip self, only collect ancestors
+    if (currentPath !== sessionFilePath && info.summary) {
+      const truncated = info.summary.length > MAX_SUMMARY_CHARS
+        ? info.summary.substring(0, MAX_SUMMARY_CHARS) + '...'
+        : info.summary
+      chain.push({ name: info.name || 'unnamed', summary: truncated })
+    }
+
+    currentPath = info.parentSessionPath
+  }
+
+  if (chain.length === 0) return ''
+
+  // Reverse to show root → parent order
+  chain.reverse()
+
+  const lines = chain.map((item, i) => `${i + 1}. "${item.name}": ${item.summary}`)
+  return `\n\n## Ancestor Session History\nYou are continuing work from previous sessions. Here is what was done before:\n${lines.join('\n')}`
 }
 
 function createSearchSessionsTool(cwd: string) {
@@ -191,6 +232,9 @@ async function init(data: WorkerInit): Promise<void> {
 
   const createRuntime: pi.CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager: sm, sessionStartEvent }) => {
     sessionManager = sm
+    // Collect ancestor context once at runtime creation time
+    const ancestorPreamble = buildAncestorPreamble(sm.getSessionFile())
+
     const services = await pi!.createAgentSessionServices({
       cwd,
       agentDir,
@@ -200,7 +244,9 @@ async function init(data: WorkerInit): Promise<void> {
           return undefined
         },
         appendSystemPromptOverride: (base: string[]) => {
-          return [...base, 'CRITICAL: You are Xi (ξ), NOT pi. The system you run on is called Xi. Never refer to yourself or your environment as "pi" or "Pi" — always say "Xi" or "xi". This overrides any previous reference to "pi" in these instructions.']
+          const parts = [...base, 'CRITICAL: You are Xi (ξ), NOT pi. The system you run on is called Xi. Never refer to yourself or your environment as "pi" or "Pi" — always say "Xi" or "xi". This overrides any previous reference to "pi" in these instructions.']
+          if (ancestorPreamble) parts.push(ancestorPreamble)
+          return parts
         },
         extensionFactories: [
           (extensionApi: Record<string, unknown>) => {
