@@ -121,6 +121,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
     let messageCount = 0
     let name: string | null = null
     let status: 'active' | 'completed' | null = null
+    let summary: string | null = null
     let parentSessionPath: string | null = header.parentSession ?? null
 
     for (let i = 1; i < lines.length; i++) {
@@ -138,6 +139,9 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if (entry.status === 'active' || entry.status === 'completed') {
             status = entry.status
           }
+          if (typeof entry.summary === 'string') {
+            summary = entry.summary
+          }
           // session_info 中的 parentSession 覆盖 header
           if ('parentSession' in entry) {
             parentSessionPath = typeof entry.parentSession === 'string' ? entry.parentSession : null
@@ -153,6 +157,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
       sessionId: header.id,
       name,
       status,
+      summary,
       createdAt: header.timestamp,
       cwd: header.cwd,
       parentSessionPath,
@@ -483,6 +488,26 @@ export function reparentSession(sessionPath: string, newParentPath: string | nul
     const entry = JSON.stringify({
       type: 'session_info',
       parentSession: newParentPath,
+    })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Set a session's summary by appending a session_info entry.
+ * Uses the same append-only override mechanism as name/status/parentSession:
+ * the last session_info entry's summary field wins.
+ */
+export function setSessionSummary(sessionPath: string, summary: string): boolean {
+  if (!existsSync(sessionPath)) return false
+
+  try {
+    const entry = JSON.stringify({
+      type: 'session_info',
+      summary,
     })
     appendFileSync(sessionPath, entry + '\n')
     return true

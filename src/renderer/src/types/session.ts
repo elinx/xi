@@ -38,6 +38,8 @@ export interface SessionInfo {
   isMain: boolean
   /** Session status: 'active' or 'completed'. null means active (default). */
   status: 'active' | 'completed' | null
+  /** Session summary (from session_info entries), or null. */
+  summary: string | null
 }
 
 /**
@@ -97,6 +99,7 @@ export interface SessionIpcApi {
   clearMessages: (sessionPath: string) => Promise<{ success: boolean; error?: string; sessionPath?: string }>
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
   reparentSession: (sessionPath: string, newParentPath: string | null) => Promise<{ success: boolean; error?: string }>
+  setSessionSummary: (sessionPath: string, summary: string) => Promise<{ success: boolean; error?: string }>
 }
 
 /** Model info returned by Pi SDK. */
