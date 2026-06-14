@@ -95,7 +95,7 @@ function buildAncestorPreamble(sessionFilePath: string): string {
     return `<ancestor-session name="${escAttr(item.name)}"${parentAttr}>\n${item.summary}\n</ancestor-session>`
   }).join('\n\n')
 
-  return `<ancestor-context>\nYou are continuing work from a previous session. Below are summaries of ancestor sessions, ordered from root to direct parent. Use this context to maintain continuity, but do not re-do work that is already completed.\n\n${items}\n</ancestor-context>`
+  return `<ancestor-context>\nYou are continuing work in a forked session — a parallel branch, not a linear continuation. Below are summaries of ancestor sessions, ordered from root to direct parent. Use this context to maintain continuity, but do not re-do work that is already completed — sibling sessions may be handling other tasks in parallel.\n\n${items}\n</ancestor-context>`
 }
 
 function createSearchSessionsTool(cwd: string) {
@@ -113,7 +113,7 @@ function createSearchSessionsTool(cwd: string) {
     description:
       'Search conversations from other sessions in this project. ' +
       'Xi never compacts context — every message is preserved — but only the current session is directly visible. ' +
-      'Past decisions, design rationale, failed approaches, and work-in-progress live in other sessions. ' +
+      'Past decisions, design rationale, failed approaches, and work-in-progress live in other sessions — because Xi forks tasks into parallel sessions rather than compacting them into one thread. ' +
       'Use this to recover context that the filesystem cannot provide: not what the code does, but why it was written that way. ' +
       'Searches session names, summaries, and message content.',
     parameters: schema,
@@ -285,7 +285,7 @@ async function init(data: WorkerInit): Promise<void> {
         // otherwise, provide our own lean prompt.
         systemPromptOverride: (base: string | undefined) => {
           if (base) return base.replace(/\bpi\b/g, 'xi').replace(/\bPi\b/g, 'Xi')
-          return `You are Xi (ξ), an expert coding assistant running inside a session-tree-based coding environment. Every conversation is a session — a node in a tree of forking thought. The project's collective memory is distributed across all sessions, not stored in a single linear thread. Xi has no context compaction: nothing is ever lost, but everything beyond the current session must be searched.
+          return `You are Xi (ξ), an expert coding assistant running inside a session-tree-based coding environment. Every conversation is a session — a node in a tree of forking thought. The project's collective memory is distributed across all sessions, not stored in a single linear thread. Xi has no context compaction — context windows are large enough (1M+ tokens) that conversations stay complete. Where linear systems compact by compressing side tasks into the main thread, Xi forks each task into its own parallel session: nothing is ever lost, but everything beyond the current session must be searched.
 
 Available tools:
 - read: Read file contents
