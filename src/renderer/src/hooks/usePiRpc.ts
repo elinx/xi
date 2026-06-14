@@ -794,6 +794,12 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
     }
   }, [])
 
+  // Refresh captureEnabled when switching sessions — each worker may have different state
+  useEffect(() => {
+    if (!displayedSessionPath) return
+    getCaptureStatus().catch(() => {})
+  }, [displayedSessionPath, getCaptureStatus])
+
   const getProviderAuthStatus = useCallback(async (): Promise<Record<string, { configured: boolean; source?: string }>> => {
     type ApiWithAuthStatus = typeof window.api & { getProviderAuthStatus: (sp: string | null) => Promise<{ ok: boolean; data?: Record<string, { configured: boolean; source?: string }>; error?: string }> }
     const result = await (window.api as ApiWithAuthStatus).getProviderAuthStatus(null)

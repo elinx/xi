@@ -76,7 +76,29 @@ Prompt capture 是有性能开销的（每次 API 调用都要序列化并追加
 └─────────────────────────────────────────────────────────────┘
 ```
 
-开关状态存储在 `localStorage` key `xi-prompt-capture-enabled`，不需要持久化到 Pi SDK 的 settings，因为这是纯 GUI 侧的行为偏好。
+#### 3.1.1 状态模型：三层一致
+
+Prompt capture 不是纯 GUI 侧的行为偏好——实际的截获行为发生在 Worker 进程的 `before_provider_request` handler 中。因此开关状态必须跨越三层保持一致：
+
+```
+┌─────────────────────────────────────────────────────┐
+│  层级              │  职责                          │
+├────────────────────┼────────────────────────────────│
+│  持久层 (config)   │  用户意图的唯一真相源          │
+│  Main 层           │  广播中枢，确保所有 worker 同步 │  
+│  Worker 层         │  实际执行 capture 的地方        │
+└─────────────────────────────────────────────────────┘
+```
+
+用户偏好持久化在 Xi 的全局配置文件 `~/.xi/config.json` 中（key: `promptCaptureEnabled`），而非 `localStorage`。原因：
+1. **跨进程可达**：Worker 进程（独立 Node.js 进程）无法读取 renderer 的 localStorage，但可以读取文件系统上的配置
+2. **Worker 自举**：Worker 启动时可以自行读取配置，无需等待 GUI 推送
+3. **全局一致性**：所有 Worker（primary + secondary）读取同一份配置，不存在不同步
+4. **App 重启后保持**：不依赖 renderer 进程先启动再推送
+
+> ⚠️ **为什么不用 localStorage**：之前的实现用 localStorage 存储 toggle 状态，导致 Worker 启动/重启/新建时无法获知用户偏好，必须等 GUI 打开 Settings 页面后才能同步。这是造成 "toggle 显示 ON 但实际不 capture" 的根本原因。
+
+#### 3.1.2 开关行为
 
 **开关关闭时**：
 - `before_provider_request` handler **不执行**（不写入 JSONL）
@@ -88,6 +110,26 @@ Prompt capture 是有性能开销的（每次 API 调用都要序列化并追加
 - ChatView 中 assistant 消息显示 🔍 按钮
 - Inspector 可用
 
+**开关切换时（广播）**：
+- Main 层将新状态写入 `config.json`
+- Main 层向所有已连接的 Worker 发送 `set_capture_enabled` RPC
+- GUI 层的 `usePiRpc.captureEnabled` 状态更新
+
+#### 3.1.3 Worker 启动/重连时的自举
+
+Worker 在 `init()` 中自行读取 `config.json`，初始化 `captureEnabled`：
+
+```typescript
+// pi-worker.ts init()
+let captureEnabled = readConfig().promptCaptureEnabled ?? false
+```
+
+这样无论 Worker 何时启动（app 启动、fork 新 session、crash 后重启），都能立即获知正确的偏好，无需等待 GUI 推送。
+
+#### 3.1.4 UI 持久化来源
+
+GUI 层的 toggle 不再使用 localStorage，而是通过 `get_capture_status` RPC 从 Worker 读取实际状态，或直接读取 `config.json`。这样可以确保 UI 反映的是 Worker 的真实状态，而非一个可能过期的 localStorage 副本。
+
 ### 3.2 核心机制
 
 Pi 的扩展系统提供了 `before_provider_request` 事件，该事件在**每次 HTTP 请求发往模型之前**触发，handler 可以读取并修改完整 payload。
@@ -95,8 +137,8 @@ Pi 的扩展系统提供了 `before_provider_request` 事件，该事件在**每
 ```typescript
 // Pi 扩展伪代码（受 toggle 控制）
 pi.on('before_provider_request', (ctx) => {
-  // 检查 capture 开关
-  if (!isCaptureEnabled()) return
+  // 检查 capture 开关（从 config.json 自举，或通过 RPC 接收广播）
+  if (!captureEnabled) return
 
   // ctx.payload 包含发往模型 API 的完整请求体
   // 包括: system, messages[], tools[], model, max_tokens, thinking...
@@ -115,15 +157,37 @@ pi.on('before_provider_request', (ctx) => {
 
 ### 3.3 数据流
 
-```
-用户开启 capture 开关
-  → GUI 通知 pi-worker: capture_enabled = true
+#### 3.3.1 用户开启 capture
 
+```
+用户点击 toggle → ON
+  → GUI 调用 setCaptureEnabled(true)
+    → Main 层写入 config.json: { promptCaptureEnabled: true }
+    → Main 层广播 set_capture_enabled RPC 给所有已连接 Worker
+      → 每个 Worker 设置 captureEnabled = true
+    → 返回成功 → GUI 更新 usePiRpc.captureEnabled = true
+```
+
+#### 3.3.2 Worker 启动（app 启动 / fork / crash 重启）
+
+```
+Worker 进程启动
+  → init() 执行
+    → 读取 ~/.xi/config.json → captureEnabled = config.promptCaptureEnabled ?? false
+    → 注册 before_provider_request handler（检查 captureEnabled）
+  → 连接建立 → Main 层收到 'connected' 事件
+    → Worker 已从 config.json 自举，无需额外同步
+    → （可选）Main 层发送 get_capture_status 确认一致
+```
+
+#### 3.3.3 用户发送消息并 capture
+
+```
 用户发送消息
   → session.prompt(text)
     → Pi SDK 组装完整 prompt
       → before_provider_request 事件触发
-        → capture_enabled? 
+        → captureEnabled?
           → YES: Xi 扩展截获 payload → redact → appendEntry('prompt_snapshot', payload)
           → NO:  跳过
       → HTTP POST → 模型 API
@@ -131,6 +195,27 @@ pi.on('before_provider_request', (ctx) => {
       → GUI 收到 message_start 事件（带 requestId）
         → GUI 从 session JSONL 读取对应的 prompt_snapshot entry
           → GUI 缓存 snapshot 到内存
+```
+
+#### 3.3.4 Session 切换
+
+```
+用户切换到另一个 session
+  → displayedSessionPath 变更
+  → usePiRpc 通过 get_capture_status 向该 session 的 Worker 查询实际状态
+  → usePiRpc.captureEnabled 更新为该 Worker 的实际 captureEnabled
+  → ChatView 根据新的 captureEnabled 决定是否显示 🔍 按钮
+```
+
+#### 3.3.5 Worker crash 后重启
+
+```
+Worker 进程 crash
+  → WorkerManager 检测到断连
+    → 自动重启 Worker
+      → 新 Worker init() 从 config.json 读取 captureEnabled
+      → 新 Worker 连接建立
+  → （无需 GUI 介入，captureEnabled 自动恢复）
 ```
 
 ### 3.4 存储位置
@@ -150,10 +235,13 @@ pi.on('before_provider_request', (ctx) => {
 | 命令 | 参数 | 返回 | 说明 |
 |------|------|------|------|
 | `get_prompt_snapshot` | `requestId: string` | `PromptSnapshot \| null` | 按 requestId 查询完整 payload |
-| `set_capture_enabled` | `enabled: boolean` | `success` | 控制 capture 开关 |
+| `set_capture_enabled` | `enabled: boolean` | `{ enabled: boolean }` | 控制 capture 开关（Worker 侧） |
 | `clear_snapshots` | — | `{ deleted: number }` | 删除当前 session 所有 prompt_snapshot entries |
+| `get_capture_status` | — | `{ enabled: boolean, snapshotCount: number }` | 查询 Worker 的实际 capture 状态 |
 
 GUI 通过这些命令按 `requestId` 查询完整的 prompt payload。
+
+**重要**：`set_capture_enabled` 只修改单个 Worker 的内存状态。全局广播由 Main 层的 `WorkerManager` 负责（见 5.1 架构分层）。
 
 ## 4. UI 设计
 
@@ -253,50 +341,118 @@ GUI 通过这些命令按 `requestId` 查询完整的 prompt payload。
 ### 5.1 架构分层
 
 ```
-┌─────────────────────────────────────────────┐
-│  GUI (React)                                │
-│  ┌───────────────────────────────────────┐  │
-│  │  SettingsPanel.tsx (修改)             │  │
-│  │  - Capture 开关 (默认 OFF)            │  │
-│  │  - 状态显示: snapshot 数量            │  │
-│  │  - Clear 按钮                         │  │
-│  └───────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────┐  │
-│  │  PromptInspector.tsx (新组件)         │  │
-│  │  - 抽屉面板 UI                        │  │
-│  │  - Section 折叠/展开                  │  │
-│  │  - 复制功能                           │  │
-│  └───────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────┐  │
-│  │  ChatView.tsx (修改)                  │  │
-│  │  - 新增 🔍 按钮 (仅 capture 开启时)    │  │
-│  │  - 管理 inspector open/close state    │  │
-│  └───────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────┐  │
-│  │  usePiRpc.ts (修改)                   │  │
-│  │  - 新增 getPromptSnapshot() RPC       │  │
-│  │  - setCaptureEnabled / clearSnapshots  │  │
-│  │  - 缓存 snapshot 到 memory            │  │
-│  │  - captureEnabled 状态                │  │
-│  └───────────────────────────────────────┘  │
-├─────────────────────────────────────────────┤
-│  Electron Main Process                      │
-│  ┌───────────────────────────────────────┐  │
-│  │  pi-worker.ts (修改)                  │  │
-│  │  - captureEnabled 标志位              │  │
-│  │  - 新增 RPC: get_prompt_snapshot       │  │
-│  │  - 新增 RPC: set_capture_enabled       │  │
-│  │  - 新增 RPC: clear_snapshots           │  │
-│  │  - 自动 prune 旧 snapshot             │  │
-│  └───────────────────────────────────────┘  │
-├─────────────────────────────────────────────┤
-│  Pi Extension (pi-worker.ts 内联)           │
-│  ┌───────────────────────────────────────┐  │
-│  │  before_provider_request handler      │  │
-│  │  - 检查 captureEnabled                │  │
-│  │  - 截获完 payload → redact → 写入    │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  GUI (React)                                                │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  SettingsPanel.tsx / GeneralSettings.tsx (修改)       │  │
+│  │  - Capture 开关 (默认 OFF)                            │  │
+│  │  - 状态显示: snapshot 数量                            │  │
+│  │  - Clear 按钮                                         │  │
+│  │  - 不再使用 localStorage 存储开关状态                  │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  PromptInspector.tsx (新组件)                         │  │
+│  │  - 抽屉面板 UI                                        │  │
+│  │  - Section 折叠/展开                                  │  │
+│  │  - 复制功能                                           │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  ChatView.tsx (修改)                                  │  │
+│  │  - 新增 🔍 按钮 (仅 capture 开启时)                    │  │
+│  │  - 管理 inspector open/close state                    │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  usePiRpc.ts (修改)                                   │  │
+│  │  - 新增 getPromptSnapshot() RPC                       │  │
+│  │  - setCaptureEnabled / clearSnapshots                  │  │
+│  │  - 缓存 snapshot 到 memory                            │  │
+│  │  - captureEnabled 状态（从 Worker 实际查询，非缓存）   │  │
+│  │  - session 切换时重新查询 captureEnabled               │  │
+│  └───────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│  Electron Main Process                                      │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  index.ts (修改)                                      │  │
+│  │  - 新增 IPC: pi:setCaptureEnabled 广播给所有 Worker   │  │
+│  │  - 新增 IPC: pi:getCaptureStatus 查询单个 Worker      │  │
+│  │  - Worker 连接/重连时无需推送（Worker 自举 from config）│  │
+│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  config.ts (新增/修改)                                │  │
+│  │  - 读写 ~/.xi/config.json                             │  │
+│  │  - promptCaptureEnabled 字段                          │  │
+│  │  - Worker 启动时读取的唯一真相源                      │  │
+│  └───────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│  Worker Process (pi-worker.ts)                              │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  init()                                               │  │
+│  │  - 读取 config.json → captureEnabled                  │  │
+│  │  - 注册 before_provider_request handler               │  │
+│  │  - 新增 RPC: get_prompt_snapshot                       │  │
+│  │  - 新增 RPC: set_capture_enabled                       │  │
+│  │  - 新增 RPC: clear_snapshots                           │  │
+│  │  - 新增 RPC: get_capture_status                        │  │
+│  │  - 自动 prune 旧 snapshot                             │  │
+│  └───────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│  Pi Extension (pi-worker.ts 内联)                           │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  before_provider_request handler                      │  │
+│  │  - 检查 captureEnabled（从 config.json 自举）          │  │
+│  │  - 截获完 payload → redact → 写入                     │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 5.1.1 广播机制：setCaptureEnabled
+
+当用户切换 toggle 时，Main 层负责将新状态传播到所有 Worker：
+
+```typescript
+// index.ts
+ipcMain.handle('pi:setCaptureEnabled', async (_event, _sessionPath, enabled: boolean) => {
+  // 1. 持久化到 config.json（真相源）
+  writeConfig({ promptCaptureEnabled: enabled })
+
+  // 2. 广播给所有已连接的 Worker
+  const workers = workerManager!.getAllWorkers()
+  for (const worker of workers) {
+    if (worker.bridge.isConnected) {
+      worker.bridge.sendRpcCommand({ type: 'set_capture_enabled', enabled }).catch(() => {})
+    }
+  }
+
+  return { ok: true, data: { enabled } }
+})
+```
+
+#### 5.1.2 Worker 自举：init 时读取 config
+
+```typescript
+// pi-worker.ts
+import { readConfig } from './config'
+
+let captureEnabled: boolean
+
+async function init(data: WorkerInit): Promise<void> {
+  // ...
+  captureEnabled = readConfig().promptCaptureEnabled ?? false  // 自举
+  // ...
+}
+```
+
+#### 5.1.3 GUI 状态：session 切换时刷新
+
+```typescript
+// usePiRpc.ts
+// 当 displayedSessionPath 变更时，重新查询当前 Worker 的 captureEnabled
+useEffect(() => {
+  if (!displayedSessionPath) return
+  getCaptureStatus().then(status => {
+    setCaptureEnabledState(status.enabled)
+  })
+}, [displayedSessionPath])
 ```
 
 ### 5.2 关键数据类型
@@ -332,9 +488,11 @@ interface PromptSnapshot {
 ```typescript
 // === pi-worker.ts 新增代码 ===
 
+import { readConfig } from './config'
+
 const MAX_SNAPSHOTS_PER_SESSION = 20
 
-let captureEnabled = false  // 默认关闭
+let captureEnabled = false  // 在 init() 中从 config.json 覆盖
 
 function isCaptureEnabled(): boolean {
   return captureEnabled
@@ -425,6 +583,7 @@ case 'get_prompt_snapshot': {
 
 case 'set_capture_enabled': {
   captureEnabled = cmd.enabled === true
+  // 注意：不在此处写 config.json，由 Main 层在广播前写入
   send({
     channel: 'response',
     id: cmd.id,
@@ -495,13 +654,14 @@ const getPromptSnapshot = useCallback(async (requestId: string): Promise<PromptS
 
 | 文件 | 变更 | 说明 |
 |------|------|------|
-| `src/main/pi-worker.ts` | 修改 | 1) 注册 `before_provider_request` 扩展（带 toggle 检查）；2) 新增 `get_prompt_snapshot` / `set_capture_enabled` / `clear_snapshots` / `get_capture_status` RPC 命令；3) 自动 prune 逻辑 |
-| `src/main/index.ts` | 修改 | 新增 IPC handler 路由到 worker |
+| `src/main/config.ts` | **新增** | 读写 `~/.xi/config.json`，提供 `promptCaptureEnabled` 字段的 get/set |
+| `src/main/pi-worker.ts` | 修改 | 1) init() 中从 config.json 自举 captureEnabled；2) 注册 `before_provider_request` 扩展（带 toggle 检查）；3) 新增 `get_prompt_snapshot` / `set_capture_enabled` / `clear_snapshots` / `get_capture_status` RPC 命令；4) 自动 prune 逻辑 |
+| `src/main/index.ts` | 修改 | 1) `setCaptureEnabled` IPC 改为广播给所有 Worker + 写入 config.json；2) 新增 IPC handler 路由到 worker |
 | `src/preload/index.ts` | 修改 | 暴露 `getPromptSnapshot()` / `setCaptureEnabled()` / `clearSnapshots()` / `getCaptureStatus()` 到 renderer |
 | `src/renderer/src/components/PromptInspector.tsx` | **新增** | 检查器抽屉面板，包含 section 折叠、复制、token 统计 |
 | `src/renderer/src/components/ChatView.tsx` | 修改 | 在 assistant 消息 actions 中新增 🔍 按钮（仅 capture 开启时显示）；管理 inspector 状态 |
-| `src/renderer/src/components/SettingsPanel.tsx` | 修改 | 新增 "Prompt Capture" toggle switch + 状态显示 + Clear 按钮 |
-| `src/renderer/src/hooks/usePiRpc.ts` | 修改 | 新增 `getPromptSnapshot()` / `setCaptureEnabled()` / `clearSnapshots()` / `captureEnabled` state |
+| `src/renderer/src/components/GeneralSettings.tsx` | 修改 | 新增 "Prompt Capture" toggle switch + 状态显示 + Clear 按钮；移除 localStorage 读写，改为通过 RPC 查询/设置 |
+| `src/renderer/src/hooks/usePiRpc.ts` | 修改 | 1) 新增 `getPromptSnapshot()` / `setCaptureEnabled()` / `clearSnapshots()` / `captureEnabled` state；2) session 切换时重新查询 `captureEnabled`；3) 移除对 localStorage 的依赖 |
 | `src/renderer/src/types/pi-events.ts` | 修改 | 新增 `PromptSnapshot` 类型定义 |
 | `docs/spec-prompt-inspector.md` | **新增** | 本 spec |
 
@@ -517,17 +677,21 @@ const getPromptSnapshot = useCallback(async (requestId: string): Promise<PromptS
 
 **目标**：端到端跑通，能点击按钮看到 raw JSON。
 
-### Phase 2: 开关 & 清理
+### Phase 2: 开关 & 同步机制
 
-- [ ] SettingsPanel 中新增 "Prompt Capture" toggle（默认 OFF）
-- [ ] `localStorage` 持久化 `xi-prompt-capture-enabled`
+- [ ] 新增 `src/main/config.ts`，读写 `~/.xi/config.json` 的 `promptCaptureEnabled` 字段
+- [ ] `pi-worker.ts` init() 中从 config.json 自举 `captureEnabled`
+- [ ] SettingsPanel / GeneralSettings 中新增 "Prompt Capture" toggle（默认 OFF）
+- [ ] **移除** localStorage 读写 `xi-prompt-capture-enabled` 的逻辑
+- [ ] `index.ts` 中 `setCaptureEnabled` IPC 改为：写入 config.json + 广播给所有 Worker
 - [ ] RPC：`set_capture_enabled` + `get_capture_status` + `clear_snapshots`
-- [ ] SettingsPanel 中显示当前 snapshot 数量 + Clear 按钮
+- [ ] `usePiRpc.ts` session 切换时重新查询 `captureEnabled`
+- [ ] GeneralSettings 中显示当前 snapshot 数量 + Clear 按钮
 - [ ] `before_provider_request` handler 检查 toggle 状态
 - [ ] ChatView 中 🔍 按钮仅 capture 开启时渲染
 - [ ] 自动 prune：超出 `MAX_SNAPSHOTS_PER_SESSION` 时清理最旧的
 
-**目标**：用户可以控制 capture 开关，可以清理 snapshot 数据。
+**目标**：用户可以控制 capture 开关，所有 Worker（包括新创建的、重启的）状态一致，可以清理 snapshot 数据。
 
 ### Phase 3: 格式化展示
 
@@ -551,19 +715,22 @@ const getPromptSnapshot = useCallback(async (requestId: string): Promise<PromptS
 
 | 场景 | 处理 |
 |------|------|
-| Capture 默认关闭 | `before_provider_request` handler 不写入；ChatView 不显示 🔍 按钮 |
-| 用户开启 capture 后又关闭 | 已存储的 snapshots 保留，不再产生新的。SettingsPanel 显示存量数量 |
+| Capture 默认关闭 | `before_provider_request` handler 不写入；ChatView 不显示 🔍 按钮。config.json 无 `promptCaptureEnabled` 或为 false |
+| 用户开启 capture 后又关闭 | 已存储的 snapshots 保留，不再产生新的。SettingsPanel 显示存量数量。config.json 更新为 false，广播给所有 Worker |
 | 用户点击 Clear | 删除当前 session 所有 `prompt_snapshot` custom entries。SettingsPanel 数量归零。不可恢复 |
 | Pi SDK 版本不支持 `before_provider_request` | 降级：仅显示 GUI 侧能拿到的信息（用户消息 + 对话历史），inspector 中标注"完整 system prompt 不可用"。SettingsPanel 中 capture toggle 置灰并标注"SDK not supported" |
 | JSONL 中无对应 snapshot（旧消息） | inspector 中显示 "Prompt snapshot not available (generated before capture was enabled)" |
 | Payload 过大（>1MB） | 默认折叠 system prompt 和 tools，显示字符数统计，提供 "Copy Raw JSON" 按钮 |
 | 连续快速发送消息 | 每个 request 独立存储 snapshot，通过 requestId 精确匹配 |
-| Session 切换 | 切换 session 时清空 promptSnapshots 内存缓存；capture toggle 状态不变（全局） |
+| Session 切换 | 切换 session 时清空 promptSnapshots 内存缓存；通过 `get_capture_status` 查询新 Worker 的实际状态，更新 UI toggle 和 🔍 按钮可见性 |
+| Fork 新 session | 新 Worker 启动时从 config.json 自举 captureEnabled，无需 GUI 干预 |
+| Worker crash 后重启 | 新 Worker 从 config.json 自举 captureEnabled，自动恢复为用户上次设置的偏好 |
 | Compaction 后的消息 | Compaction 后的 prompt 会包含摘要，snapshot 如实记录 |
 | Streaming 中的消息 | 只有 `agent_end` 后才生成完整 snapshot（因为 `before_provider_request` 在请求时触发），streaming 中不可查看 |
 | 扩展注册失败 | 静默失败，不影响正常对话功能。Inspector 显示 "Prompt capture unavailable" |
 | 超过 MAX_SNAPSHOTS_PER_SESSION (20) | 自动删除最旧的 snapshot。SettingsPanel 中始终显示 `≤20` |
-| 用户清除全局设置 | `localStorage` 中清除 `xi-prompt-capture-enabled` 后，下次启动默认 OFF |
+| config.json 不存在或损坏 | 视为默认 OFF（`promptCaptureEnabled ?? false`）。Worker 和 GUI 均优雅降级 |
+| 多个 Worker 同时运行 | Main 层广播 `set_capture_enabled` 给所有 Worker，确保状态一致。每个 Worker 独立维护自己的 snapshotCount |
 
 ## 9. 性能考量
 

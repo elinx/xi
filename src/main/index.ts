@@ -746,15 +746,38 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('pi:setCaptureEnabled', async (_event, sessionPath: string | null, enabled: boolean) => {
-    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) return { ok: false, error: 'Worker not connected' }
+  ipcMain.handle('pi:setCaptureEnabled', async (_event, _sessionPath: string | null, enabled: boolean) => {
+    // 1. Persist to settings.json (source of truth for worker bootstrap)
     try {
-      const data = await worker.bridge.sendRpcCommand({ type: 'set_capture_enabled', enabled })
-      return { ok: true, data }
+      const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? ''
+      const agentDir = process.env.PI_CODING_AGENT_DIR || join(homeDir, '.xi')
+      const settingsPath = join(agentDir, 'settings.json')
+      let settings: Record<string, unknown> = {}
+      if (existsSync(settingsPath)) {
+        try {
+          const content = readFileSync(settingsPath, 'utf-8')
+          settings = JSON.parse(content)
+        } catch {}
+      }
+      settings.promptCaptureEnabled = enabled
+      writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n')
     } catch (err: unknown) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      console.error('[setCaptureEnabled] Failed to persist to settings.json:', err instanceof Error ? err.message : String(err))
     }
+
+    // 2. Broadcast to all connected workers
+    const workers = workerManager?.getAllWorkers() ?? []
+    let lastResult: { ok: boolean; data?: unknown; error?: string } = { ok: false, error: 'No workers' }
+    for (const worker of workers) {
+      if (!worker.bridge.isConnected) continue
+      try {
+        const data = await worker.bridge.sendRpcCommand({ type: 'set_capture_enabled', enabled })
+        lastResult = { ok: true, data }
+      } catch (err: unknown) {
+        lastResult = { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+    return lastResult
   })
 
   ipcMain.handle('pi:clearSnapshots', async (_event, sessionPath: string | null) => {

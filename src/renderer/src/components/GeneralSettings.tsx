@@ -31,9 +31,7 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   const [workerMaxSecondaries, setWorkerMaxSecondaries] = useState(() => {
     return Number(localStorage.getItem('xi-settings-worker-max-secondaries')) || 8
   })
-  const [isCaptureOn, setIsCaptureOn] = useState(() => {
-    return localStorage.getItem('xi-prompt-capture-enabled') === 'true'
-  })
+  const [isCaptureOn, setIsCaptureOn] = useState(false)
   const [snapshotCount, setSnapshotCount] = useState(0)
   const [clearing, setClearing] = useState(false)
   const [summaryPrompt, setSummaryPrompt] = useState(() => {
@@ -75,21 +73,11 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   }, [fontSize])
 
   useEffect(() => {
-    // On mount, sync localStorage preference TO the worker (worker starts with captureEnabled=false)
-    const storedPref = localStorage.getItem('xi-prompt-capture-enabled') === 'true'
-    if (storedPref && setCaptureEnabled) {
-      setCaptureEnabled(true).then(() => {
-        getCaptureStatus?.().then((status) => {
-          setIsCaptureOn(status.enabled)
-          setSnapshotCount(status.snapshotCount)
-        })
-      })
-    } else {
-      getCaptureStatus?.().then((status) => {
-        setIsCaptureOn(status.enabled)
-        setSnapshotCount(status.snapshotCount)
-      })
-    }
+    // On mount, query the actual worker state (workers bootstrap from settings.json)
+    getCaptureStatus?.().then((status) => {
+      setIsCaptureOn(status.enabled)
+      setSnapshotCount(status.snapshotCount)
+    })
   }, [])
 
   useEffect(() => {
@@ -342,7 +330,6 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
             onClick={async () => {
               const next = !isCaptureOn
               setIsCaptureOn(next)
-              localStorage.setItem('xi-prompt-capture-enabled', String(next))
               await setCaptureEnabled?.(next)
               if (next) {
                 const status = await getCaptureStatus?.()
