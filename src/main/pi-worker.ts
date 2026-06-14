@@ -52,7 +52,7 @@ function validateWritePath(absolutePath: string, cwd: string): void {
  * Returns an empty string if no ancestors have summaries.
  */
 function buildAncestorPreamble(sessionFilePath: string): string {
-  const chain: Array<{ name: string; summary: string }> = []
+  const chain: Array<{ name: string; summary: string; parentName: string | null }> = []
   let currentPath: string | null = sessionFilePath
   const visited = new Set<string>()
   const MAX_DEPTH = 5
@@ -70,7 +70,14 @@ function buildAncestorPreamble(sessionFilePath: string): string {
       const truncated = info.summary.length > MAX_SUMMARY_CHARS
         ? info.summary.substring(0, MAX_SUMMARY_CHARS) + '...'
         : info.summary
-      chain.push({ name: info.name || 'unnamed', summary: truncated })
+
+      let parentName: string | null = null
+      if (info.parentSessionPath) {
+        const parentInfo = parseSessionFile(info.parentSessionPath)
+        parentName = parentInfo?.name ?? null
+      }
+
+      chain.push({ name: info.name || 'unnamed', summary: truncated, parentName })
     }
 
     currentPath = info.parentSessionPath
@@ -82,11 +89,12 @@ function buildAncestorPreamble(sessionFilePath: string): string {
   chain.reverse()
 
   const items = chain.map((item, i) => {
-    const summary = item.summary
-    return `<ancestor-session index="${i + 1}" name="${item.name}">\n${summary}\n</ancestor-session>`
+    const depth = i + 1
+    const parentAttr = item.parentName ? ` parent="${item.parentName}"` : ''
+    return `<ancestor-session depth="${depth}" name="${item.name}"${parentAttr}>\n${item.summary}\n</ancestor-session>`
   }).join('\n\n')
 
-  return `<ancestor-context>\nYou are continuing work from a previous session. Below are summaries of ancestor sessions — work that was done before this session started. Use this context to maintain continuity, but do not re-do work that is already completed.\n\n${items}\n</ancestor-context>`
+  return `<ancestor-context>\nYou are continuing work from a previous session. Below are summaries of ancestor sessions, ordered from root to direct parent. Use this context to maintain continuity, but do not re-do work that is already completed.\n\n${items}\n</ancestor-context>`
 }
 
 function createSearchSessionsTool(cwd: string) {
