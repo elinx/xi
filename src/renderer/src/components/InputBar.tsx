@@ -6,6 +6,7 @@ import { useSessionMention } from '../hooks/useSessionMention'
 import { useSkillMention } from '../hooks/useSkillMention'
 import type { SkillInfo } from '../hooks/useSkillStore'
 import type { WorkerStatus } from '../hooks/useSessionCache'
+import { getInputDraft, setInputDraft, clearInputDraft } from '../hooks/useInputDraft'
 import ModelSelector from './ModelSelector'
 import FileMentionDropdown from './FileMentionDropdown'
 import SessionMentionDropdown from './SessionMentionDropdown'
@@ -18,6 +19,7 @@ interface InputBarProps {
   onSend: (text: string, images?: { data: string; mimeType: string }[], mentions?: MentionItem[], quotes?: QuotedMessage[], isSummaryCommand?: boolean) => void
   disabled: boolean
   isConnected: boolean
+  sessionPath?: string | null
   isStreaming?: boolean
   onStop?: () => void
   workerStatus?: WorkerStatus
@@ -39,7 +41,7 @@ interface InputBarProps {
   skills?: SkillInfo[]
 }
 
-function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued, skills = [] }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued, skills = [] }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -73,6 +75,102 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     window.addEventListener('xi:invoke-skill', handler)
     return () => window.removeEventListener('xi:invoke-skill', handler)
   }, [])
+
+  // --- Draft persistence: save on unmount / restore on mount ---
+  const sessionPathRef = useRef(sessionPath)
+  sessionPathRef.current = sessionPath
+
+  // Restore draft when mounting or switching sessions
+  useEffect(() => {
+    if (!sessionPath || !editorRef.current) return
+    const draft = getInputDraft(sessionPath)
+    if (!draft) return
+    // Only restore if the editor is currently empty
+    if (editorRef.current.textContent?.trim()) return
+    suppressMentionRef.current = true
+    editorRef.current.innerHTML = draft.innerHTML
+    // Move cursor to end
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(editorRef.current)
+      range.collapse(false)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    // Restore mention state
+    if (draft.mentions.length > 0) {
+      mention.setMentions(draft.mentions)
+    }
+    // Restore pasted images
+    if (draft.pastedImages.length > 0) {
+      setPastedImages(draft.pastedImages)
+    }
+    mention.close()
+    setTimeout(() => { suppressMentionRef.current = false }, 100)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionPath])
+
+  // Save draft on unmount
+  useEffect(() => {
+    return () => {
+      const sp = sessionPathRef.current
+      if (!sp || !editorRef.current) return
+      const hasContent = editorRef.current.textContent?.trim()
+      const hasImages = pastedImagesRef.current.length > 0
+      if (hasContent || hasImages) {
+        setInputDraft(sp, {
+          innerHTML: editorRef.current.innerHTML,
+          mentions: [...mentionRef.current.mentions, ...sessionMentionRef.current.sessionMentions],
+          pastedImages: pastedImagesRef.current,
+        })
+      } else {
+        clearInputDraft(sp)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save draft on every input change (debounced)
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveDraft = useCallback(() => {
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current)
+    draftSaveTimerRef.current = setTimeout(() => {
+      const sp = sessionPathRef.current
+      if (!sp || !editorRef.current) return
+      const hasContent = editorRef.current.textContent?.trim()
+      const hasImages = pastedImagesRef.current.length > 0
+      if (hasContent || hasImages) {
+        setInputDraft(sp, {
+          innerHTML: editorRef.current.innerHTML,
+          mentions: [...mentionRef.current.mentions, ...sessionMentionRef.current.sessionMentions],
+          pastedImages: pastedImagesRef.current,
+        })
+      } else {
+        clearInputDraft(sp)
+      }
+    }, 500)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Ref for pastedImages to avoid stale closure in debounced saveDraft
+  const pastedImagesRef = useRef(pastedImages)
+  pastedImagesRef.current = pastedImages
+
+  // Refs for mention state to avoid stale closure in debounced saveDraft
+  const mentionRef = useRef(mention)
+  mentionRef.current = mention
+  const sessionMentionRef = useRef(sessionMention)
+  sessionMentionRef.current = sessionMention
+
+  // Save draft when pastedImages changes (since setPastedImages is async)
+  useEffect(() => {
+    if (!sessionPath) return
+    // Skip the initial mount restore
+    if (!editorRef.current) return
+    saveDraft()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastedImages])
 
   const showStop = isStreaming
   const noModel = isConnected && (!currentModel || (currentModel.id === 'unknown' && currentModel.provider === 'unknown'))
@@ -179,11 +277,46 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     draftMentionsRef.current = []
   }, [])
 
-  // Reset history when sentMessages changes (session switch)
+  // Save draft for previous session and restore draft for new session when switching
   useEffect(() => {
     setHistoryIndex(-1)
     draftRef.current = ''
     draftMentionsRef.current = []
+
+    // Restore draft for the new session
+    if (sessionPath && editorRef.current) {
+      const draft = getInputDraft(sessionPath)
+      if (draft && draft.innerHTML) {
+        suppressMentionRef.current = true
+        editorRef.current.innerHTML = draft.innerHTML
+        // Move cursor to end
+        const sel = window.getSelection()
+        if (sel) {
+          const range = document.createRange()
+          range.selectNodeContents(editorRef.current)
+          range.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
+        if (draft.mentions.length > 0) {
+          mention.setMentions(draft.mentions)
+        }
+        if (draft.pastedImages.length > 0) {
+          setPastedImages(draft.pastedImages)
+        }
+        mention.close()
+        setTimeout(() => { suppressMentionRef.current = false }, 100)
+      } else {
+        // No draft — clear editor
+        if (editorRef.current.textContent?.trim()) {
+          editorRef.current.innerHTML = ''
+        }
+        setPastedImages([])
+        mention.clearMentions()
+        sessionMention.clearMentions()
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentMessages])
 
   const handleSubmit = useCallback((): void => {
@@ -210,6 +343,10 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     setHistoryIndex(-1)
     draftRef.current = ''
     draftMentionsRef.current = []
+    // Clear persisted draft after sending
+    if (sessionPathRef.current) {
+      clearInputDraft(sessionPathRef.current)
+    }
   }, [getPlainText, pastedImages, disabled, onSend, mention, sessionMention])
 
   useEffect(() => {
@@ -354,6 +491,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     // Calculate cursor position in full text
     // For simplicity, use the full text length for cursor position approximation
     skillMention.handleTextChange(fullText, fullText.length)
+
+    // Save draft (debounced)
+    saveDraft()
   }
 
   const handleMentionSelect = useCallback((file: FileEntry) => {
@@ -399,8 +539,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     }
 
     mention.selectItem(file)
+    saveDraft()
     setTimeout(() => { suppressMentionRef.current = false }, 100)
-  }, [mention])
+  }, [mention, saveDraft])
 
   const handleSessionMentionSelect = useCallback((session: SessionInfo) => {
     if (!editorRef.current) return
@@ -446,8 +587,9 @@ function InputBar({ onSend, disabled, isConnected, isStreaming, onStop, workerSt
     }
 
     sessionMention.selectItem(session)
+    saveDraft()
     setTimeout(() => { suppressMentionRef.current = false }, 100)
-  }, [sessionMention])
+  }, [sessionMention, saveDraft])
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>): void {
     const items = e.clipboardData.items

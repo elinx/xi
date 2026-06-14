@@ -1117,6 +1117,7 @@ function App(): React.ReactElement {
               onSend={handleSendPrompt}
               disabled={!isConnected}
               isConnected={isConnected}
+              sessionPath={activeSessionPath}
               isStreaming={displayedStreaming}
               onStop={handleStop}
               workerStatus={displayedWorkerStatus}
