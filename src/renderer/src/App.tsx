@@ -97,7 +97,12 @@ function App(): React.ReactElement {
   const activeSessionPath = sessionCache.displayedSessionPath ?? currentSession?.filePath ?? null
   const displayedWorkerStatus = activeSessionPath ? getWorkerStatus(activeSessionPath) : 'none'
 
-  const sentMessages = useMemo(() => {
+  // Compute sent messages (user text only, reversed for history navigation).
+  // We stabilize the reference so it only changes when the actual content changes,
+  // not on every displayedMessages update (e.g., during streaming when only
+  // assistant content changes). This prevents unnecessary re-renders and effect
+  // triggers in InputBar.
+  const sentMessagesRaw = useMemo(() => {
     return displayedMessages
       .filter(msg => msg.role === 'user')
       .map(msg => {
@@ -109,6 +114,22 @@ function App(): React.ReactElement {
       .filter(text => text.trim().length > 0)
       .reverse()
   }, [displayedMessages])
+
+  const sentMessagesPrevRef = useRef<string[]>([])
+  const sentMessages = useMemo(() => {
+    // Only update reference when content actually changes
+    if (sentMessagesRaw.length !== sentMessagesPrevRef.current.length) {
+      sentMessagesPrevRef.current = sentMessagesRaw
+      return sentMessagesRaw
+    }
+    for (let i = 0; i < sentMessagesRaw.length; i++) {
+      if (sentMessagesRaw[i] !== sentMessagesPrevRef.current[i]) {
+        sentMessagesPrevRef.current = sentMessagesRaw
+        return sentMessagesRaw
+      }
+    }
+    return sentMessagesPrevRef.current
+  }, [sentMessagesRaw])
 
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)

@@ -277,46 +277,16 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
     draftMentionsRef.current = []
   }, [])
 
-  // Save draft for previous session and restore draft for new session when switching
+  // Reset history navigation when sent messages change (e.g., user sends a new message).
+  // NOTE: We intentionally do NOT modify the editor content here. The editor is already
+  // cleared by handleSubmit when sending, and session-switch draft restoration is handled
+  // by the [sessionPath] effect above. Previously this effect also restored/cleared the
+  // editor, which caused input loss during streaming because `sentMessages` gets a new
+  // reference on every displayedMessages update (even when only assistant content changes).
   useEffect(() => {
     setHistoryIndex(-1)
     draftRef.current = ''
     draftMentionsRef.current = []
-
-    // Restore draft for the new session
-    if (sessionPath && editorRef.current) {
-      const draft = getInputDraft(sessionPath)
-      if (draft && draft.innerHTML) {
-        suppressMentionRef.current = true
-        editorRef.current.innerHTML = draft.innerHTML
-        // Move cursor to end
-        const sel = window.getSelection()
-        if (sel) {
-          const range = document.createRange()
-          range.selectNodeContents(editorRef.current)
-          range.collapse(false)
-          sel.removeAllRanges()
-          sel.addRange(range)
-        }
-        if (draft.mentions.length > 0) {
-          mention.setMentions(draft.mentions)
-        }
-        if (draft.pastedImages.length > 0) {
-          setPastedImages(draft.pastedImages)
-        }
-        mention.close()
-        setTimeout(() => { suppressMentionRef.current = false }, 100)
-      } else {
-        // No draft — clear editor
-        if (editorRef.current.textContent?.trim()) {
-          editorRef.current.innerHTML = ''
-        }
-        setPastedImages([])
-        mention.clearMentions()
-        sessionMention.clearMentions()
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentMessages])
 
   const handleSubmit = useCallback((): void => {
