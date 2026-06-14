@@ -399,8 +399,9 @@ export function clearSessionMessages(sessionPath: string): boolean {
           kept.push(line)
           hasHeader = true
         } else if (entry.type === 'session_info') {
-          // Keep name, status, parentSession metadata
-          kept.push(line)
+          // Keep name, status, parentSession metadata; strip summary
+          const { summary: _, ...rest } = entry
+          kept.push(JSON.stringify(rest))
         }
         // Skip: message, fork_point, and everything else
       } catch {
