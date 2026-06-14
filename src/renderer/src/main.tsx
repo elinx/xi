@@ -11,7 +11,7 @@ if (typeof window !== 'undefined' && !window.api) {
 
   window.api = new Proxy({} as typeof window.api, {
     get(_target, prop) {
-      if (prop === 'onEvent' || prop === 'onResponse' || prop === 'onExtensionUiRequest' || prop === 'onStateChanged' || prop === 'onWorkerStatus' || prop === 'onFsChanged' || prop === 'onTerminalData' || prop === 'onTerminalExit') return noopUnsub()
+      if (prop === 'onEvent' || prop === 'onResponse' || prop === 'onExtensionUiRequest' || prop === 'onStateChanged' || prop === 'onWorkerStatus' || prop === 'onFsChanged' || prop === 'onTerminalData' || prop === 'onTerminalExit' || prop === 'onSummaryAutoTriggered') return noopUnsub()
       if (prop === 'openConfigDir' || prop === 'showItemInFolder' || prop === 'copyToClipboard') return noop
       if (prop === 'start' || prop === 'stop') return ok
       if (prop === 'listSessions' || prop === 'refreshSessions') return async () => ({ projects: [] })

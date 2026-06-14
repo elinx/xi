@@ -41,6 +41,9 @@ interface ChatViewProps {
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
   onInspectPrompt?: (messageId: string) => Promise<PromptSnapshot | null>
   captureEnabled?: boolean
+  sessionSummary?: string | null
+  onSetSessionSummary?: (sessionPath: string, summary: string) => Promise<boolean>
+  currentSessionPathForSummary?: string | null
 }
 
 function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
@@ -1517,7 +1520,90 @@ function SessionPickerModal({ sessions, currentSessionPath, onSelect, onClose }:
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled }: ChatViewProps): React.ReactElement {
+function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string; onSave: (sessionPath: string, summary: string) => Promise<boolean>; sessionPath: string | null }): React.ReactElement {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState(summary)
+  const [isSaving, setIsSaving] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+
+  const handleSave = useCallback(async () => {
+    if (!sessionPath) return
+    setIsSaving(true)
+    const ok = await onSave(sessionPath, editText.trim())
+    setIsSaving(false)
+    if (ok) {
+      setIsEditing(false)
+    }
+  }, [onSave, editText, sessionPath])
+
+  const handleCancel = useCallback(() => {
+    setEditText(summary)
+    setIsEditing(false)
+  }, [summary])
+
+  return (
+    <div className="rounded-lg bg-amber-50/95 backdrop-blur-sm border border-amber-200 shadow-sm">
+      <div className="flex items-center justify-between px-3 py-1.5">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center gap-1.5 text-amber-800 font-medium text-xs hover:text-amber-900 transition-colors"
+        >
+          <svg className={`w-3 h-3 transition-transform ${collapsed ? '' : 'rotate-90'}`} fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+          <span>📋</span>
+          <span>Summary</span>
+        </button>
+        <div className="flex items-center gap-0.5">
+          {!isEditing && !collapsed && (
+            <button
+              onClick={() => { setEditText(summary); setIsEditing(true) }}
+              className="rounded p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+              title="Edit summary"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+      {!collapsed && (
+        isEditing ? (
+          <div className="px-3 pb-2">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-xs text-gray-800 resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-amber-400"
+              autoFocus
+            />
+            <div className="flex items-center gap-2 mt-1.5">
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !editText.trim()}
+                className="rounded bg-amber-600 px-2.5 py-0.5 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving...' : '✓ Save'}
+              </button>
+              <button
+                onClick={handleCancel}
+                className="rounded bg-gray-200 px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-300"
+              >
+                ✗ Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-3 pb-2">
+            <p className="text-xs text-amber-900 whitespace-pre-wrap leading-relaxed line-clamp-3">{summary}</p>
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
@@ -1922,6 +2008,13 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
         </div>
       )}
       </div>
+      {sessionSummary && onSetSessionSummary && messages.length > 0 && (
+        <div className="absolute top-2 left-4 right-4 z-10 pointer-events-none">
+          <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl pointer-events-auto">
+            <SessionSummaryCard summary={sessionSummary} onSave={onSetSessionSummary} sessionPath={currentSessionPathForSummary ?? null} />
+          </div>
+        </div>
+      )}
       {showScrollToBottom && (
         <button
           onClick={scrollToBottom}

@@ -85,9 +85,11 @@ function App(): React.ReactElement {
   }), [updateSessionMessages, updateSessionTokenUsage, setSessionStreaming, updateSessionForkPoints, setWorkerStatus, sessionCache.displayedSessionPath, getCache, ensureCacheSync, sessionCache.updateCache])
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled } = usePiRpc(piRpcOptions)
-  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, clearMessages: clearSessionMessages, refresh } = useSessionManager(isConnected)
+  const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, clearMessages: clearSessionMessages, setSessionSummary, refresh } = useSessionManager(isConnected)
 
   const displayedMessages = sessionCache.displayedMessages
+  const displayedMessagesRef = useRef(displayedMessages)
+  displayedMessagesRef.current = displayedMessages
   const displayedTokenUsage = sessionCache.displayedTokenUsage
   const displayedForkPoints = sessionCache.displayedForkPoints
   const displayedStreaming = sessionCache.isDisplayedStreaming
@@ -233,6 +235,12 @@ function App(): React.ReactElement {
   const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
+
+  /** Tracks whether the current agent response is a summary reply.
+   *  Set to true when /summary is sent or mark-completed auto-triggers.
+   *  When agent_end fires and this is true, the last assistant message
+   *  is extracted and persisted as session summary via IPC. */
+  const pendingSummaryRef = useRef(false)
 
   const currentForwards = activeSessionPath ? (pendingForwards.get(activeSessionPath) ?? []) : []
   const mergedQuotes = [...quotes, ...currentForwards]
@@ -488,6 +496,12 @@ function App(): React.ReactElement {
     }
 
     sendPrompt(sessionPath, finalText, images, mentions)
+
+    // Detect summary prompt and set pending flag
+    if (finalText.startsWith('请为当前会话生成一段摘要')) {
+      pendingSummaryRef.current = true
+    }
+
     setPendingForwards(prev => {
       const activePath = displayedSessionPathRef.current
       if (!activePath || !prev.has(activePath)) return prev
@@ -609,7 +623,7 @@ function App(): React.ReactElement {
   useEffect(() => {
     if (!displayedStreaming && pendingCommitGenerationRef.current) {
       pendingCommitGenerationRef.current = false
-      const msgs = sessionCache.displayedMessages
+      const msgs = displayedMessagesRef.current
       const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant')
       if (lastAssistant) {
         const text = lastAssistant.blocks
@@ -625,7 +639,28 @@ function App(): React.ReactElement {
   }, [displayedStreaming, sessionCache.displayedMessages])
 
   useEffect(() => {
-    setOnAgentEnd(() => {
+    setOnAgentEnd(async () => {
+      // Check if a summary reply was pending
+      if (pendingSummaryRef.current) {
+        pendingSummaryRef.current = false
+        const sessionPath = displayedSessionPathRef.current
+        if (sessionPath) {
+          // Extract last assistant message text as summary
+          const msgs = displayedMessagesRef.current
+          const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant')
+          if (lastAssistant) {
+            const summaryText = lastAssistant.blocks
+              .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text' && !('subtype' in b))
+              .map(b => b.content)
+              .join('\n')
+              .trim()
+            if (summaryText) {
+              await setSessionSummary(sessionPath, summaryText)
+            }
+          }
+        }
+      }
+
       refresh()
       const queue = messageQueueRef.current
       if (queue.length > 0) {
@@ -642,6 +677,16 @@ function App(): React.ReactElement {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setOnAgentEnd, refresh, sendPrompt])
+
+  // Listen for auto-triggered summary prompts from mark-completed
+  useEffect(() => {
+    const cleanup = (window.api as typeof window.api & { onSummaryAutoTriggered?: (cb: (sp: string) => void) => () => void }).onSummaryAutoTriggered?.((sessionPath: string) => {
+      if (sessionPath === displayedSessionPathRef.current) {
+        pendingSummaryRef.current = true
+      }
+    })
+    return cleanup ?? (() => {})
+  }, [])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
@@ -1025,6 +1070,9 @@ function App(): React.ReactElement {
                 sessions={sessions?.projects?.flatMap(p => p.allSessions).map(s => ({ filePath: s.filePath, name: s.name, isMain: s.isMain }))}
                 onInspectPrompt={handleInspectPrompt}
                 captureEnabled={captureEnabled}
+                sessionSummary={activeSession?.summary}
+                onSetSessionSummary={setSessionSummary}
+                currentSessionPathForSummary={activeSessionPath}
               />
             </div>
             {activeTab?.type === 'file' && (
