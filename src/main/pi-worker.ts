@@ -51,6 +51,10 @@ function validateWritePath(absolutePath: string, cwd: string): void {
  * collecting summaries from ancestor sessions.
  * Returns an empty string if no ancestors have summaries.
  */
+function escAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 function buildAncestorPreamble(sessionFilePath: string): string {
   const chain: Array<{ name: string; summary: string; parentName: string | null }> = []
   let currentPath: string | null = sessionFilePath
@@ -59,13 +63,12 @@ function buildAncestorPreamble(sessionFilePath: string): string {
   const MAX_SUMMARY_CHARS = 500
 
   while (currentPath && chain.length < MAX_DEPTH) {
-    if (visited.has(currentPath)) break // prevent cycles
+    if (visited.has(currentPath)) break
     visited.add(currentPath)
 
     const info = parseSessionFile(currentPath)
     if (!info) break
 
-    // Skip self, only collect ancestors
     if (currentPath !== sessionFilePath && info.summary) {
       const truncated = info.summary.length > MAX_SUMMARY_CHARS
         ? info.summary.substring(0, MAX_SUMMARY_CHARS) + '...'
@@ -85,13 +88,11 @@ function buildAncestorPreamble(sessionFilePath: string): string {
 
   if (chain.length === 0) return ''
 
-  // Reverse to show root → parent order
   chain.reverse()
 
   const items = chain.map((item, i) => {
-    const depth = i + 1
-    const parentAttr = item.parentName ? ` parent="${item.parentName}"` : ''
-    return `<ancestor-session depth="${depth}" name="${item.name}"${parentAttr}>\n${item.summary}\n</ancestor-session>`
+    const parentAttr = item.parentName ? ` parent="${escAttr(item.parentName)}"` : ''
+    return `<ancestor-session name="${escAttr(item.name)}"${parentAttr}>\n${item.summary}\n</ancestor-session>`
   }).join('\n\n')
 
   return `<ancestor-context>\nYou are continuing work from a previous session. Below are summaries of ancestor sessions, ordered from root to direct parent. Use this context to maintain continuity, but do not re-do work that is already completed.\n\n${items}\n</ancestor-context>`
