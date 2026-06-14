@@ -7,8 +7,9 @@ interface ChatContextMenuProps {
   messageBlocks: ContentBlock[]
   messageRole: 'user' | 'assistant'
   isStreaming: boolean
-  onQuote: () => void
-  onForward: () => void
+  selectedText?: string
+  onQuote: (selectedText?: string) => void
+  onForward: (selectedText?: string) => void
   onFork: () => void
   onClose: () => void
 }
@@ -18,6 +19,7 @@ function ChatContextMenu({
   y,
   messageBlocks,
   isStreaming,
+  selectedText,
   onQuote,
   onForward,
   onFork,
@@ -26,13 +28,19 @@ function ChatContextMenu({
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleCopy = useCallback(() => {
-    const textParts: string[] = []
-    for (const block of messageBlocks) {
-      if (block.type === 'text' && !block.subtype) {
-        textParts.push((block as TextBlock).content)
+    // If user has selected text within the message, copy just that
+    const selection = window.getSelection()
+    if (selection && selection.toString().trim().length > 0) {
+      navigator.clipboard.writeText(selection.toString())
+    } else {
+      const textParts: string[] = []
+      for (const block of messageBlocks) {
+        if (block.type === 'text' && !block.subtype) {
+          textParts.push((block as TextBlock).content)
+        }
       }
+      navigator.clipboard.writeText(textParts.join('\n\n'))
     }
-    navigator.clipboard.writeText(textParts.join('\n\n'))
     onClose()
   }, [messageBlocks, onClose])
 
@@ -77,24 +85,24 @@ function ChatContextMenu({
       </button>
       <div className="border-t border-gray-100 my-0.5" />
       <button
-        onClick={() => { onQuote(); onClose() }}
+        onClick={() => { onQuote(selectedText); onClose() }}
         disabled={disabled}
         className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2 disabled:text-gray-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
       >
         <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
         </svg>
-        Quote
+        {selectedText ? 'Quote Selection' : 'Quote'}
       </button>
       <button
-        onClick={() => { onForward(); onClose() }}
+        onClick={() => { onForward(selectedText); onClose() }}
         disabled={disabled}
         className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2 disabled:text-gray-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
       >
         <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
         </svg>
-        Forward...
+        {selectedText ? 'Forward Selection...' : 'Forward...'}
       </button>
       <div className="border-t border-gray-100 my-0.5" />
       <button

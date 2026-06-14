@@ -1647,6 +1647,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     messageId: string
     messageRole: 'user' | 'assistant'
     messageBlocks: ContentBlock[]
+    selectedText?: string
   } | null>(null)
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
@@ -1717,12 +1718,22 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     const msgId = msgEl.dataset.msgId!
     const msgRole = msgEl.dataset.msgRole as 'user' | 'assistant'
     const msgBlocks = msgEl.dataset.msgBlocks
+    // Check if user has selected text within this message
+    const selection = window.getSelection()
+    let selectedText: string | undefined
+    if (selection && selection.toString().trim().length > 0) {
+      const range = selection.getRangeAt(0)
+      if (msgEl.contains(range.commonAncestorContainer)) {
+        selectedText = selection.toString().trim()
+      }
+    }
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       messageId: msgId,
       messageRole: msgRole,
       messageBlocks: msgBlocks ? JSON.parse(msgBlocks) : [],
+      selectedText,
     })
   }, [])
 
@@ -2198,17 +2209,18 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             messageBlocks={contextMenu.messageBlocks}
             messageRole={contextMenu.messageRole}
             isStreaming={isStreaming && (streamingMessageId != null ? contextMenu.messageId === streamingMessageId : contextMenu.messageRole === 'assistant')}
-            onQuote={() => {
+            selectedText={contextMenu.selectedText}
+            onQuote={(selectedText) => {
               if (!onQuoteMessage) return
-              const textContent = contextMenu.messageBlocks
+              const textContent = selectedText ?? contextMenu.messageBlocks
                 .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
                 .map((b) => b.content)
                 .join('\n')
               const msg = messages.find(m => m.id === contextMenu.messageId)
               onQuoteMessage(contextMenu.messageId, contextMenu.messageRole, textContent, msg?.timestamp ?? Date.now())
             }}
-            onForward={() => {
-              const textContent = contextMenu.messageBlocks
+            onForward={(selectedText) => {
+              const textContent = selectedText ?? contextMenu.messageBlocks
                 .filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
                 .map((b) => b.content)
                 .join('\n')
