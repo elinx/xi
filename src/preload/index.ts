@@ -38,6 +38,12 @@ const api = {
     return () => ipcRenderer.removeListener('worker:status', handler)
   },
 
+  onSummaryAutoTriggered: (callback: (sessionPath: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, sessionPath: string) => callback(sessionPath)
+    ipcRenderer.on('session:summaryAutoTriggered', handler)
+    return () => ipcRenderer.removeListener('session:summaryAutoTriggered', handler)
+  },
+
   getState: (): Promise<{ connected: boolean }> =>
     ipcRenderer.invoke('pi:getState'),
 
@@ -97,6 +103,9 @@ const api = {
 
   reparentSession: (sessionPath: string, newParentPath: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:reparentSession', sessionPath, newParentPath),
+
+  setSessionSummary: (sessionPath: string, summary: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('session:setSessionSummary', sessionPath, summary),
 
   clearSession: (sessionPath: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:clearSession', sessionPath),

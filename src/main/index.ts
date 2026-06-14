@@ -8,6 +8,14 @@ import { WorkerManager } from './worker-manager'
 import * as sessionService from './session-service'
 import type { SessionInfo, ForkableMessage, ForkPoint } from '../renderer/src/types/session'
 
+/** Prompt template for auto-generating session summaries. */
+const SUMMARY_PROMPT = `请为当前会话生成一段摘要，涵盖以下方面（如果适用）：
+1. 用户意图：用户想要完成什么
+2. 主要操作：做了哪些关键实现或修改
+3. 涉及文件：修改或创建了哪些文件
+4. 已知问题：未解决的问题或待办事项
+请保持简洁，200字以内。只输出摘要内容，不要使用工具。`
+
 // Override app name & dock icon so macOS shows "Xi" instead of "Electron"
 app.setName('Xi')
 if (process.platform === 'darwin') {
@@ -1084,9 +1092,43 @@ function registerIpcHandlers(): void {
   ipcMain.handle('session:setSessionStatus', async (_event, sessionPath: string, status: 'active' | 'completed') => {
     const result = sessionService.setSessionStatus(sessionPath, status)
     if (result) {
+      // Auto-trigger summary generation when marking as completed and no summary exists
+      if (status === 'completed') {
+        try {
+          const info = sessionService.parseSessionFile(sessionPath)
+          if (info && !info.summary) {
+            const worker = workerManager?.get(sessionPath) ?? workerManager?.getPrimary()
+            if (worker?.bridge.isConnected) {
+              // Fire-and-forget: send summary prompt without awaiting
+              worker.bridge.sendRpcCommand({
+                type: 'prompt',
+                message: SUMMARY_PROMPT,
+              }).catch(() => {
+                // Silently ignore — user can manually /summary later
+              })
+              // Notify frontend that a summary prompt was auto-triggered
+              try {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('session:summaryAutoTriggered', sessionPath)
+                }
+              } catch {}
+            }
+          }
+        } catch {
+          // Silently ignore — auto-trigger is best-effort
+        }
+      }
       return { success: true }
     }
     return { success: false, error: 'Failed to set session status' }
+  })
+
+  ipcMain.handle('session:setSessionSummary', async (_event, sessionPath: string, summary: string) => {
+    const result = sessionService.setSessionSummary(sessionPath, summary)
+    if (result) {
+      return { success: true }
+    }
+    return { success: false, error: 'Failed to set session summary' }
   })
 
   ipcMain.handle('session:reparentSession', async (_event, sessionPath: string, newParentPath: string | null) => {
