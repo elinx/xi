@@ -410,7 +410,7 @@ function SessionNode({
               className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
             />
           ) : (
-            <span className={`shrink truncate text-xs ${isCompleted ? 'line-through' : ''}`}>
+            <span className={`shrink truncate text-xs ${isCompleted ? 'line-through' : ''}`} title={node.session.summary ? `${getSessionDisplayName(node.session)}\n${node.session.summary.slice(0, 100)}${node.session.summary.length > 100 ? '...' : ''}` : undefined}>
               {getSessionDisplayName(node.session)}
             </span>
           )}

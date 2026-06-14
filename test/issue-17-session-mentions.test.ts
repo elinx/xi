@@ -47,10 +47,10 @@ function formatSessionContext(mentions: MentionItem[], getCache: (filePath: stri
 }
 
 const mockSessions: SessionInfo[] = [
-  { filePath: '/proj/.xi/sessions/s1.jsonl', sessionId: 's1', name: 'main', status: 'active', createdAt: Date.now(), cwd: '/proj', messageCount: 5, isMain: true },
-  { filePath: '/proj/.xi/sessions/s2.jsonl', sessionId: 's2', name: 'feature-auth', status: 'active', createdAt: Date.now(), cwd: '/proj', messageCount: 12, isMain: false },
-  { filePath: '/proj/.xi/sessions/s3.jsonl', sessionId: 's3', name: 'bugfix-api', status: 'completed', createdAt: Date.now(), cwd: '/proj', messageCount: 3, isMain: false },
-  { filePath: '/proj/.xi/sessions/s4.jsonl', sessionId: 's4', name: null, status: 'active', createdAt: Date.now(), cwd: '/proj', messageCount: 0, isMain: false },
+  { filePath: '/proj/.xi/sessions/s1.jsonl', sessionId: 's1', name: 'main', status: 'active', summary: null, createdAt: Date.now(), cwd: '/proj', messageCount: 5, isMain: true },
+  { filePath: '/proj/.xi/sessions/s2.jsonl', sessionId: 's2', name: 'feature-auth', status: 'active', summary: null, createdAt: Date.now(), cwd: '/proj', messageCount: 12, isMain: false },
+  { filePath: '/proj/.xi/sessions/s3.jsonl', sessionId: 's3', name: 'bugfix-api', status: 'completed', summary: null, createdAt: Date.now(), cwd: '/proj', messageCount: 3, isMain: false },
+  { filePath: '/proj/.xi/sessions/s4.jsonl', sessionId: 's4', name: null, status: 'active', summary: null, createdAt: Date.now(), cwd: '/proj', messageCount: 0, isMain: false },
 ]
 
 describe('Issue #17: Session Mentions ($ trigger)', () => {

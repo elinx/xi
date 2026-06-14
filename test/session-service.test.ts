@@ -14,6 +14,7 @@ import {
   getForkPoints,
   reparentSession,
   wouldCreateCycle,
+  setSessionSummary,
 } from '../src/main/session-service'
 import type { SessionInfo } from '../src/renderer/src/types/session'
 
@@ -243,6 +244,7 @@ describe('buildSessionTree', () => {
       sessionId: 'test-id',
       name: null,
       status: null,
+      summary: null,
       createdAt: '2026-05-26T16:00:00.000Z',
       cwd: '/test',
       parentSessionPath: null,
@@ -783,22 +785,22 @@ describe('reparentSession', () => {
 describe('wouldCreateCycle', () => {
   it('returns false for null newParent', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     expect(wouldCreateCycle('/a', null, sessions)).toBe(false)
   })
 
   it('returns true for self-reference', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     expect(wouldCreateCycle('/a', '/a', sessions)).toBe(true)
   })
 
   it('returns true for direct cycle A->B->A', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/b', messageCount: 0, isMain: false },
-      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/b', messageCount: 0, isMain: false, status: null, summary: null },
+      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     // Moving /b under /a would create /b->/a->/b
     expect(wouldCreateCycle('/b', '/a', sessions)).toBe(true)
@@ -806,9 +808,9 @@ describe('wouldCreateCycle', () => {
 
   it('returns true for indirect cycle A->B->C->A', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/c', messageCount: 0, isMain: false },
-      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/a', messageCount: 0, isMain: false },
-      { filePath: '/c', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/a', sessionId: '1', name: null, createdAt: '', cwd: '', parentSessionPath: '/c', messageCount: 0, isMain: false, status: null, summary: null },
+      { filePath: '/b', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/a', messageCount: 0, isMain: false, status: null, summary: null },
+      { filePath: '/c', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     // Moving /c under /b would create /c->/b->/a->/c
     expect(wouldCreateCycle('/c', '/b', sessions)).toBe(true)
@@ -816,9 +818,9 @@ describe('wouldCreateCycle', () => {
 
   it('returns false for valid reparent', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true },
-      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false },
-      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true, status: null, summary: null },
+      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false, status: null, summary: null },
+      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     // Moving /b under /main is fine
     expect(wouldCreateCycle('/b', '/main', sessions)).toBe(false)
@@ -826,11 +828,70 @@ describe('wouldCreateCycle', () => {
 
   it('returns false for moving to descendant of same root (no cycle)', () => {
     const sessions: SessionInfo[] = [
-      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true },
-      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false },
-      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false },
+      { filePath: '/main', sessionId: '1', name: 'main', createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: true, status: null, summary: null },
+      { filePath: '/a', sessionId: '2', name: null, createdAt: '', cwd: '', parentSessionPath: '/main', messageCount: 0, isMain: false, status: null, summary: null },
+      { filePath: '/b', sessionId: '3', name: null, createdAt: '', cwd: '', parentSessionPath: null, messageCount: 0, isMain: false, status: null, summary: null },
     ]
     // Moving /b under /a is fine (no cycle)
     expect(wouldCreateCycle('/b', '/a', sessions)).toBe(false)
+  })
+})
+
+describe('setSessionSummary', () => {
+  it('appends session_info with summary', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'test.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:24:40.822Z', cwd: '/test/project' },
+    )
+
+    const ok = setSessionSummary(filePath, 'Implemented fork functionality')
+    expect(ok).toBe(true)
+
+    const result = parseSessionFile(filePath)
+    expect(result!.summary).toBe('Implemented fork functionality')
+  })
+
+  it('last session_info wins for summary', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'test.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:24:40.822Z', cwd: '/test/project' },
+      [{ type: 'session_info', summary: 'First summary' }],
+    )
+
+    setSessionSummary(filePath, 'Updated summary')
+
+    const result = parseSessionFile(filePath)
+    expect(result!.summary).toBe('Updated summary')
+  })
+
+  it('returns false for nonexistent file', () => {
+    const ok = setSessionSummary('/nonexistent/file.jsonl', 'test')
+    expect(ok).toBe(false)
+  })
+
+  it('preserves other session_info fields', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'test.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:24:40.822Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'my-session', status: 'completed' }],
+    )
+
+    setSessionSummary(filePath, 'Session summary')
+
+    const result = parseSessionFile(filePath)
+    expect(result!.name).toBe('my-session')
+    expect(result!.status).toBe('completed')
+    expect(result!.summary).toBe('Session summary')
+  })
+
+  it('parseSessionFile returns null summary when no summary entry', () => {
+    const dir = join(testDir, 'sessions')
+    const filePath = writeSession(dir, 'test.jsonl',
+      { id: 'uuid-1', timestamp: '2026-05-26T16:24:40.822Z', cwd: '/test/project' },
+      [{ type: 'session_info', name: 'my-session' }],
+    )
+
+    const result = parseSessionFile(filePath)
+    expect(result!.summary).toBeNull()
   })
 })

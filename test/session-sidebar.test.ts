@@ -34,6 +34,8 @@ function makeSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
     filePath: '/test/session.jsonl',
     sessionId: 'test-id',
     name: null,
+    status: null,
+    summary: null,
     createdAt: '2026-05-28T10:00:00.000Z',
     cwd: '/test/project',
     parentSessionPath: null,
