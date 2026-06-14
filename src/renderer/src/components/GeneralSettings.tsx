@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { DEFAULT_SUMMARY_PROMPT } from '../../../shared/summary-prompt'
 
 type Theme = 'system' | 'light' | 'dark'
 type StartupSession = 'last' | 'main'
@@ -35,6 +36,9 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   })
   const [snapshotCount, setSnapshotCount] = useState(0)
   const [clearing, setClearing] = useState(false)
+  const [summaryPrompt, setSummaryPrompt] = useState(() => {
+    return localStorage.getItem('xi-settings-summary-prompt') || ''
+  })
 
   // Skill sources state
   const [harnessDirs, setHarnessDirs] = useState<Array<{ id: string; label: string; dir: string; skillCount: number }>>([])
@@ -206,6 +210,40 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
             <option value="last">Last Session</option>
             <option value="main">Main Session</option>
           </select>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Summary</h3>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-700">Summary Prompt</span>
+              <span className="text-[10px] text-gray-400">Used by /summary and mark-completed. Empty = default.</span>
+            </div>
+            <button
+              onClick={() => {
+                setSummaryPrompt('')
+                localStorage.removeItem('xi-settings-summary-prompt')
+              }}
+              className="text-[10px] text-gray-400 hover:text-gray-600"
+            >
+              Reset to default
+            </button>
+          </div>
+          <textarea
+            value={summaryPrompt}
+            onChange={(e) => {
+              setSummaryPrompt(e.target.value)
+              if (e.target.value.trim()) {
+                localStorage.setItem('xi-settings-summary-prompt', e.target.value)
+              } else {
+                localStorage.removeItem('xi-settings-summary-prompt')
+              }
+            }}
+            placeholder={DEFAULT_SUMMARY_PROMPT}
+            className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 placeholder-gray-300 resize-y min-h-[100px] focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono"
+          />
         </div>
       </div>
 

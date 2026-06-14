@@ -20,6 +20,7 @@ import type { ImageAnnotatorHandle } from './ImageAnnotator'
 import type { ViewMode } from '../utils/compact-view'
 import { groupByTurns, getUserSummary, getAgentSummary } from '../utils/compact-view'
 import type { ConversationTurn } from '../utils/compact-view'
+import { getSummaryPrompt } from '../../../shared/summary-prompt'
 import PromptInspector, { InspectorErrorBoundary } from './PromptInspector'
 import type { PromptSnapshot } from '../types/pi-events'
 
@@ -127,9 +128,20 @@ const mdComponentsInline = {
   a: LinkComponent,
 }
 
-function TextBlockRenderer({ block, isStreaming, onFileSelect }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void }): React.ReactElement {
+function TextBlockRenderer({ block, isStreaming, onFileSelect, isUser }: { block: TextBlock; isStreaming?: boolean; onFileSelect?: (filePath: string) => void; isUser?: boolean }): React.ReactElement {
   if (block.subtype === 'thinking') {
     return <ThinkingBlockRenderer content={block.content} isStreaming={isStreaming} />
+  }
+
+  if (isUser && block.content === getSummaryPrompt()) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        /summary
+      </span>
+    )
   }
 
   if (isStreaming) {
@@ -982,7 +994,7 @@ const ContentBlockRenderer = memo(function ContentBlockRenderer({
 }): React.ReactElement | null {
   switch (block.type) {
     case 'text':
-      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={isUser ? onFileSelect : undefined} />
+      return <TextBlockRenderer block={block} isStreaming={isStreamingBlock} onFileSelect={isUser ? onFileSelect : undefined} isUser={isUser} />
     case 'quote':
       return <QuoteBlockRenderer block={block} />
     case 'image':
