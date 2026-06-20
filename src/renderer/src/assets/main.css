@@ -315,3 +315,17 @@
 :root.light .line-flash {
   background-color: rgba(59, 130, 246, 0.08);
 }
+
+@keyframes xi-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0); }
+}
+
+.xi-pulse-ring {
+  animation: xi-pulse-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes xi-row-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

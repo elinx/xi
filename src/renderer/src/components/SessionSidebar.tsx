@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { SessionListResult, SessionInfo, SessionTreeNode } from '../types/session'
-import TreeGraphRow, { sessionAncestorLinesToGuides, sessionDotToGuide } from './TreeGraph'
+
 import { getSessionDisplayName } from '../utils/session-utils'
 import { useLayoutStore } from '../hooks/useLayoutStore'
 
@@ -121,9 +121,8 @@ type DropPosition = 'before' | 'child' | 'after'
 
 function SessionNode({
   node,
-  ancestorLines,
+  depth,
   currentSessionPath,
-  isOnActivePath,
   workerStatuses,
   onSwitch,
   onRename,
@@ -154,9 +153,8 @@ function SessionNode({
   onDropOnSession,
 }: {
   node: SessionTreeNode
-  ancestorLines: { hasLine: boolean; highlight: boolean; branchActive: boolean }[]
+  depth: number
   currentSessionPath: string | null
-  isOnActivePath: boolean
   workerStatuses: Map<string, 'none' | 'starting' | 'connected' | 'error'>
   onSwitch: (path: string) => void
   onRename: (sessionPath: string, name: string) => void
@@ -237,20 +235,6 @@ function SessionNode({
     setIsRenaming(false)
   }, [renameValue, node.session, onRename])
 
-  const hasChildOnActivePath = node.children.some(
-    (child) =>
-      currentSessionPath === child.session.filePath ||
-      isDescendantOf(child, currentSessionPath)
-  )
-
-  const guides = [...sessionAncestorLinesToGuides(ancestorLines), sessionDotToGuide({
-    active: isOnActivePath || isActive || node.session.isMain,
-    hasChildren,
-    isExpanded,
-    highlight: hasChildOnActivePath,
-    completed: isCompleted,
-  })]
-
   const isMoveUnderMode = moveUnderTarget !== null
   const isMoveUnderDropTarget = isMoveUnderMode && moveUnderTarget !== node.session.filePath
 
@@ -312,14 +296,12 @@ function SessionNode({
           if (!pos || !isValidDrop(pos)) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'move'
-          // Only update if changed
           if (dropTargetInfo?.path !== node.session.filePath || dropTargetInfo?.position !== pos) {
             onDropTargetChange({ path: node.session.filePath, position: pos })
           }
-          // Auto-expand collapsed nodes after 500ms hover
           if (!isExpanded && hasChildren && autoExpandTimerRef.current === null) {
             autoExpandTimerRef.current = setTimeout(() => {
-              onToggleCollapsed(node.session.filePath) // expand by removing from collapsed set
+              onToggleCollapsed(node.session.filePath)
               autoExpandTimerRef.current = null
             }, 500)
           }
@@ -344,27 +326,22 @@ function SessionNode({
           onDragSessionEnd()
           clearAutoExpandTimer()
         }}
-        className={`group flex items-center rounded cursor-pointer transition-colors duration-150 ${
+        className={`group relative flex items-center cursor-pointer transition-colors duration-150 ${
           isDragging
             ? 'opacity-40'
             : isCurrentDropTarget && dropPosition === 'child'
-              ? 'bg-blue-50 ring-2 ring-blue-400 text-blue-900'
+              ? 'bg-blue-50 ring-2 ring-blue-400'
               : isCurrentDropTarget && (dropPosition === 'before' || dropPosition === 'after')
-                ? isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'bg-gray-100 text-gray-900'
+                ? ''
                 : isMoveUnderMode && isMoveUnderDropTarget
-                  ? 'hover:bg-gray-100 hover:text-gray-900 ring-1 ring-gray-300 hover:ring-gray-500'
+                  ? 'ring-1 ring-gray-300 hover:ring-gray-500'
                   : isActive
                     ? isCompleted
-                        ? 'bg-gray-100/60 text-gray-500'
-                        : 'bg-blue-50 text-gray-900'
-                    : isCompleted
-                      ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-500'
-                      : hiddenCount > 0
-                        ? 'bg-gray-50/80 text-gray-700 hover:bg-gray-100 hover:text-gray-800'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                      ? 'bg-gray-100/60'
+                      : 'bg-blue-50'
+                    : 'hover:bg-gray-100'
         }`}
+        style={{ paddingLeft: `${12 + depth * 16}px`, minHeight: isCompleted ? 34 : 42 }}
         onClick={() => {
           if (isMoveUnderMode && isMoveUnderDropTarget) {
             onMoveUnderConfirm(moveUnderTarget!, node.session.filePath)
@@ -375,24 +352,31 @@ function SessionNode({
         onDoubleClick={isMoveUnderMode ? undefined : handleDoubleClick}
         onContextMenu={(e) => onContextMenu(e, node.session)}
       >
-        <TreeGraphRow guides={guides}>
-          <div className="flex-1 flex items-center gap-1 py-1.5 pr-2 min-w-0">
-          {/* Drag handle grip icon — w-0 when idle, expands on hover */}
-          {canDrag && (
-            <span className="flex-shrink-0 w-0 overflow-hidden group-hover:w-3.5 transition-[width] duration-150">
-              <span className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 hover:text-gray-600 transition-opacity cursor-grab active:cursor-grabbing flex items-center">
-                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
-                  <circle cx="5" cy="3" r="1.5" />
-                  <circle cx="11" cy="3" r="1.5" />
-                  <circle cx="5" cy="8" r="1.5" />
-                  <circle cx="11" cy="8" r="1.5" />
-                  <circle cx="5" cy="13" r="1.5" />
-                  <circle cx="11" cy="13" r="1.5" />
-                </svg>
-              </span>
-            </span>
+        {isActive && !isCompleted && (
+          <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-sm bg-blue-500" />
+        )}
+        <div className={`flex items-center flex-1 min-w-0 gap-1 pr-2 ${isCompleted ? 'opacity-50' : ''}`}>
+          {hasChildren ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleCollapsed(node.session.filePath)
+              }}
+              className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 transition-all duration-150"
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none" className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}>
+                <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          ) : (
+            <span className="flex-shrink-0 w-5" />
           )}
-          {/* Name + collapse indicator (always together, name shrinks) */}
+          {node.session.isMain && (
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className="flex-shrink-0 text-blue-500">
+              <path d="M4 0L8 4L4 8L0 4Z"/>
+            </svg>
+          )}
           {isRenaming ? (
             <input
               autoFocus
@@ -404,127 +388,82 @@ function SessionNode({
                 if (e.key === 'Escape') setIsRenaming(false)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-xs text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
+              className="flex-1 min-w-0 bg-gray-100 rounded px-1 py-0.5 text-[13px] text-gray-900 outline-none border border-gray-300 focus:border-blue-500"
             />
           ) : (
-            <span className={`shrink truncate text-xs ${isCompleted ? 'line-through' : ''}`} title={node.session.summary ? `${getSessionDisplayName(node.session)}\n${node.session.summary.slice(0, 100)}${node.session.summary.length > 100 ? '...' : ''}` : undefined}>
-              {getSessionDisplayName(node.session)}
-            </span>
+            <div className="flex-1 flex flex-col min-w-0 gap-px">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className={`text-[13px] font-medium truncate text-gray-900 ${isCompleted ? 'line-through' : ''}`} title={node.session.summary ? `${getSessionDisplayName(node.session)}\n${node.session.summary.slice(0, 100)}${node.session.summary.length > 100 ? '...' : ''}` : undefined}>
+                  {getSessionDisplayName(node.session)}
+                </span>
+                {!node.session.isMain && (() => {
+                  const ws = workerStatuses.get(node.session.filePath)
+                  if (isCompleted) return (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400 flex-shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />done
+                    </span>
+                  )
+                  if (ws === 'connected' || ws === 'starting') return (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 flex-shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 xi-pulse-ring" />running
+                    </span>
+                  )
+                  if (ws === 'error') return (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-500 flex-shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />error
+                    </span>
+                  )
+                  return (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 flex-shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />active
+                    </span>
+                  )
+                })()}
+              </div>
+              {!isCompleted && (() => {
+                const summary = node.session.summary ?? node.session.firstUserMessage
+                return summary ? (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[11px] text-gray-500 truncate flex-1 min-w-0">{summary}</span>
+                    <span className="text-[10px] text-gray-500 flex-shrink-0">{formatRelativeTime(node.session.createdAt)}</span>
+                  </div>
+                ) : null
+              })()}
+            </div>
           )}
-          {/* Status dot — right after name */}
-          {node.session.isMain ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-blue-500" />
-          ) : workerStatuses.get(node.session.filePath) === 'connected' ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-blue-500" />
-          ) : workerStatuses.get(node.session.filePath) === 'starting' ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-          ) : workerStatuses.get(node.session.filePath) === 'error' ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-red-500" />
-          ) : null}
-
-          {/* Collapse/expand arrow — always visible when collapsed, hover-only when expanded */}
-          {hasChildren && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleCollapsed(node.session.filePath)
-              }}
-              className={`flex-shrink-0 rounded px-0.5 py-0.5 transition-colors duration-150 ${
-                isExpanded
-                  ? 'text-gray-300 hover:text-gray-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-              title={isExpanded ? 'Collapse' : `Expand (${hiddenCount} hidden)`}
-            >
-              <svg
-                className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
+          {!isRenaming && (
+            <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsForking(true); setForkName('') }}
+                className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 transition-colors duration-150"
+                title="Fork"
               >
-                <path
-                  fillRule="evenodd"
-                  d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          )}
-          {/* Hidden count badge — only when collapsed with children */}
-          {hasChildren && !isExpanded && (
-            <span
-              className="flex-shrink-0 min-w-[1.25rem] h-[1.25rem] flex items-center justify-center rounded-full bg-gray-200/80 text-gray-500 text-[9px] font-semibold leading-none px-1"
-              title={`${hiddenCount} sub-session${hiddenCount > 1 ? 's' : ''} hidden`}
-            >
-              {hiddenCount}
-            </span>
-          )}
-
-          {/* Spacer to push right-side items to the end */}
-          <span className="flex-1 min-w-1" />
-
-          <span className="flex-shrink-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-            {formatRelativeTime(node.session.createdAt)}
-          </span>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsForking(true)
-              setForkName('')
-            }}
-            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors duration-150"
-            title="Fork"
-          >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 001.5 0zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
-              </svg>
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsCreatingChild(true)
-              setChildName('')
-            }}
-            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors duration-150"
-            title="New child session"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-
-          {!node.session.isMain && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                if (confirmDelete) {
-                  onDelete(node.session.filePath)
-                  setConfirmDelete(false)
-                } else {
-                  setConfirmDelete(true)
-                }
-              }}
-              onBlur={() => setConfirmDelete(false)}
-              className={`flex-shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-colors duration-150 ${
-                confirmDelete
-                  ? 'bg-red-600 text-white opacity-100'
-                  : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
-              }`}
-            >
-              {confirmDelete ? (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="8" r="2"/>
+                  <path d="M6 8v8" strokeLinecap="round"/><path d="M18 10c0 4-6 2-6 6" strokeLinecap="round" fill="none"/>
                 </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsCreatingChild(true); setChildName('') }}
+                className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 transition-colors duration-150"
+                title="New child session"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
-              )}
-            </button>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onContextMenu(e, node.session) }}
+                className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 transition-colors duration-150"
+                title="More"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <circle cx="3" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="13" cy="8" r="1.2" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
           )}
-          </div>
-        </TreeGraphRow>
+        </div>
       </div>
 
       {/* Drop indicator line - after */}
@@ -640,39 +579,13 @@ function SessionNode({
 
       {hasChildren && isExpanded && (
         <div>
-          {node.children.map((child, i) => {
-            const childIsActivePath =
-              currentSessionPath === child.session.filePath ||
-              isDescendantOf(child, currentSessionPath)
-            const laterSiblingOnActivePath = node.children
-              .slice(i + 1)
-              .some(
-                (sibling) =>
-                  currentSessionPath === sibling.session.filePath ||
-                  isDescendantOf(sibling, currentSessionPath)
-              )
-            const onPath = childIsActivePath || laterSiblingOnActivePath
-            const newAncestorLines = [
-              ...ancestorLines.map((entry) => ({
-                hasLine: entry.hasLine,
-                highlight: entry.branchActive
-                  ? (entry.highlight && childIsActivePath)
-                  : entry.highlight,
-                branchActive: entry.branchActive && childIsActivePath,
-              })),
-              {
-                hasLine: i < node.children.length - 1,
-                highlight: onPath,
-                branchActive: childIsActivePath,
-              },
-            ]
+          {node.children.map((child) => {
             return (
               <SessionNode
                 key={child.session.filePath}
                 node={child}
-                ancestorLines={newAncestorLines}
+                depth={depth + 1}
                 currentSessionPath={currentSessionPath}
-                isOnActivePath={childIsActivePath}
                 workerStatuses={workerStatuses}
                 onSwitch={onSwitch}
                 onRename={onRename}
@@ -717,29 +630,34 @@ function FloatingParentStack({
 }) {
   if (ancestors.length === 0) return null
 
-  const ROW_H = 26
+  const ROW_H = 34
 
   return (
     <div className="absolute left-0 right-0 top-0 z-10 flex flex-col shadow-sm">
       {ancestors.map((entry, i) => {
         const isDirectParent = i === ancestors.length - 1
         return (
-          <div
-            key={entry.session.filePath}
-            className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors duration-150 ${
-              isDirectParent
-                ? 'bg-white border-b border-gray-200/80 text-gray-700 font-medium hover:bg-gray-50'
-                : 'bg-white/95 border-b border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-            }`}
-            style={{ height: ROW_H, paddingLeft: 8 + entry.originalIndex * 16, paddingRight: 8 }}
-            onClick={() => onSwitch(entry.session.filePath)}
-            title={getSessionDisplayName(entry.session)}
-          >
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-gray-300" />
-            <span className="truncate">
-              {entry.session.isMain ? 'main' : getSessionDisplayName(entry.session)}
-            </span>
-          </div>
+      <div
+          key={entry.session.filePath}
+          className={`flex items-center cursor-pointer transition-colors duration-150 ${
+            isDirectParent
+              ? 'bg-gray-50 border-b border-gray-200 text-gray-700 font-medium hover:bg-gray-100'
+              : 'bg-gray-50/95 border-b border-gray-100 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+          }`}
+          style={{ height: ROW_H, paddingLeft: `${12 + entry.originalIndex * 16}px`, paddingRight: 8 }}
+          onClick={() => onSwitch(entry.session.filePath)}
+          title={getSessionDisplayName(entry.session)}
+        >
+          <span className="flex-shrink-0 w-5" />
+          {entry.session.isMain && (
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className="flex-shrink-0 text-blue-500 mr-1.5">
+              <path d="M4 0L8 4L4 8L0 4Z"/>
+            </svg>
+          )}
+          <span className="text-[13px] truncate">
+            {getSessionDisplayName(entry.session)}
+          </span>
+        </div>
         )
       })}
     </div>
@@ -772,9 +690,36 @@ function SessionSidebar({
   const [triggerRenamePath, setTriggerRenamePath] = useState<string | null>(null)
   const [triggerForkPath, setTriggerForkPath] = useState<string | null>(null)
   const [moveUnderTarget, setMoveUnderTarget] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [completedCollapsed, setCompletedCollapsed] = useState(false)
 
   const projects = sessions?.projects ?? []
   const root = projects[0]?.root ?? null
+
+  const rootChildren = root?.children ?? []
+  const completedTopLevel = rootChildren.filter(c => c.session.status === 'completed')
+  const visibleRoot = root ? { ...root, children: rootChildren.filter(c => c.session.status !== 'completed') } : null
+
+  const filteredRoot = useMemo(() => {
+    if (!searchQuery.trim() || !root) return null
+    const q = searchQuery.toLowerCase()
+    function filter(node: SessionTreeNode): SessionTreeNode | null {
+      const name = (node.session.name ?? '').toLowerCase()
+      const summary = (node.session.summary ?? '').toLowerCase()
+      const firstMsg = (node.session.firstUserMessage ?? '').toLowerCase()
+      const matches = name.includes(q) || summary.includes(q) || firstMsg.includes(q)
+      const filteredChildren: SessionTreeNode[] = []
+      for (const child of node.children) {
+        const filtered = filter(child)
+        if (filtered) filteredChildren.push(filtered)
+      }
+      if (matches || filteredChildren.length > 0) {
+        return { ...node, children: filteredChildren }
+      }
+      return null
+    }
+    return filter(root)
+  }, [searchQuery, root])
 
   // Collapsed state from layout store (shared with App.tsx toolbar)
   const sessionCollapsedPathsArr = useLayoutStore(s => s.sessionCollapsedPaths)
@@ -1008,6 +953,20 @@ function SessionSidebar({
           </button>
         </div>
       )}
+      <div className="px-3 pt-2 pb-1 flex-shrink-0">
+        <div className="relative">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search sessions"
+            className="w-full h-7 bg-gray-100 rounded-lg pl-8 pr-3 text-xs text-gray-900 placeholder-gray-400 border border-transparent focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+          />
+        </div>
+      </div>
       {/* Scroll area wrapper — provides positioning context for floating overlay */}
       <div className="relative flex-1 min-h-0">
         {/* Floating parent stack — only show ancestors that are scrolled out */}
@@ -1039,12 +998,50 @@ function SessionSidebar({
           <div className="px-3 py-6 text-center text-xs text-gray-600">
             No sessions found
           </div>
+        ) : searchQuery.trim() ? (
+          filteredRoot ? (
+            <SessionNode
+              node={filteredRoot}
+              depth={0}
+              currentSessionPath={displayedSessionPath ?? currentSession?.filePath ?? null}
+              workerStatuses={workerStatuses}
+              onSwitch={onSwitchSession}
+              onRename={onRenameSession}
+              onDelete={onDeleteSession}
+              onSetSessionStatus={onSetSessionStatus}
+              onReparentSession={onReparentSession}
+              onForkFromEnd={onForkFromEnd}
+              onNewSession={onNewSession}
+              onContextMenu={handleContextMenu}
+              triggerRenamePath={triggerRenamePath}
+              onRenameTriggered={handleRenameTriggered}
+              triggerForkPath={triggerForkPath}
+              onForkTriggered={handleForkTriggered}
+              moveUnderTarget={moveUnderTarget}
+              onMoveUnderTargetChange={setMoveUnderTarget}
+              onMoveUnderConfirm={handleMoveUnderConfirm}
+              onMoveUnderCancel={() => setMoveUnderTarget(null)}
+              collapsedPaths={new Set()}
+              onToggleCollapsed={handleToggleCollapsed}
+              dragSourcePath={dragSourcePath}
+              dropTargetInfo={dropTargetInfo}
+              dragDescendantPaths={dragDescendantPaths}
+              onDragSessionStart={handleDragSessionStart}
+              onDragSessionEnd={handleDragSessionEnd}
+              onDropTargetChange={handleDropTargetChange}
+              onDropOnSession={handleDropOnSession}
+            />
+          ) : (
+            <div className="px-3 py-6 text-center text-xs text-gray-600">
+              No results found
+            </div>
+          )
         ) : (
+          <>
           <SessionNode
-            node={root}
-            ancestorLines={[]}
+            node={visibleRoot!}
+            depth={0}
             currentSessionPath={displayedSessionPath ?? currentSession?.filePath ?? null}
-            isOnActivePath={true}
             workerStatuses={workerStatuses}
             onSwitch={onSwitchSession}
             onRename={onRenameSession}
@@ -1072,6 +1069,42 @@ function SessionSidebar({
             onDropTargetChange={handleDropTargetChange}
             onDropOnSession={handleDropOnSession}
           />
+          {completedTopLevel.length > 0 && (
+            <div className="mt-2 border-t border-gray-200">
+              <button
+                onClick={() => setCompletedCollapsed(!completedCollapsed)}
+                className="flex items-center gap-1.5 w-full px-3 py-2 text-left"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`text-gray-400 transition-transform duration-150 ${completedCollapsed ? '' : 'rotate-90'}`}>
+                  <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Completed</span>
+                <span className="text-[10px] font-semibold bg-gray-200 text-gray-500 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{completedTopLevel.length}</span>
+              </button>
+              {!completedCollapsed && completedTopLevel.map(node => (
+                <div
+                  key={node.session.filePath}
+                  className="flex items-center cursor-pointer hover:bg-gray-100 transition-colors duration-150 group"
+                  style={{ paddingLeft: '12px', minHeight: 36 }}
+                  onClick={() => onSwitchSession(node.session.filePath)}
+                  onContextMenu={(e) => handleContextMenu(e, node.session)}
+                >
+                  <div className="flex items-center flex-1 min-w-0 gap-1 pr-2 opacity-50">
+                    <span className="w-5 flex-shrink-0" />
+                    <div className="flex-1 flex items-center min-w-0">
+                      <span className="text-[13px] font-medium truncate text-gray-900 line-through">
+                        {getSessionDisplayName(node.session)}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 flex-shrink-0">
+                      {formatRelativeTime(node.session.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          </>
         )}
       </div>
       </div>{/* end scroll area wrapper */}
