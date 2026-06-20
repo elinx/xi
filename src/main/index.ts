@@ -76,7 +76,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#16181d',
     titleBarStyle: 'hiddenInset',
     icon: iconPath,
     show: false,
@@ -2114,7 +2114,7 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
-  nativeTheme.themeSource = 'light'
+  nativeTheme.themeSource = 'dark'
 
   // Restore last project cwd if available and current cwd doesn't match
   try {

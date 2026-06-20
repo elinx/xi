@@ -106,9 +106,9 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
               }}
               className={`
                 group relative flex items-center gap-1.5 px-3 text-xs font-medium border-r border-gray-200
-                min-w-0 h-9 transition-colors
+                min-w-0 h-9 transition-colors duration-150
                 ${isActive
-                  ? 'bg-white text-gray-900 border-b-2 border-b-blue-500 -mb-px'
+                  ? 'bg-gray-50 text-gray-900 border-b-2 border-b-blue-500 -mb-px'
                   : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                 }
               `}
@@ -172,7 +172,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
           +
         </button>
         {menuOpen && (
-          <div className="absolute top-full right-0 mt-px bg-white border border-gray-200 rounded-md shadow-lg z-50 py-0.5 min-w-[140px]">
+          <div className="absolute top-full right-0 mt-px xi-glass rounded-md z-50 py-0.5 min-w-[140px]">
             {ADD_MENU_ITEMS.map(item => (
               <button
                 key={item.type}
@@ -198,7 +198,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
             onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
           />
           <div
-            className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[160px]"
+            className="fixed xi-glass rounded-md py-0.5 min-w-[160px]"
             style={{ left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999 }}
           >
             {ctxTab.closable && (

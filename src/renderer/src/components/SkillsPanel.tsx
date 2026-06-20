@@ -19,7 +19,7 @@ function ScopeLabel({ scope }: { scope: string }) {
 function DiagnosticsDialog({ diagnostics, onClose }: { diagnostics: SkillDiagnostic[]; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-gray-50 rounded-xl shadow-2xl max-w-md w-full max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-800">Skill Diagnostics</span>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

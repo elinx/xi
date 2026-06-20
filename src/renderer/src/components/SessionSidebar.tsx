@@ -86,9 +86,6 @@ function formatRelativeTime(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleDateString()
 }
 
-const GRAY = '#e5e7eb'
-const BLUE = '#3b82f6'
-
 function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): boolean {
   if (!sessionPath) return false
   if (node.session.filePath === sessionPath) return true
@@ -347,7 +344,7 @@ function SessionNode({
           onDragSessionEnd()
           clearAutoExpandTimer()
         }}
-        className={`group flex items-center rounded cursor-pointer transition-colors ${
+        className={`group flex items-center rounded cursor-pointer transition-colors duration-150 ${
           isDragging
             ? 'opacity-40'
             : isCurrentDropTarget && dropPosition === 'child'
@@ -360,8 +357,8 @@ function SessionNode({
                   ? 'hover:bg-gray-100 hover:text-gray-900 ring-1 ring-gray-300 hover:ring-gray-500'
                   : isActive
                     ? isCompleted
-                      ? 'bg-gray-100/60 text-gray-500'
-                      : 'bg-gray-100 text-gray-900'
+                        ? 'bg-gray-100/60 text-gray-500'
+                        : 'bg-blue-50 text-gray-900'
                     : isCompleted
                       ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-500'
                       : hiddenCount > 0
@@ -416,9 +413,9 @@ function SessionNode({
           )}
           {/* Status dot — right after name */}
           {node.session.isMain ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-blue-500" />
           ) : workerStatuses.get(node.session.filePath) === 'connected' ? (
-            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-green-500" />
+            <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-blue-500" />
           ) : workerStatuses.get(node.session.filePath) === 'starting' ? (
             <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
           ) : workerStatuses.get(node.session.filePath) === 'error' ? (
@@ -432,7 +429,7 @@ function SessionNode({
                 e.stopPropagation()
                 onToggleCollapsed(node.session.filePath)
               }}
-              className={`flex-shrink-0 rounded px-0.5 py-0.5 transition-colors ${
+              className={`flex-shrink-0 rounded px-0.5 py-0.5 transition-colors duration-150 ${
                 isExpanded
                   ? 'text-gray-300 hover:text-gray-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100'
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
@@ -475,7 +472,7 @@ function SessionNode({
               setIsForking(true)
               setForkName('')
             }}
-            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors duration-150"
             title="Fork"
           >
               <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
@@ -489,7 +486,7 @@ function SessionNode({
               setIsCreatingChild(true)
               setChildName('')
             }}
-            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors"
+            className="flex-shrink-0 rounded px-0.5 py-0.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-colors duration-150"
             title="New child session"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -509,7 +506,7 @@ function SessionNode({
                 }
               }}
               onBlur={() => setConfirmDelete(false)}
-              className={`flex-shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-colors ${
+              className={`flex-shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-colors duration-150 ${
                 confirmDelete
                   ? 'bg-red-600 text-white opacity-100'
                   : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
@@ -580,7 +577,7 @@ function SessionNode({
               setIsForking(false)
               setForkName('')
             }}
-            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors"
+            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors duration-150"
             title="Cancel"
           >
             ✕
@@ -633,7 +630,7 @@ function SessionNode({
               setIsCreatingChild(false)
               setChildName('')
             }}
-            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors"
+            className="rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-xs transition-colors duration-150"
             title="Cancel"
           >
             ✕
@@ -729,7 +726,7 @@ function FloatingParentStack({
         return (
           <div
             key={entry.session.filePath}
-            className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors ${
+            className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors duration-150 ${
               isDirectParent
                 ? 'bg-white border-b border-gray-200/80 text-gray-700 font-medium hover:bg-gray-50'
                 : 'bg-white/95 border-b border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
@@ -1005,7 +1002,7 @@ function SessionSidebar({
           <span className="flex-1 truncate">Click a session to move under it</span>
           <button
             onClick={() => setMoveUnderTarget(null)}
-            className="flex-shrink-0 rounded px-1.5 py-0.5 text-blue-600 hover:bg-blue-100 font-medium"
+            className="flex-shrink-0 rounded px-1.5 py-0.5 text-blue-600 hover:bg-blue-100 font-medium transition-colors duration-150"
           >
             Cancel
           </button>
@@ -1094,12 +1091,12 @@ function SessionSidebar({
       {contextMenu && (
         <div
           data-context-menu
-          className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[180px]"
+          className="fixed z-50 xi-glass rounded-md py-0.5 min-w-[180px]"
           style={{ left: contextMenuPos?.x ?? contextMenu.x, top: contextMenuPos?.y ?? contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
             onClick={() => {
               setTriggerRenamePath(contextMenu.session.filePath)
               setContextMenu(null)
@@ -1111,7 +1108,7 @@ function SessionSidebar({
             Rename
           </button>
           <button
-            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
             onClick={() => {
               const newStatus = contextMenu.session.status === 'completed' ? 'active' : 'completed'
               onSetSessionStatus(contextMenu.session.filePath, newStatus)
@@ -1136,7 +1133,7 @@ function SessionSidebar({
           </button>
           {contextMenu.session.parentSessionPath && (
             <button
-              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
               onClick={() => {
                 onSwitchSession(contextMenu.session.parentSessionPath!)
                 setContextMenu(null)
@@ -1150,7 +1147,7 @@ function SessionSidebar({
           )}
           {!contextMenu.session.isMain && (
             <button
-              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
               onClick={() => {
                 setMoveUnderTarget(contextMenu.session.filePath)
                 setContextMenu(null)
@@ -1164,7 +1161,7 @@ function SessionSidebar({
           )}
           {!contextMenu.session.isMain && contextMenu.session.parentSessionPath && (
             <button
-              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
               onClick={async () => {
                 await onReparentSession(contextMenu.session.filePath, null)
                 setContextMenu(null)
@@ -1181,7 +1178,7 @@ function SessionSidebar({
           )}
           {contextMenu.session.filePath === currentSession?.filePath && (
             <button
-              className="w-full px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 text-left transition-colors flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 text-left transition-colors duration-150 flex items-center gap-2"
               onClick={() => {
                 setTriggerForkPath(contextMenu.session.filePath)
                 setContextMenu(null)
@@ -1195,7 +1192,7 @@ function SessionSidebar({
           )}
           {!contextMenu.session.isMain && (
             <button
-              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 text-left transition-colors flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 text-left transition-colors duration-150 flex items-center gap-2"
               onClick={() => {
                 onDeleteSession(contextMenu.session.filePath)
                 setContextMenu(null)

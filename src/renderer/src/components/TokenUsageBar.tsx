@@ -61,11 +61,11 @@ export function TokenUsageBar({
       {hovered && (
         <div
           className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 rounded-md p-2 text-xs text-white whitespace-nowrap z-50"
-          style={{ background: '#1a1a2e' }}
+          style={{ background: 'var(--color-gray-100)' }}
         >
           {tooltipRows.map((row, i) =>
             row === 'divider' ? (
-              <div key={i} className="border-t border-white/15 my-1" />
+              <div key={i} className="border-t border-gray-500/20 my-1" />
             ) : (
               <div key={i} className="flex justify-between gap-3">
                 <span className="text-gray-400">{row.label}</span>

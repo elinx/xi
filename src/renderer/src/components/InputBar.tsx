@@ -601,14 +601,14 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
     statusText = (
       <span className="text-amber-600">
-        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors">No model configured</button>
+        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors duration-150">No model configured</button>
       </span>
     )
   } else if (isConnected && currentModel) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
     statusText = (
       <span className="text-gray-500">
-        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
+        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors duration-150">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
       </span>
     )
   } else {
@@ -627,7 +627,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
         onRemoveQueue={onRemoveQueuedAt}
         onClearQueue={onClearQueue}
       />
-      <div className="border-t border-gray-200 bg-white px-4 py-3">
+      <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
       <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
       <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
         {statusDot}
@@ -647,7 +647,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
       </div>
       {noModel && (
         <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
-          No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors">select a model</button> to start chatting
+          No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors duration-150">select a model</button> to start chatting
         </div>
       )}
       {showModelSelector && onSetModel && getAvailableModels && (
@@ -687,7 +687,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
             onInput={handleEditorInput}
             onPaste={handlePaste}
             data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ files, $ sessions)'}
-            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
+            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
           />
           <FileMentionDropdown
             files={mention.filteredFiles}
@@ -726,7 +726,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
         {showStop ? (
           <button
             onClick={onStop}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 active:scale-95"
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-500 active:scale-95"
           >
             Stop
           </button>
@@ -734,7 +734,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
           <button
             onClick={handleSubmit}
             disabled={disabled || noModel || (isEmpty() && pastedImages.length === 0)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
           >
             Send
           </button>

@@ -11,7 +11,7 @@ const LINE_W = 1.5         // line width
 const LINE_LEFT = CENTER_X - LINE_W / 2  // 9.25px
 
 const BRANCH_COLORS = [
-  '#3b82f6', // blue-500
+  '#36d399', // accent
   '#10b981', // emerald-500
   '#8b5cf6', // violet-500
   '#f59e0b', // amber-500
@@ -21,7 +21,7 @@ const BRANCH_COLORS = [
   '#84cc16', // lime-500
 ]
 
-const GRAY = '#e5e7eb'
+const GRAY = 'var(--color-gray-400)'
 
 function getBranchColor(branchName: string): string {
   let hash = 0
@@ -106,7 +106,7 @@ function CommitGraph({
       ? { width: DOT_SIZE, height: DOT_SIZE, backgroundColor: dotColor, border: `2px solid ${dotColor}` }
       : dotStyle === 'hollow'
         ? { width: DOT_SIZE, height: DOT_SIZE, backgroundColor: GRAY, border: `2px solid ${GRAY}` }
-        : { width: DOT_SIZE, height: DOT_SIZE, backgroundColor: 'white', border: `2px solid ${dotColor}` }
+        : { width: DOT_SIZE, height: DOT_SIZE, backgroundColor: 'var(--color-gray-50)', border: `2px solid ${dotColor}` }
 
   return (
     <div

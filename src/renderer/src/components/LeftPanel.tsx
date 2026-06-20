@@ -100,7 +100,7 @@ export default function LeftPanel({
           <button
             key={v.id}
             onClick={() => onViewChange(v.id)}
-            className={view === v.id ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+            className={view === v.id ? 'bg-blue-50 text-blue-600 rounded p-1 transition-colors duration-150' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1 transition-colors duration-150'}
             title={v.title}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >

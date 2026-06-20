@@ -51,22 +51,22 @@ function SettingsPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-200 flex-shrink-0">
         <button
           onClick={() => setShowProviderDialog(true)}
-          className="rounded-md px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          className="rounded-md px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-900 transition-colors duration-150"
         >
           Providers
         </button>
         <button
-          className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 dark:text-gray-500"
+          className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 transition-colors duration-150"
         >
           General
         </button>
         <div className="flex-1" />
         <button
           onClick={onOpenConfigDir}
-          className="rounded-md p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="rounded-md p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Open config directory"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -93,12 +93,12 @@ function SettingsPanel({
 
       {showProviderDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowProviderDialog(false)}>
-          <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 flex-shrink-0 border-b border-gray-100 dark:border-gray-700/50">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Configure Providers</h2>
+          <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl xi-glass shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 flex-shrink-0 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">Configure Providers</h2>
               <button
                 onClick={() => setShowProviderDialog(false)}
-                className="rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="rounded p-1 text-gray-400 hover:text-gray-600 transition-colors duration-150"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

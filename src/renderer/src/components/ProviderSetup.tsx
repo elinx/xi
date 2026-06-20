@@ -107,13 +107,13 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
          onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-800 shadow-2xl p-5"
+      <div className="w-full max-w-sm rounded-xl xi-glass shadow-2xl p-5"
            onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">{message}</p>
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">{title}</h3>
+        <p className="text-xs text-gray-500 mb-4 leading-relaxed">{message}</p>
         <div className="flex justify-end gap-2">
           <button onClick={onCancel}
-            className="rounded-md px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm}
@@ -149,12 +149,12 @@ function TestConnectionButton({ providerId, testProvider, apiKeyOverride, baseUr
       <button
         onClick={handleTest}
         disabled={testing}
-        className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+        className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
       >
         {testing ? 'Testing...' : 'Test'}
       </button>
       {result && (
-        <span className={`text-xs font-medium ${result.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+        <span className={`text-xs font-medium ${result.ok ? 'text-green-600' : 'text-red-600'}`}>
           {result.ok
             ? `Connected (${result.latencyMs ?? 0}ms)`
             : categorizeError(result.error ?? 'Unknown error')}
@@ -229,14 +229,14 @@ function RightPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 flex-shrink-0">
+      <div className="px-4 py-2.5 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2">
           <ProviderIcon name={providerInfo.name} color={providerInfo.color} size="sm" />
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{providerInfo.name}</div>
+            <div className="text-sm font-semibold text-gray-900">{providerInfo.name}</div>
           </div>
           {isConfigured && (
-            <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded-full font-medium">OK</span>
+            <span className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full font-medium">OK</span>
           )}
         </div>
       </div>
@@ -244,7 +244,7 @@ function RightPanel({
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-3 space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">API Key</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">API Key</label>
             <div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -253,12 +253,12 @@ function RightPanel({
                     value={apiKey}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     placeholder={isConfigured ? 'sk-••••••••' : 'sk-...'}
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 pr-9 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 pr-9 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSetApiKey() }}
                   />
                   <button
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       {showApiKey
@@ -270,7 +270,7 @@ function RightPanel({
               </div>
               {PROVIDER_URLS[providerId] && (
                 <a href={PROVIDER_URLS[providerId]} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors mt-2"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors mt-2"
                 >
                   Get API key from {providerInfo.name}
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -282,10 +282,10 @@ function RightPanel({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Model</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Model</label>
             {models.length > 0 ? (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="max-h-36 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <div className="max-h-36 overflow-y-auto divide-y divide-gray-100">
                   {models.map((model) => {
                     const modelKey = `${model.provider}/${model.id}`
                     const isSelected = selectedModelKey === modelKey
@@ -296,14 +296,14 @@ function RightPanel({
                           disabled={switchingModel}
                           className={`flex-1 px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
                             isSelected
-                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'text-gray-700 hover:bg-gray-50'
                           } disabled:opacity-50`}
                         >
                           <span className={`w-4 h-4 rounded-full flex-shrink-0 border-2 flex items-center justify-center ${
-                            isSelected ? 'border-blue-500 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'
+                            isSelected ? 'border-blue-500' : 'border-gray-300'
                           }`}>
-                            {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400" />}
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-blue-500" />}
                           </span>
                           <span className="flex-1 truncate">{model.name}</span>
                           {switchingModel && isSelected && (
@@ -316,7 +316,7 @@ function RightPanel({
                         {isCustomProvider && onRemoveModel && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onRemoveModel(providerId, model.id, model.name) }}
-                            className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
+                            className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
                             title="Remove model"
                           >
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -330,7 +330,7 @@ function RightPanel({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-gray-400 dark:text-gray-500">No models available</p>
+              <p className="text-xs text-gray-400">No models available</p>
             )}
           </div>
 
@@ -343,11 +343,11 @@ function RightPanel({
           </div>
 
           {/* Danger zone */}
-          <div className="pt-3 mt-1 border-t border-gray-100 dark:border-gray-700/50">
+          <div className="pt-3 mt-1 border-t border-gray-100">
             {isCustomProvider ? (
               <button
                 onClick={() => onDeleteProvider?.(providerId, providerInfo.name)}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
               >
                 Delete Provider
               </button>
@@ -355,7 +355,7 @@ function RightPanel({
               <button
                 onClick={handleClearApiKey}
                 disabled={removingAuth}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
               >
                 {removingAuth ? 'Clearing...' : 'Clear API Key'}
               </button>
@@ -456,10 +456,10 @@ function CustomProviderForm({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 flex-shrink-0">
+      <div className="px-4 py-2.5 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2">
           <ProviderIcon name="C" color={CUSTOM_COLOR} size="sm" />
-          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <div className="text-sm font-semibold text-gray-900">
             {editingProviderId ? 'Edit Custom Provider' : 'Add Custom Provider'}
           </div>
         </div>
@@ -468,25 +468,25 @@ function CustomProviderForm({
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Provider ID</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Provider ID</label>
               <input type="text" value={customId} onChange={(e) => setCustomId(e.target.value.replace(/[^a-z0-9-]/g, ''))} placeholder="my-llm" disabled={!!(editingProviderId ?? registeredProviderId)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-500" />
+                className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Display name</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Display name</label>
               <input type="text" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="My LLM Server"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Base URL</label>
             <input type="text" value={customBaseUrl} onChange={(e) => setCustomBaseUrl(e.target.value)} placeholder="https://api.my-llm.com/v1"
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Type</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">API Type</label>
             <select value={customApi} onChange={(e) => setCustomApi(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="openai-completions">OpenAI Compatible (chat/completions)</option>
               <option value="openai-responses">OpenAI Responses</option>
               <option value="anthropic-messages">Anthropic Messages</option>
@@ -494,33 +494,33 @@ function CustomProviderForm({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              API Key {(editingProviderId ?? registeredProviderId) && <span className="text-gray-400 dark:text-gray-500 font-normal">(leave empty to keep current)</span>}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              API Key {(editingProviderId ?? registeredProviderId) && <span className="text-gray-400 font-normal">(leave empty to keep current)</span>}
             </label>
             <input type="password" value={customApiKey} onChange={(e) => setCustomApiKey(e.target.value)} placeholder="sk-..."
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model ID</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Model ID</label>
               <input type="text" value={customModelId} onChange={(e) => setCustomModelId(e.target.value)} placeholder="my-model-v1"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model name</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Model name</label>
               <input type="text" value={customModelName} onChange={(e) => setCustomModelName(e.target.value)} placeholder="My Model V1"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
+            <label className="flex items-center gap-1.5 text-xs text-gray-700">
               <input type="checkbox" checked={customReasoning} onChange={(e) => setCustomReasoning(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
               Reasoning
             </label>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-700 dark:text-gray-300">Context:</label>
+              <label className="text-xs text-gray-700">Context:</label>
               <input type="number" value={customContextWindow} onChange={(e) => setCustomContextWindow(Number(e.target.value) || 128000)}
-                className="w-24 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">
@@ -535,13 +535,13 @@ function CustomProviderForm({
               <button
                 onClick={handleTest}
                 disabled={customTesting}
-                className="rounded-md border border-gray-300 dark:border-gray-600 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
                 {customTesting ? 'Testing...' : 'Test'}
               </button>
             )}
             {customTestResult && (
-              <span className={`text-sm font-medium ${customTestResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              <span className={`text-sm font-medium ${customTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>
                 {customTestResult.ok ? `Connected (${customTestResult.latencyMs ?? 0}ms)` : categorizeError(customTestResult.error ?? 'Unknown error')}
               </span>
             )}
@@ -756,10 +756,10 @@ function ProviderSetup({
   const isFocusedCustomProvider = effectiveFocusedProvider ? effectiveFocusedProvider in customProviderBaseUrls : false
 
   return (
-    <div className="flex w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
-      <div className="w-52 flex-shrink-0 border-r border-gray-100 dark:border-gray-700/50 flex flex-col max-h-[26rem]">
-        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Providers</span>
+    <div className="flex w-full rounded-lg border border-gray-200 bg-white overflow-hidden">
+      <div className="w-52 flex-shrink-0 border-r border-gray-100 flex flex-col max-h-[26rem]">
+        <div className="px-3 py-2.5 border-b border-gray-100">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Providers</span>
         </div>
         <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
           {customProvidersList.map((p) => {
@@ -779,18 +779,18 @@ function ProviderSetup({
                 }}
                 className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all group ${
                   isFocused
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                    : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'border border-transparent hover:bg-gray-50'
                 }`}
               >
                 <ProviderIcon name={p.name} color={p.color} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
+                  <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
                 </div>
                 {/* Delete button for custom providers - visible on hover */}
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteProvider(p.id, p.name) }}
-                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
                   title="Delete provider"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -802,11 +802,11 @@ function ProviderSetup({
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 ) : isFocused ? (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex-shrink-0 flex items-center justify-center">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 flex-shrink-0 flex items-center justify-center">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                   </span>
                 ) : (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 flex-shrink-0" />
                 )}
               </button>
             )
@@ -815,8 +815,8 @@ function ProviderSetup({
             onClick={() => { setFocusedProvider('__custom__'); setEditingCustom(null) }}
             className={`w-full flex items-center justify-center gap-1 rounded-md border-2 border-dashed px-2.5 py-1.5 text-sm font-medium transition-colors ${
               effectiveFocusedProvider === '__custom__' && !editingCustom
-                ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-300 text-blue-600 bg-blue-50'
+                : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
             }`}
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -824,7 +824,7 @@ function ProviderSetup({
             </svg>
             Add Custom
           </button>
-          {popularProvidersList.length > 0 && <div className="border-t border-gray-200 dark:border-gray-700 my-1.5" />}
+          {popularProvidersList.length > 0 && <div className="border-t border-gray-200 my-1.5" />}
           {popularProvidersList.map((p) => {
             const isFocused = effectiveFocusedProvider === p.id
             return (
@@ -833,29 +833,29 @@ function ProviderSetup({
                 onClick={() => { setFocusedProvider(p.id); setEditingCustom(null) }}
                 className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
                   isFocused
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                    : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'border border-transparent hover:bg-gray-50'
                 }`}
               >
                 <ProviderIcon name={p.name} color={p.color} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
+                  <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
                 </div>
                 {p.configured ? (
                   <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 ) : isFocused ? (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex-shrink-0 flex items-center justify-center">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 flex-shrink-0 flex items-center justify-center">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                   </span>
                 ) : (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 flex-shrink-0" />
                 )}
               </button>
             )
           })}
-          {otherProvidersList.length > 0 && <div className="border-t border-gray-200 dark:border-gray-700 my-1.5" />}
+          {otherProvidersList.length > 0 && <div className="border-t border-gray-200 my-1.5" />}
           {otherProvidersList.map((p) => {
             const isFocused = effectiveFocusedProvider === p.id
             return (
@@ -864,24 +864,24 @@ function ProviderSetup({
                 onClick={() => { setFocusedProvider(p.id); setEditingCustom(null) }}
                 className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all ${
                   isFocused
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                    : 'border border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'border border-transparent hover:bg-gray-50'
                 }`}
               >
                 <ProviderIcon name={p.name} color={p.color} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</div>
+                  <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
                 </div>
                 {p.configured ? (
                   <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 ) : isFocused ? (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex-shrink-0 flex items-center justify-center">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-blue-500 flex-shrink-0 flex items-center justify-center">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                   </span>
                 ) : (
-                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 flex-shrink-0" />
                 )}
               </button>
             )
@@ -921,12 +921,12 @@ function ProviderSetup({
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
                 </svg>
               </div>
-              <p className="text-sm text-gray-400 dark:text-gray-500">Select a provider to configure</p>
+              <p className="text-sm text-gray-400">Select a provider to configure</p>
             </div>
           </div>
         )}
@@ -959,12 +959,12 @@ function ProviderSetup({
       {/* Deleting overlay */}
       {deleting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-          <div className="rounded-lg bg-white dark:bg-gray-800 px-4 py-3 shadow-xl flex items-center gap-2">
+          <div className="rounded-lg bg-gray-50 px-4 py-3 shadow-xl flex items-center gap-2">
             <svg className="w-4 h-4 text-blue-500 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="text-sm text-gray-700 dark:text-gray-300">
+            <span className="text-sm text-gray-700">
               {deleteTarget?.type === 'provider' ? 'Deleting provider...' : 'Removing model...'}
             </span>
           </div>

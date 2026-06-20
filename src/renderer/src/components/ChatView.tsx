@@ -259,7 +259,7 @@ function MentionPill({ filePath, onClick }: { filePath: string; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-blue-100 text-blue-700 text-[13px] leading-5 align-baseline hover:bg-blue-200 transition-colors cursor-pointer border-0"
+      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-blue-100 text-blue-700 text-[13px] leading-5 align-baseline hover:bg-blue-200 transition-colors duration-150 cursor-pointer border-0"
     >
       <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -273,7 +273,7 @@ function SessionMentionPill({ sessionName, onClick }: { sessionName: string; onC
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-purple-100 text-purple-700 text-[13px] leading-5 align-baseline hover:bg-purple-200 transition-colors cursor-pointer border-0"
+      className="inline-flex items-center gap-0.5 px-1.5 py-px mx-0.5 rounded-md bg-purple-500/10 text-purple-400 text-[13px] leading-5 align-baseline hover:bg-purple-500/20 transition-colors duration-150 cursor-pointer border-0"
     >
       <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -293,7 +293,7 @@ function ToolPathPill({ filePath, onClick }: { filePath: string; onClick: () => 
       tabIndex={0}
       onClick={(e) => { e.stopPropagation(); onClick() }}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onClick() } }}
-      className="inline-flex items-center gap-0.5 px-0.5 py-px rounded text-inherit text-[11px] font-mono leading-4 align-baseline hover:text-blue-600 hover:bg-blue-50 hover:underline underline-offset-2 transition-colors cursor-pointer max-w-[280px] truncate"
+      className="inline-flex items-center gap-0.5 px-0.5 py-px rounded text-inherit text-[11px] font-mono leading-4 align-baseline hover:text-blue-600 hover:bg-blue-50 hover:underline underline-offset-2 transition-colors duration-150 cursor-pointer max-w-[280px] truncate"
       title={filePath}
     >
       <svg className="w-2.5 h-2.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -311,7 +311,7 @@ function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 
     <div className={`mb-1 rounded-md border-l-2 ${isForward ? 'border-amber-400 bg-amber-50' : 'border-blue-400 bg-blue-50'}`}>
       <button
         onClick={() => setOpen(!open)}
-        className={`w-full flex items-center gap-1 px-3 py-1.5 text-[11px] transition-colors cursor-pointer ${isForward ? 'text-amber-600 hover:text-amber-800' : 'text-blue-500 hover:text-blue-700'}`}
+        className={`w-full flex items-center gap-1 px-3 py-1.5 text-[11px] transition-colors duration-150 cursor-pointer ${isForward ? 'text-amber-400 hover:text-amber-300' : 'text-blue-500 hover:text-blue-700'}`}
       >
         <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
@@ -319,7 +319,7 @@ function QuoteBlockRenderer({ block }: { block: { type: 'quote'; role: 'user' | 
         {isForward ? `↗ "${block.sourceSessionName}" · ` : ''}{isForward ? 'Forwarded' : 'Quoted'} {block.role === 'user' ? 'You' : 'Xi'} message
       </button>
       {open && (
-        <div className={`px-3 pb-2 text-xs leading-4 whitespace-pre-wrap ${isForward ? 'text-amber-700' : 'text-blue-700'}`}>{block.content}</div>
+        <div className={`px-3 pb-2 text-xs leading-4 whitespace-pre-wrap ${isForward ? 'text-amber-400' : 'text-blue-700'}`}>{block.content}</div>
       )}
     </div>
   )
@@ -334,7 +334,7 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
     <div className="py-1 border-l-3 border-violet-300 pl-3">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center gap-2 text-left text-xs font-medium text-violet-500 hover:text-violet-700 transition-colors"
+        className="flex w-full items-center gap-2 text-left text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors duration-150"
       >
         <svg
           className={`h-3 w-3 shrink-0 transition-transform ${collapsed ? '' : 'rotate-90'}`}
@@ -490,7 +490,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
       {/* Header line — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 py-0.5 text-left text-gray-400 hover:text-gray-600 transition-colors"
+        className="flex w-full items-center gap-1.5 py-0.5 text-left text-gray-400 hover:text-gray-600 transition-colors duration-150"
       >
         <span className="text-[10px]">{icon}</span>
         <span className="font-mono text-[11px]">{block.toolName}</span>
@@ -525,9 +525,9 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
                 (block.args.edits as Array<{ oldText?: string; newText?: string }>).map((edit, i) => (
                   <div key={i} className={Array.isArray(block.args.edits) && (block.args.edits as unknown[]).length > 1 ? 'mb-2 pb-2 border-b border-gray-200 last:border-b-0' : ''}>
                     <div className="text-xs text-red-400 mb-0.5">- old</div>
-                    <pre className="overflow-x-auto text-xs text-red-700 bg-red-50 rounded px-2 py-1 mb-1 whitespace-pre-wrap">{String(edit.oldText ?? '')}</pre>
-                    <div className="text-xs text-green-600 mb-0.5">+ new</div>
-                    <pre className="overflow-x-auto text-xs text-green-700 bg-green-50 rounded px-2 py-1 whitespace-pre-wrap">{String(edit.newText ?? '')}</pre>
+                    <pre className="overflow-x-auto text-xs text-red-400 bg-red-50 rounded border border-red-500/20 px-2 py-1 mb-1 whitespace-pre-wrap">{String(edit.oldText ?? '')}</pre>
+                    <div className="text-xs text-green-400 mb-0.5">+ new</div>
+                    <pre className="overflow-x-auto text-xs text-green-400 bg-green-50 rounded border border-green-500/20 px-2 py-1 whitespace-pre-wrap">{String(edit.newText ?? '')}</pre>
                   </div>
                 ))
               ) : (
@@ -535,13 +535,13 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
                   {block.args.oldText != null && (
                     <>
                       <div className="text-xs text-red-400 mb-0.5">- old</div>
-                      <pre className="overflow-x-auto text-xs text-red-700 bg-red-50 rounded px-2 py-1 mb-1 whitespace-pre-wrap">{String(block.args.oldText)}</pre>
+                      <pre className="overflow-x-auto text-xs text-red-400 bg-red-50 rounded border border-red-500/20 px-2 py-1 mb-1 whitespace-pre-wrap">{String(block.args.oldText)}</pre>
                     </>
                   )}
                   {block.args.newText != null && (
                     <>
-                      <div className="text-xs text-green-600 mb-0.5">+ new</div>
-                      <pre className="overflow-x-auto text-xs text-green-700 bg-green-50 rounded px-2 py-1 whitespace-pre-wrap">{String(block.args.newText)}</pre>
+                      <div className="text-xs text-green-400 mb-0.5">+ new</div>
+                      <pre className="overflow-x-auto text-xs text-green-400 bg-green-50 rounded border border-green-500/20 px-2 py-1 whitespace-pre-wrap">{String(block.args.newText)}</pre>
                     </>
                   )}
                 </>
@@ -549,7 +549,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
             </div>
           ) : block.toolName === 'bash' && block.args.command ? (
             <div className="relative group/cmd">
-              <pre className="overflow-x-auto text-xs text-gray-700 bg-gray-100 rounded px-2 py-1 pr-7">{String(block.args.command)}</pre>
+              <pre className="overflow-x-auto text-xs text-gray-700 bg-gray-100 rounded border border-gray-200 px-2 py-1 pr-7">{String(block.args.command)}</pre>
               <BashCopyButton command={String(block.args.command)} />
             </div>
           ) : block.toolName === 'read' && block.args.path ? (
@@ -786,11 +786,11 @@ function AnnotatableImageBlock({
               e.stopPropagation()
               setZoom((z) => Math.min(4, z + 0.25))
             }}
-            className="rounded bg-gray-800/80 px-3 py-1 text-sm text-white hover:bg-gray-700"
+            className="rounded bg-gray-100/80 px-3 py-1 text-sm text-white hover:bg-gray-200"
           >
             +
           </button>
-          <span className="rounded bg-gray-800/80 px-3 py-1 text-sm text-white">
+          <span className="rounded bg-gray-100/80 px-3 py-1 text-sm text-white">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -798,7 +798,7 @@ function AnnotatableImageBlock({
               e.stopPropagation()
               setZoom((z) => Math.max(0.25, z - 0.25))
             }}
-            className="rounded bg-gray-800/80 px-3 py-1 text-sm text-white hover:bg-gray-700"
+            className="rounded bg-gray-100/80 px-3 py-1 text-sm text-white hover:bg-gray-200"
           >
             -
           </button>
@@ -1234,7 +1234,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
         {needCollapse && (
           <button
             onClick={onToggleExpand}
-            className={`text-[11px] font-medium mt-1 transition-colors ${isExpanded ? 'text-gray-400 hover:text-gray-600' : 'text-blue-500 hover:text-blue-600'}`}
+            className={`text-[11px] font-medium mt-1 transition-colors duration-150 ${isExpanded ? 'text-gray-400 hover:text-gray-600' : 'text-blue-500 hover:text-blue-600'}`}
           >
             {isExpanded ? '收起' : '展开'}
           </button>
@@ -1244,7 +1244,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
             {userForkPoints.map((fp, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
@@ -1327,7 +1327,7 @@ function TurnCard({
       {onQuoteMessage && !isUserStreaming && (
         <button
           onClick={() => onQuoteMessage(turn.userMessage.id, 'user', userTextContent, turn.userMessage.timestamp ?? Date.now())}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Quote message"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1338,7 +1338,7 @@ function TurnCard({
       {onForwardClick && sessions && !isUserStreaming && (
         <button
           onClick={() => onForwardClick(turn.userMessage.id, 'user', userTextContent)}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Forward to session"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1349,7 +1349,7 @@ function TurnCard({
       {captureEnabled && !isUserStreaming && onInspect && (
         <button
           onClick={() => onInspect(turn.userMessage.id)}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Inspect prompt"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1359,7 +1359,7 @@ function TurnCard({
       )}
       <button
         onClick={() => onForkClick(turn.userMessage.id, turn.userMessage.piEntryId)}
-        className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+        className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
         title="Fork from here"
       >
         <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
@@ -1382,7 +1382,7 @@ function TurnCard({
       {onQuoteMessage && !isAgentStreaming && firstAgentMsg && (
         <button
           onClick={() => onQuoteMessage(firstAgentMsg.id, 'assistant', agentTextContent, firstAgentMsg.timestamp ?? Date.now())}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Quote message"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1393,7 +1393,7 @@ function TurnCard({
       {onForwardClick && sessions && !isAgentStreaming && firstAgentMsg && (
         <button
           onClick={() => onForwardClick(firstAgentMsg.id, 'assistant', agentTextContent)}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Forward to session"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1404,7 +1404,7 @@ function TurnCard({
       {firstAgentMsg && !isAgentStreaming && (
         <button
           onClick={() => onForkClick(firstAgentMsg.id, firstAgentMsg.piEntryId)}
-          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
           title="Fork from here"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
@@ -1427,7 +1427,7 @@ function TurnCard({
       {/* User message — same style as normal mode */}
       <div className="group flex items-center justify-end gap-2">
         {userActions}
-        <div className="max-w-[85%] min-w-0 rounded-lg bg-blue-50 px-3 py-2">
+        <div className="max-w-[85%] min-w-0 xi-bubble-user px-3 py-2">
           <MessageBlocksRenderer
             msg={turn.userMessage}
             isStreaming={isStreaming}
@@ -1451,7 +1451,7 @@ function TurnCard({
         <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
           ξ
         </div>
-        <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+        <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
           <CollapsibleAgentContent
             turn={turn}
             isExpanded={isExpanded}
@@ -1484,14 +1484,14 @@ function TurnCard({
 
 /** Tool name to color mapping */
 const TOOL_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  read: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: '#059669' },
-  write: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: '#2563eb' },
-  edit: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: '#d97706' },
+  read: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', dot: '#059669' },
+  write: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', dot: '#36d399' },
+  edit: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', dot: '#d97706' },
   bash: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', dot: '#9ca3af' },
-  ls: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', dot: '#7c3aed' },
-  find: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: '#db2777' },
-  grep: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', dot: '#0891b2' },
-  search_sessions: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: '#ea580c' },
+  ls: { bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/20', dot: '#7c3aed' },
+  find: { bg: 'bg-pink-500/10', text: 'text-pink-400', border: 'border-pink-500/20', dot: '#db2777' },
+  grep: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20', dot: '#0891b2' },
+  search_sessions: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20', dot: '#ea580c' },
 }
 
 function OutlineRow({
@@ -1554,7 +1554,7 @@ function OutlineRow({
     <div>
       {/* Main row: one line per turn */}
       <div
-        className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-gray-50 transition-colors duration-150"
         onClick={onToggleExpand}
       >
         <span className="text-[11px] font-mono text-gray-300 w-4 text-right flex-shrink-0">{turn.index}</span>
@@ -1619,7 +1619,7 @@ function SessionPickerModal({ sessions, currentSessionPath, onSelect, onClose }:
             <button
               key={s.filePath}
               onClick={() => onSelect(s.filePath)}
-              className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+              className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors duration-150"
             >
               <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75v-.878a2.25 2.25 0 111.5 0v.878a2.25 2.25 0 01-2.25 2.25h-1.5v2.128a2.251 2.251 0 11-1.5 0V8.5h-1.5A2.25 2.25 0 013.5 6.25v-.878a2.25 2.25 0 111.5 0zM5 3.25a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm6.75.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-3 8.75a.75.75 0 10-1.5 0 .75.75 0 001.5 0z" />
@@ -1659,7 +1659,7 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
       <div className="flex items-center justify-between px-3 py-1.5">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-1.5 text-amber-800 font-medium text-xs hover:text-amber-900 transition-colors"
+          className="flex items-center gap-1.5 text-amber-400 font-medium text-xs hover:text-amber-300 transition-colors duration-150"
         >
           <svg className={`w-3 h-3 transition-transform ${collapsed ? '' : 'rotate-90'}`} fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -1671,7 +1671,7 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
           {!isEditing && !collapsed && (
             <button
               onClick={() => { setEditText(summary); setIsEditing(true) }}
-              className="rounded p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+              className="rounded p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-100 transition-colors duration-150"
               title="Edit summary"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2047,7 +2047,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
           </div>
         </div>
       ) : viewMode === 'normal' ? (
-        <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl space-y-2">
+        <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl space-y-3">
           {(() => {
             // Group consecutive same-role messages
             const groups: { role: 'user' | 'assistant'; msgs: ChatMessage[] }[] = []
@@ -2076,7 +2076,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   {onQuoteMessage && !isGroupStreaming && (
                     <button
                       onClick={() => onQuoteMessage(firstMsg.id, isUser ? 'user' : 'assistant', msgTextContent, firstMsg.timestamp ?? Date.now())}
-                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
                       title="Quote message"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2087,7 +2087,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   {onForwardMessage && sessions && !isGroupStreaming && (
                     <button
                       onClick={() => setForwardingMessage({ id: firstMsg.id, role: isUser ? 'user' : 'assistant', content: msgTextContent })}
-                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
                       title="Forward to session"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2098,7 +2098,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   {isUser && captureEnabled && !isGroupStreaming && (
                     <button
                       onClick={() => handleInspect(firstMsg.id)}
-                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                      className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
                       title="Inspect prompt"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2109,7 +2109,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   {!isGroupStreaming && (
                   <button
                     onClick={() => handleForkClick(firstMsg.id, firstMsg.piEntryId)}
-                    className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                    className="rounded p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-150"
                     title="Fork from here"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
@@ -2135,7 +2135,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   className="group flex items-center justify-end gap-2"
                 >
                   {actions}
-                  <div className="max-w-[85%] min-w-0 rounded-lg bg-blue-50 px-3 py-2">
+                  <div className="max-w-[85%] min-w-0 xi-bubble-user px-3 py-2">
                     <MergedBlocksRenderer
                       messages={group.msgs}
                       isStreaming={isStreaming}
@@ -2153,7 +2153,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                         {msgForkPoints.map((fp, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400"
                           >
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
@@ -2178,7 +2178,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
                     ξ
                   </div>
-                  <div className="flex-1 min-w-0 rounded-lg bg-gray-50 px-3 py-2">
+                  <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
                     <MergedBlocksRenderer
                       messages={group.msgs}
                       isStreaming={isStreaming}
@@ -2196,7 +2196,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                         {msgForkPoints.map((fp, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] text-purple-700"
+                            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400"
                           >
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />

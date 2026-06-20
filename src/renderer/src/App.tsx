@@ -25,6 +25,7 @@ import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
 import { useSkillStore } from './hooks/useSkillStore'
+import { useTheme } from './hooks/useTheme'
 import type { MentionItem } from './hooks/useFileMention'
 
 interface QueuedMessage {
@@ -36,6 +37,7 @@ interface QueuedMessage {
 
 
 function App(): React.ReactElement {
+  useTheme()
   const sessionCache = useSessionCache()
   const {
     displaySession, getCache, ensureCacheSync, clearCache, getOrCreateCache,
@@ -829,8 +831,8 @@ function App(): React.ReactElement {
   }, [addTab, tabs, setActiveTab])
 
    return (
-        <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-          <div className="flex border-b border-gray-200 bg-gray-50 h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+         <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+           <div className="flex border-b border-gray-200 xi-titlebar h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
             {!leftPanelCollapsed && (
              <div
                className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
@@ -849,7 +851,7 @@ function App(): React.ReactElement {
                     </svg>
                   </button>
                   {showRecentProjects && (
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-0.5 min-w-[220px] max-h-[300px] overflow-y-auto">
+                    <div className="absolute top-full left-0 mt-1 xi-glass rounded-md z-50 py-0.5 min-w-[220px] max-h-[300px] overflow-y-auto">
                       <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Recent Projects</div>
                       {recentProjects.map((p) => (
                         <button

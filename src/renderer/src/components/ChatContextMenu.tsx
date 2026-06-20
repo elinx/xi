@@ -70,7 +70,7 @@ function ChatContextMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[180px]"
+      className="fixed xi-glass rounded-md py-0.5 min-w-[180px]"
       style={{ left: x, top: y, zIndex: 9999 }}
     >
       <button
