@@ -1377,7 +1377,7 @@ function TurnCard({
   )
 
   const agentActions = (
-    <div className={`relative flex items-center gap-0.5 transition-opacity flex-shrink-0 mt-0.5 ${isAgentStreaming ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
+    <div className={`flex items-center gap-0.5 ${isAgentStreaming ? 'opacity-0 pointer-events-none' : ''}`}>
       {!isAgentStreaming && <CopyButton blocks={allAgentBlocks} />}
       {onQuoteMessage && !isAgentStreaming && firstAgentMsg && (
         <button
@@ -1447,36 +1447,43 @@ function TurnCard({
       </div>
 
       {/* Agent message — same style as normal mode, with collapse */}
-      <div className="group flex items-start gap-2">
-        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
-          ξ
+      <div className="group">
+        <div className="flex items-start gap-2">
+          <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
+            ξ
+          </div>
+          <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
+            <CollapsibleAgentContent
+              turn={turn}
+              isExpanded={isExpanded}
+              onToggleExpand={onToggleExpand}
+              annotatingTarget={annotatingTarget}
+              onEnterAnnotation={onEnterAnnotation}
+              onExitAnnotation={onExitAnnotation}
+              onSendFeedback={onSendFeedback}
+              onFileSelect={onFileSelect}
+              onSessionSelect={onSessionSelect}
+              sessionNames={sessionNames}
+              isStreaming={isStreaming}
+              streamingMessageId={streamingMessageId}
+              forkPoints={forkPoints}
+              onForkClick={onForkClick}
+              forkInputMessageId={forkInputMessageId}
+              forkEntryId={forkEntryId}
+              onForkClose={onForkClose}
+              onForkAtEntry={onForkAtEntry}
+              onQuoteMessage={onQuoteMessage}
+              onForwardClick={onForwardClick}
+              sessions={sessions}
+            />
+          </div>
         </div>
-        <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
-          <CollapsibleAgentContent
-            turn={turn}
-            isExpanded={isExpanded}
-            onToggleExpand={onToggleExpand}
-            annotatingTarget={annotatingTarget}
-            onEnterAnnotation={onEnterAnnotation}
-            onExitAnnotation={onExitAnnotation}
-            onSendFeedback={onSendFeedback}
-            onFileSelect={onFileSelect}
-            onSessionSelect={onSessionSelect}
-            sessionNames={sessionNames}
-            isStreaming={isStreaming}
-            streamingMessageId={streamingMessageId}
-            forkPoints={forkPoints}
-            onForkClick={onForkClick}
-            forkInputMessageId={forkInputMessageId}
-            forkEntryId={forkEntryId}
-            onForkClose={onForkClose}
-            onForkAtEntry={onForkAtEntry}
-            onQuoteMessage={onQuoteMessage}
-            onForwardClick={onForwardClick}
-            sessions={sessions}
-          />
+        <div className="flex items-start gap-2">
+          <div className="flex-shrink-0 w-6 h-6" />
+          <div>
+            {agentActions}
+          </div>
         </div>
-        {agentActions}
       </div>
     </div>
   )
@@ -2173,41 +2180,48 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                   key={gi}
                   data-msg-id={firstMsg.id}
                   data-msg-role="assistant"
-                  className="group flex items-start gap-2"
+                  className="group"
                 >
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
-                    ξ
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm font-serif text-white bg-orange-500">
+                      ξ
+                    </div>
+                    <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
+                      <MergedBlocksRenderer
+                        messages={group.msgs}
+                        isStreaming={isStreaming}
+                        streamingMessageId={streamingMessageId}
+                        annotatingTarget={annotatingTarget}
+                        onEnterAnnotation={handleEnterAnnotation}
+                        onExitAnnotation={handleExitAnnotation}
+                        onSendFeedback={handleSendFeedback}
+                        onFileSelect={onFileSelect}
+                        onSessionSelect={onSessionSelect}
+                        sessionNames={sessionNames}
+                      />
+                      {msgForkPoints.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {msgForkPoints.map((fp, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400"
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                              </svg>
+                              forked: {fp.childName || '(unnamed)'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0 xi-bubble px-3 py-2">
-                    <MergedBlocksRenderer
-                      messages={group.msgs}
-                      isStreaming={isStreaming}
-                      streamingMessageId={streamingMessageId}
-                      annotatingTarget={annotatingTarget}
-                      onEnterAnnotation={handleEnterAnnotation}
-                      onExitAnnotation={handleExitAnnotation}
-                      onSendFeedback={handleSendFeedback}
-                      onFileSelect={onFileSelect}
-                      onSessionSelect={onSessionSelect}
-                      sessionNames={sessionNames}
-                    />
-                    {msgForkPoints.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {msgForkPoints.map((fp, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400"
-                          >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                            </svg>
-                            forked: {fp.childName || '(unnamed)'}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 w-6 h-6" />
+                    <div>
+                      {actions}
+                    </div>
                   </div>
-                  {actions}
                 </div>
               )
             })
