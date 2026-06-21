@@ -23,6 +23,7 @@ export interface UsePiRpcOptions {
   onSessionForkPointsUpdate: (sessionPath: string, forkPoints: ForkPoint[]) => void
   onSessionModelChange: (sessionPath: string, model: PiModelInfo | null) => void
   onWorkerStatusChange: (sessionPath: string, status: string) => void
+  onSubagentDetected?: (sessionPath: string, parentSessionPath: string) => void
   onDisplaySession?: (sessionPath: string) => void
   displayedSessionPath: string | null
   getCache: (sessionPath: string) => SessionCache | undefined
@@ -77,6 +78,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
   const {
     onSessionMessagesUpdate, onSessionTokenUsageUpdate, onSessionStreamingChange,
     onSessionForkPointsUpdate, onSessionModelChange, onWorkerStatusChange,
+    onSubagentDetected,
     onDisplaySession,
     displayedSessionPath, getCache, ensureCacheSync, updateCache,
   } = options
@@ -604,6 +606,24 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       return cleanup
     }
   }, [onWorkerStatusChange])
+
+  useEffect(() => {
+    type SubagentStatusApi = typeof window.api & { onSubagentStatus?: (callback: (data: unknown) => void) => (() => void) }
+    const apiWithSubagent = window.api as SubagentStatusApi
+    if (apiWithSubagent.onSubagentStatus) {
+      const cleanup = apiWithSubagent.onSubagentStatus((data) => {
+        const obj = data as Record<string, unknown>
+        if (obj.type === 'subagent:detected') {
+          const sessionPath = obj.sessionPath as string
+          const parentSessionPath = obj.parentSessionPath as string
+          if (sessionPath && parentSessionPath) {
+            onSubagentDetected?.(sessionPath, parentSessionPath)
+          }
+        }
+      })
+      return cleanup
+    }
+  }, [onSubagentDetected])
 
   const respondToUiRequest = useCallback((sessionPath: string | null, requestId: string, response: Record<string, unknown>) => {
     window.api.sendExtensionUIResponse(sessionPath, { type: 'extension_ui_response', id: requestId, ...response })

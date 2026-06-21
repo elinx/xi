@@ -60,6 +60,8 @@ function App(): React.ReactElement {
   const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
   isDisplayedStreamingRef.current = sessionCache.isDisplayedStreaming
 
+  const loadSessionsRef = useRef<(() => Promise<void>) | null>(null)
+
   const piRpcOptions: UsePiRpcOptions = useMemo(() => ({
     onSessionMessagesUpdate: (sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
       updateSessionMessages(sessionPath, updater)
@@ -77,6 +79,9 @@ function App(): React.ReactElement {
     onWorkerStatusChange: (sessionPath: string, status: string) => {
       setWorkerStatus(sessionPath, status as WorkerStatus)
     },
+    onSubagentDetected: () => {
+      loadSessionsRef.current?.()
+    },
     onDisplaySession: (sessionPath: string) => {
       sessionCache.displaySession(sessionPath)
     },
@@ -88,6 +93,8 @@ function App(): React.ReactElement {
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, clearMessages: clearSessionMessages, setSessionSummary, refresh } = useSessionManager(isConnected)
+
+  loadSessionsRef.current = refresh
 
   const displayedMessages = sessionCache.displayedMessages
   const displayedMessagesRef = useRef(displayedMessages)

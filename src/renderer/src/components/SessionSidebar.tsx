@@ -86,6 +86,18 @@ function formatRelativeTime(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleDateString()
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const remS = s % 60
+  if (m < 60) return remS > 0 ? `${m}m ${remS}s` : `${m}m`
+  const h = Math.floor(m / 60)
+  const remM = m % 60
+  return remM > 0 ? `${h}h ${remM}m` : `${h}h`
+}
+
 function isDescendantOf(node: SessionTreeNode, sessionPath: string | null): boolean {
   if (!sessionPath) return false
   if (node.session.filePath === sessionPath) return true
@@ -377,6 +389,9 @@ function SessionNode({
               <path d="M4 0L8 4L4 8L0 4Z"/>
             </svg>
           )}
+          {node.session.origin === 'subagent' && (
+            <span className="flex-shrink-0 text-amber-500 text-sm leading-none" title="Subagent session">⚡</span>
+          )}
           {isRenaming ? (
             <input
               autoFocus
@@ -396,7 +411,26 @@ function SessionNode({
                 <span className={`text-[13px] font-medium truncate text-gray-900 ${isCompleted ? 'line-through' : ''}`} title={node.session.summary ? `${getSessionDisplayName(node.session)}\n${node.session.summary.slice(0, 100)}${node.session.summary.length > 100 ? '...' : ''}` : undefined}>
                   {getSessionDisplayName(node.session)}
                 </span>
+                {node.session.origin === 'subagent' && node.session.subagentMeta && (
+                  <span className="inline-flex items-center text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1 py-px flex-shrink-0">
+                    {node.session.subagentMeta.agentName}
+                  </span>
+                )}
                 {!node.session.isMain && (() => {
+                  if (node.session.origin === 'subagent' && node.session.subagentMeta) {
+                    const meta = node.session.subagentMeta
+                    if (meta.status === 'completed') return (
+                      <span className="inline-flex items-center text-[10px] font-medium text-green-600 flex-shrink-0">✓</span>
+                    )
+                    if (meta.status === 'failed') return (
+                      <span className="inline-flex items-center text-[10px] font-medium text-red-500 flex-shrink-0">✗</span>
+                    )
+                    return (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 flex-shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 xi-pulse-ring" />running
+                      </span>
+                    )
+                  }
                   const ws = workerStatuses.get(node.session.filePath)
                   if (isCompleted) return (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400 flex-shrink-0">
@@ -421,6 +455,25 @@ function SessionNode({
                 })()}
               </div>
               {!isCompleted && (() => {
+                if (node.session.origin === 'subagent' && node.session.subagentMeta) {
+                  const meta = node.session.subagentMeta
+                  return (
+                    <div className="flex items-center gap-2 text-[10px] text-gray-500 min-w-0">
+                      {meta.currentTool && (
+                        <span className="flex items-center gap-0.5 min-w-0">
+                          <span className="flex-shrink-0">🔧</span>
+                          <span className="truncate">{meta.currentTool}</span>
+                        </span>
+                      )}
+                      {meta.turnCount != null && (
+                        <span className="flex-shrink-0">{meta.turnCount} turns</span>
+                      )}
+                      {meta.durationMs != null && (
+                        <span className="flex-shrink-0">{formatDuration(meta.durationMs)}</span>
+                      )}
+                    </div>
+                  )
+                }
                 const summary = node.session.summary ?? node.session.firstUserMessage
                 return summary ? (
                   <div className="flex items-center gap-1.5 min-w-0">

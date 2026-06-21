@@ -226,6 +226,11 @@ export class PiSDKBridge extends EventEmitter {
         break
       }
 
+      case 'subagent:run': {
+        this.emit('subagent:run', msg)
+        break
+      }
+
       default:
         this.emit('event', { ...msg, sessionId: this.sessionId })
     }

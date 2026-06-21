@@ -173,6 +173,86 @@ function initWorkerManager(sessionPath?: string): void {
   workerManager.on('worker:status', (data: unknown) => {
     broadcastToRenderers('worker:status', data)
   })
+
+  workerManager.on('subagent:run', async (data: unknown) => {
+    const msg = data as { toolCallId: string; task: string; parentSessionFile: string }
+    const { toolCallId, task, parentSessionFile } = msg
+    const cwd = projectPath
+
+    const sessionDir = sessionService.getSessionDir(cwd)
+    const subSessionPath = sessionService.createSessionFile(sessionDir, cwd, 'subagent', parentSessionFile)
+    sessionService.setSessionOrigin(subSessionPath, 'subagent')
+    sessionService.setSubagentMeta(subSessionPath, {
+      agentName: 'subagent',
+      task,
+      mode: 'single',
+      runId: toolCallId,
+    })
+
+    broadcastToRenderers('subagent:status', {
+      type: 'subagent:detected',
+      sessionPath: subSessionPath,
+      parentSessionPath: parentSessionFile,
+      toolCallId,
+    })
+
+    try {
+      const worker = await workerManager!.getOrCreateSecondary(subSessionPath, cwd)
+
+      const agentEndPromise = new Promise<void>((resolve) => {
+        const handler = (eventData: unknown) => {
+          const evt = eventData as Record<string, unknown>
+          if (evt.type === 'agent_end' && evt.sessionPath === subSessionPath) {
+            workerManager?.off('event', handler)
+            resolve()
+          }
+        }
+        workerManager?.on('event', handler)
+      })
+
+      worker.bridge.sendCommand({ type: 'prompt', message: task })
+
+      await agentEndPromise
+
+      const messages = sessionService.parseSessionMessages(subSessionPath)
+      const lastAssistant = [...messages].reverse().find(
+        (m) => (m as { role?: string }).role === 'assistant'
+      )
+
+      let resultText = '(subagent produced no output)'
+      if (lastAssistant) {
+        const content = (lastAssistant as { content?: unknown }).content
+        if (typeof content === 'string') {
+          resultText = content
+        } else if (Array.isArray(content)) {
+          const parts: string[] = []
+          for (const block of content) {
+            if (block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string') {
+              parts.push(block.text)
+            }
+          }
+          resultText = parts.join('\n') || resultText
+        }
+      }
+
+      const primary = workerManager?.getPrimary()
+      primary?.bridge.sendCommand({
+        type: 'subagent:result',
+        toolCallId,
+        result: {
+          content: [{ type: 'text', text: resultText }],
+          details: { sessionPath: subSessionPath, exitStatus: 'success' },
+        },
+      })
+    } catch (err) {
+      const primary = workerManager?.getPrimary()
+      primary?.bridge.sendCommand({
+        type: 'subagent:result',
+        toolCallId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
 }
 
 function registerIpcHandlers(): void {

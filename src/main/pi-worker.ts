@@ -472,6 +472,41 @@ function forwardEvent(event: AgentSessionEvent): void {
   send({ channel: 'event', data: event })
 }
 
+const pendingSubagentRequests = new Map<string, {
+  resolve: (result: unknown) => void
+  reject: (err: Error) => void
+}>()
+
+function requestSubagentRun(toolCallId: string, task: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    pendingSubagentRequests.set(toolCallId, { resolve, reject })
+    send({
+      channel: 'subagent:run',
+      toolCallId,
+      task,
+      parentSessionFile: session?.sessionFile,
+    })
+  })
+}
+
+function createSubagentTool() {
+  return {
+    name: 'subagent',
+    label: 'subagent',
+    description: 'Delegate a task to a subagent with its own session. The subagent runs in parallel with full tool access (read, bash, edit, write, grep, find, ls). Its session appears in the sidebar with real-time streaming. Use for: exploration, research, implementing a specific subtask, or any work that benefits from isolated context.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        task: { type: 'string' as const, description: 'The task for the subagent to complete. Be specific — the subagent has no context beyond this task description and the project files.' },
+      },
+      required: ['task'],
+    },
+    execute: async (toolCallId: string, params: { task: string }) => {
+      return await requestSubagentRun(toolCallId, params.task)
+    },
+  }
+}
+
 function redactSensitiveFields(payload: Record<string, unknown>): Record<string, unknown> {
   const safe = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>
   if (typeof safe === 'object' && safe !== null) {
@@ -562,6 +597,7 @@ Available tools:
 - find: Find files by glob pattern (respects .gitignore)
 - ls: List directory contents
 - search_sessions: Search conversations from other sessions — recovers past decisions, design rationale, and failed approaches that the filesystem cannot provide
+- subagent: Delegate a task to a subagent with its own session. The subagent runs in parallel with full tool access and real-time streaming in the sidebar.
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
 
@@ -645,8 +681,8 @@ Session features:
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions'],
-        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile())],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent'],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool()],
       })),
       services,
       diagnostics: services.diagnostics,
@@ -1182,6 +1218,19 @@ process.parentPort.on('message', (event: Electron.ParentPortMessageEvent) => {
       console.error('[PiWorker] Stack:', err.stack)
       send({ channel: 'error', error: `Init failed: ${err.message}` })
     })
+    return
+  }
+
+  if (msg.type === 'subagent:result') {
+    const pending = pendingSubagentRequests.get(msg.toolCallId as string)
+    if (pending) {
+      pendingSubagentRequests.delete(msg.toolCallId as string)
+      if (msg.error) {
+        pending.reject(new Error(msg.error as string))
+      } else {
+        pending.resolve(msg.result)
+      }
+    }
     return
   }
 
