@@ -656,7 +656,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
                 onInput={handleEditorInput}
                 onPaste={handlePaste}
                 data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Message Xi…'}
-                className="w-full resize-none px-3.5 pt-3 pb-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
+                className="w-full resize-none px-3.5 pt-4 pb-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus-visible:outline-none min-h-[60px] max-h-[140px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
               />
               <FileMentionDropdown
                 files={mention.filteredFiles}

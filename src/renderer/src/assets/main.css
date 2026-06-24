@@ -119,6 +119,11 @@
     outline: 2px solid rgba(54, 211, 153, 0.5);
     outline-offset: 1px;
   }
+
+  [contenteditable]:focus-visible,
+  [contenteditable]:focus {
+    outline: none;
+  }
 }
 
 .prose {
@@ -254,6 +259,11 @@
 
 :root.light :focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.5);
+}
+
+:root.light [contenteditable]:focus-visible,
+:root.light [contenteditable]:focus {
+  outline: none;
 }
 
 :root.light .prose {
