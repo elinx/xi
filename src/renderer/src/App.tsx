@@ -796,6 +796,8 @@ function App(): React.ReactElement {
   const collapseAllSessions = useLayoutStore(s => s.collapseAllSessions)
   const expandAllSessions = useLayoutStore(s => s.expandAllSessions)
   const sessionCollapsedPaths = useLayoutStore(s => s.sessionCollapsedPaths)
+  const sessionViewMode = useLayoutStore(s => s.sessionViewMode)
+  const setSessionViewMode = useLayoutStore(s => s.setSessionViewMode)
   const sessionRoot = projects[0]?.root ?? null
   // Collect expandable paths excluding root (main) — collapsing main would hide everything
   const sessionExpandablePaths = useMemo(() => {
@@ -984,6 +986,26 @@ function App(): React.ReactElement {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l3-3 3 3M9 15l3 3 3-3" />
                         )}
                       </svg>
+                    </button>
+                    <div className="w-px h-4 bg-gray-300 mx-0.5" />
+                    <button
+                      onClick={() => setSessionViewMode(sessionViewMode === 'tree' ? 'grouped' : 'tree')}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${sessionViewMode === 'grouped' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title={sessionViewMode === 'tree' ? 'Switch to grouped view' : 'Switch to tree view'}
+                    >
+                      {sessionViewMode === 'tree' ? (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.3}>
+                          <rect x="2" y="3" width="12" height="3.5" rx="1"/>
+                          <rect x="2" y="9.5" width="12" height="3.5" rx="1"/>
+                        </svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
+                          <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+                          <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
+                          <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+                          <path d="M4.5 7L9.5 4.5M4.5 9L9.5 11.5" strokeLinecap="round"/>
+                        </svg>
+                      )}
                     </button>
                   </div>
                 )}

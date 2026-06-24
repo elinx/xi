@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 
 export type LeftPanelView = 'sessions' | 'skills' | 'mcp'
 export type RightPanelView = 'files' | 'git' | 'search'
+export type SessionViewMode = 'tree' | 'grouped'
 
 interface LayoutState {
   leftPanelView: LeftPanelView
@@ -28,6 +29,10 @@ interface LayoutState {
   collapseAllSessions: (expandablePaths: string[]) => void
   expandAllSessions: () => void
   expandSessionPaths: (paths: string[]) => void
+
+  // Session sidebar view mode
+  sessionViewMode: SessionViewMode
+  setSessionViewMode: (mode: SessionViewMode) => void
 
   // Session tree scroll trigger (transient, not persisted)
   sessionScrollTrigger: number
@@ -139,18 +144,20 @@ export const useLayoutStore = create<LayoutState>()(
 
       sessionScrollTrigger: 0,
       triggerSessionScroll: () => set((state) => ({ sessionScrollTrigger: state.sessionScrollTrigger + 1 })),
+
+      sessionViewMode: 'tree',
+      setSessionViewMode: (mode) => set({ sessionViewMode: mode }),
     }),
     {
       name: 'xi-layout-store',
-      // Merge persisted state with defaults so new keys (like sessionCollapsedPaths)
-      // never end up as undefined when loading from an older persisted version
+      version: 1,
       merge: (persisted, current) => ({
         ...current,
-        ...(persisted as Partial<LayoutState>),
-        // Safety: ensure sessionCollapsedPaths is always an array
+        ...((persisted as Partial<LayoutState>) ?? {}),
         sessionCollapsedPaths: Array.isArray((persisted as Partial<LayoutState>)?.sessionCollapsedPaths)
           ? ((persisted as Partial<LayoutState>).sessionCollapsedPaths as string[])
           : current.sessionCollapsedPaths,
+        sessionViewMode: (persisted as Partial<LayoutState>)?.sessionViewMode ?? current.sessionViewMode,
       }),
       partialize: (state) => ({
         leftPanelView: state.leftPanelView,
@@ -160,6 +167,7 @@ export const useLayoutStore = create<LayoutState>()(
         rightPanelCollapsed: state.rightPanelCollapsed,
         rightPanelWidth: state.rightPanelWidth,
         sessionCollapsedPaths: state.sessionCollapsedPaths,
+        sessionViewMode: state.sessionViewMode,
       }),
     }
   )

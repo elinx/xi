@@ -726,9 +726,33 @@ function SessionSidebar({
   const projects = sessions?.projects ?? []
   const root = projects[0]?.root ?? null
 
-  const rootChildren = root?.children ?? []
-  const completedTopLevel = rootChildren.filter(c => c.session.status === 'completed')
-  const visibleRoot = root ? { ...root, children: rootChildren.filter(c => c.session.status !== 'completed') } : null
+  const allCompleted = useMemo(() => {
+    if (!root) return []
+    const result: SessionTreeNode[] = []
+    function walk(node: SessionTreeNode) {
+      for (const child of node.children) {
+        if (child.session.status === 'completed' && !child.session.isMain) {
+          result.push(child)
+        }
+        walk(child)
+      }
+    }
+    walk(root)
+    return result
+  }, [root])
+
+  const groupedRoot = useMemo(() => {
+    if (!root) return null
+    function prune(node: SessionTreeNode): SessionTreeNode {
+      const children: SessionTreeNode[] = []
+      for (const child of node.children) {
+        if (child.session.status === 'completed') continue
+        children.push(prune(child))
+      }
+      return { ...node, children }
+    }
+    return prune(root)
+  }, [root])
 
   const filteredRoot = useMemo(() => {
     if (!searchQuery.trim() || !root) return null
@@ -756,6 +780,7 @@ function SessionSidebar({
   const toggleSessionCollapsed = useLayoutStore(s => s.toggleSessionCollapsed)
   const expandSessionPaths = useLayoutStore(s => s.expandSessionPaths)
   const sessionScrollTrigger = useLayoutStore(s => s.sessionScrollTrigger)
+  const sessionViewMode = useLayoutStore(s => s.sessionViewMode)
   const collapsedPaths = new Set(sessionCollapsedPathsArr)
   const handleToggleCollapsed = toggleSessionCollapsed
 
@@ -983,20 +1008,6 @@ function SessionSidebar({
           </button>
         </div>
       )}
-      <div className="px-3 pt-2 pb-1 flex-shrink-0">
-        <div className="relative">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-            <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search sessions"
-            className="w-full h-7 bg-gray-100 rounded-lg pl-8 pr-3 text-xs text-gray-900 placeholder-gray-400 border border-transparent focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          />
-        </div>
-      </div>
       {/* Scroll area wrapper — provides positioning context for floating overlay */}
       <div className="relative flex-1 min-h-0">
         {/* Floating parent stack — only show ancestors that are scrolled out */}
@@ -1068,8 +1079,11 @@ function SessionSidebar({
           )
         ) : (
           <>
+          {sessionViewMode === 'grouped' && (
+            <div className="h-px bg-gray-200 mx-3" />
+          )}
           <SessionNode
-            node={visibleRoot!}
+            node={sessionViewMode === 'tree' ? root! : groupedRoot!}
             depth={0}
             currentSessionPath={displayedSessionPath ?? currentSession?.filePath ?? null}
             workerStatuses={workerStatuses}
@@ -1099,8 +1113,8 @@ function SessionSidebar({
             onDropTargetChange={handleDropTargetChange}
             onDropOnSession={handleDropOnSession}
           />
-          {completedTopLevel.length > 0 && (
-            <div className="mt-2 border-t border-gray-200">
+          {sessionViewMode === 'grouped' && allCompleted.length > 0 && (
+            <div className="mt-2 border-t border-gray-200 bg-gray-50/50">
               <button
                 onClick={() => setCompletedCollapsed(!completedCollapsed)}
                 className="flex items-center gap-1.5 w-full px-3 py-2 text-left"
@@ -1109,9 +1123,9 @@ function SessionSidebar({
                   <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Completed</span>
-                <span className="text-[10px] font-semibold bg-gray-200 text-gray-500 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{completedTopLevel.length}</span>
+                <span className="text-[10px] font-semibold bg-gray-200 text-gray-500 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{allCompleted.length}</span>
               </button>
-              {!completedCollapsed && completedTopLevel.map(node => (
+              {!completedCollapsed && allCompleted.map(node => (
                 <div
                   key={node.session.filePath}
                   className="flex items-center cursor-pointer hover:bg-gray-100 transition-colors duration-150 group"
@@ -1119,14 +1133,14 @@ function SessionSidebar({
                   onClick={() => onSwitchSession(node.session.filePath)}
                   onContextMenu={(e) => handleContextMenu(e, node.session)}
                 >
-                  <div className="flex items-center flex-1 min-w-0 gap-1 pr-2 opacity-50">
+                  <div className="flex items-center flex-1 min-w-0 gap-1 pr-2 opacity-40">
                     <span className="w-5 flex-shrink-0" />
                     <div className="flex-1 flex items-center min-w-0">
-                      <span className="text-[13px] font-medium truncate text-gray-900 line-through">
+                      <span className="text-[13px] font-medium truncate text-gray-500 line-through">
                         {getSessionDisplayName(node.session)}
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-500 flex-shrink-0">
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">
                       {formatRelativeTime(node.session.createdAt)}
                     </span>
                   </div>
