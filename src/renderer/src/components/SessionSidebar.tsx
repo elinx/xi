@@ -384,11 +384,6 @@ function SessionNode({
           ) : (
             <span className="flex-shrink-0 w-5" />
           )}
-          {node.session.isMain && (
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className="flex-shrink-0 text-blue-500">
-              <path d="M4 0L8 4L4 8L0 4Z"/>
-            </svg>
-          )}
           {node.session.origin === 'subagent' && (
             <span className="flex-shrink-0 text-amber-500 text-sm leading-none" title="Subagent session">⚡</span>
           )}
@@ -689,11 +684,6 @@ function FloatingParentStack({
           title={getSessionDisplayName(entry.session)}
         >
           <span className="flex-shrink-0 w-5" />
-          {entry.session.isMain && (
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" className="flex-shrink-0 text-blue-500 mr-1.5">
-              <path d="M4 0L8 4L4 8L0 4Z"/>
-            </svg>
-          )}
           <span className="text-[13px] truncate">
             {getSessionDisplayName(entry.session)}
           </span>
