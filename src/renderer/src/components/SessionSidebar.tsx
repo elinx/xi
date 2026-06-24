@@ -426,32 +426,20 @@ function SessionNode({
                       <span className="inline-flex items-center text-[10px] font-medium text-red-500 flex-shrink-0">✗</span>
                     )
                     return (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 flex-shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 xi-pulse-ring" />running
-                      </span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 xi-pulse-ring flex-shrink-0" title="running" />
                     )
                   }
                   const ws = workerStatuses.get(node.session.filePath)
                   if (isCompleted) return (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-400 flex-shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />done
-                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" title="done" />
                   )
                   if (ws === 'connected' || ws === 'starting') return (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 flex-shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 xi-pulse-ring" />running
-                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 xi-pulse-ring flex-shrink-0" title="running" />
                   )
                   if (ws === 'error') return (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-500 flex-shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />error
-                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="error" />
                   )
-                  return (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 flex-shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />active
-                    </span>
-                  )
+                  return null
                 })()}
               </div>
               {!isCompleted && (() => {
