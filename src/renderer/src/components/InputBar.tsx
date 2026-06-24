@@ -589,31 +589,17 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
   }
 
   let statusDot: React.ReactNode
-  let statusText: React.ReactNode
 
   if (isStreaming) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-    statusText = <>Xi is thinking… press <kbd className="rounded border border-gray-200 bg-gray-100 px-1 py-px font-mono text-[10px] leading-none text-gray-500">Esc</kbd> to interrupt</>
   } else if (workerStatus === 'starting') {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-    statusText = <span className="text-amber-600">Connecting…</span>
   } else if (noModel) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-    statusText = (
-      <span className="text-amber-600">
-        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="underline decoration-amber-300 underline-offset-2 hover:decoration-amber-500 transition-colors duration-150">No model configured</button>
-      </span>
-    )
   } else if (isConnected && currentModel) {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-    statusText = (
-      <span className="text-gray-500">
-        Xi Connected · <button onClick={() => setShowModelSelector(true)} className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 hover:bg-gray-200 transition-colors duration-150">{currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel.id}</button>
-      </span>
-    )
   } else {
     statusDot = <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-    statusText = 'Xi Disconnected'
   }
 
   return (
@@ -627,120 +613,137 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
         onRemoveQueue={onRemoveQueuedAt}
         onClearQueue={onClearQueue}
       />
-      <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
-      <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
-      <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
-        {statusDot}
-        {statusText}
-        {tokenUsage && isConnected && (
-          <span>
-            <TokenUsageRing size={16} showPercent={false} tooltipPosition="top"
-              usedTokens={tokenUsage.totalTokens}
-              contextWindowSize={tokenUsage.contextWindowSize}
-              inputTokens={tokenUsage.inputTokens}
-              outputTokens={tokenUsage.outputTokens}
-              cacheReadTokens={tokenUsage.cacheReadTokens}
-              totalCost={tokenUsage.totalCost}
-            />
-          </span>
-        )}
-      </div>
-      {noModel && (
-        <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
-          No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors duration-150">select a model</button> to start chatting
-        </div>
-      )}
-      {showModelSelector && onSetModel && getAvailableModels && (
-        <ModelSelector
-          currentModel={currentModel ?? null}
-          onSetModel={onSetModel}
-          getAvailableModels={getAvailableModels}
-          onClose={() => setShowModelSelector(false)}
-        />
-      )}
-      {pastedImages.length > 0 && (
-        <div className="mb-2 flex gap-2">
-          {pastedImages.map((img, i) => (
-            <div key={i} className="relative">
-              <img
-                src={`data:${img.mimeType};base64,${img.data}`}
-                alt="pasted"
-                className="h-16 rounded border border-gray-200"
-              />
-              <button
-                onClick={() => setPastedImages((prev) => prev.filter((_, j) => j !== i))}
-                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] text-white"
-              >
-                ×
-              </button>
+      <div className="px-4 pb-3 pt-1">
+        <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
+          {noModel && (
+            <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
+              No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors duration-150">select a model</button> to start chatting
             </div>
-          ))}
+          )}
+          {showModelSelector && onSetModel && getAvailableModels && (
+            <ModelSelector
+              currentModel={currentModel ?? null}
+              onSetModel={onSetModel}
+              getAvailableModels={getAvailableModels}
+              onClose={() => setShowModelSelector(false)}
+            />
+          )}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            {pastedImages.length > 0 && (
+              <div className="flex gap-2 px-3 pt-3">
+                {pastedImages.map((img, i) => (
+                  <div key={i} className="relative">
+                    <img
+                      src={`data:${img.mimeType};base64,${img.data}`}
+                      alt="pasted"
+                      className="h-14 rounded-lg border border-gray-200"
+                    />
+                    <button
+                      onClick={() => setPastedImages((prev) => prev.filter((_, j) => j !== i))}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gray-800 text-[11px] text-white opacity-0 transition-opacity hover:bg-gray-700 group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="relative">
+              <div
+                ref={editorRef}
+                contentEditable
+                onKeyDown={handleKeyDown}
+                onInput={handleEditorInput}
+                onPaste={handlePaste}
+                data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Message Xi…'}
+                className="w-full resize-none px-3.5 pt-3 pb-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
+              />
+              <FileMentionDropdown
+                files={mention.filteredFiles}
+                selectedIndex={mention.selectedIndex}
+                onSelect={handleMentionSelect}
+                visible={mention.open}
+              />
+              <SessionMentionDropdown
+                sessions={sessionMention.filteredSessions}
+                selectedIndex={sessionMention.selectedIndex}
+                onSelect={handleSessionMentionSelect}
+                visible={sessionMention.open}
+              />
+              <SkillMentionDropdown
+                items={skillMention.items}
+                selectedIndex={skillMention.selectedIndex}
+                onSelect={(item) => {
+                  const text = getPlainText()
+                  const newText = text.replace(/\/skill:[a-z0-9-]*$/, `/skill:${item.name} `)
+                  setEditorText(newText)
+                  skillMention.close()
+                  setTimeout(() => {
+                    if (editorRef.current) {
+                      const range = document.createRange()
+                      range.selectNodeContents(editorRef.current)
+                      range.collapse(false)
+                      const sel = window.getSelection()
+                      sel?.removeAllRanges()
+                      sel?.addRange(range)
+                    }
+                  }, 0)
+                }}
+                visible={skillMention.visible}
+              />
+            </div>
+            <div className="flex items-center gap-2 px-3 pb-2 pt-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                {statusDot}
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                <span><kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-500">@</kbd> files</span>
+                <span><kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-500">$</kbd> sessions</span>
+                <span><kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-500">/</kbd> skills</span>
+                <span className="text-gray-300">·</span>
+                <span><kbd className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-500">⇧↵</kbd> newline</span>
+              </div>
+              <div className="flex-1" />
+              {tokenUsage && isConnected && (
+                <TokenUsageRing size={15} showPercent={false} tooltipPosition="top"
+                  usedTokens={tokenUsage.totalTokens}
+                  contextWindowSize={tokenUsage.contextWindowSize}
+                  inputTokens={tokenUsage.inputTokens}
+                  outputTokens={tokenUsage.outputTokens}
+                  cacheReadTokens={tokenUsage.cacheReadTokens}
+                  totalCost={tokenUsage.totalCost}
+                />
+              )}
+              <button
+                onClick={() => setShowModelSelector(true)}
+                className="text-[11.5px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md px-2 py-1 transition-colors duration-150"
+                title="Select model"
+              >
+                {currentModel && currentModel.name && currentModel.name !== 'unknown' ? currentModel.name : currentModel?.id ?? 'No model'}
+              </button>
+              {showStop ? (
+                <button
+                  onClick={onStop}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-red-600 active:scale-95"
+                >
+                  <span className="h-2.5 w-2.5 rounded-sm bg-white" />
+                  Stop
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={disabled || noModel || (isEmpty() && pastedImages.length === 0)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-900 text-white transition-all duration-150 hover:bg-black disabled:bg-gray-300 disabled:cursor-not-allowed active:scale-90"
+                  title="Send (Enter)"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-      <div className="flex items-end gap-2 relative">
-
-        <div className="flex-1 relative">
-          <div
-            ref={editorRef}
-            contentEditable
-            onKeyDown={handleKeyDown}
-            onInput={handleEditorInput}
-            onPaste={handlePaste}
-            data-placeholder={noModel ? 'Select a model to start chatting...' : disabled ? 'Xi not connected...' : workerStatus === 'starting' ? 'Connecting...' : workerStatus === 'none' || workerStatus === 'error' ? 'Worker not ready...' : 'Type a message... (@ files, $ sessions)'}
-            className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 min-h-[36px] max-h-[96px] overflow-y-auto empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
-          />
-          <FileMentionDropdown
-            files={mention.filteredFiles}
-            selectedIndex={mention.selectedIndex}
-            onSelect={handleMentionSelect}
-            visible={mention.open}
-          />
-          <SessionMentionDropdown
-            sessions={sessionMention.filteredSessions}
-            selectedIndex={sessionMention.selectedIndex}
-            onSelect={handleSessionMentionSelect}
-            visible={sessionMention.open}
-          />
-          <SkillMentionDropdown
-            items={skillMention.items}
-            selectedIndex={skillMention.selectedIndex}
-            onSelect={(item) => {
-              const text = getPlainText()
-              const newText = text.replace(/\/skill:[a-z0-9-]*$/, `/skill:${item.name} `)
-              setEditorText(newText)
-              skillMention.close()
-              setTimeout(() => {
-                if (editorRef.current) {
-                  const range = document.createRange()
-                  range.selectNodeContents(editorRef.current)
-                  range.collapse(false)
-                  const sel = window.getSelection()
-                  sel?.removeAllRanges()
-                  sel?.addRange(range)
-                }
-              }, 0)
-            }}
-            visible={skillMention.visible}
-          />
-        </div>
-        {showStop ? (
-          <button
-            onClick={onStop}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-500 active:scale-95"
-          >
-            Stop
-          </button>
-        ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={disabled || noModel || (isEmpty() && pastedImages.length === 0)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
-          >
-            Send
-          </button>
-        )}
-      </div>
-      </div>
       </div>
     </div>
   )

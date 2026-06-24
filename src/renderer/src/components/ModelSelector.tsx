@@ -81,7 +81,7 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
   return (
     <div
       ref={popoverRef}
-      className="absolute bottom-full left-0 mb-1 w-80 max-h-96 overflow-hidden xi-glass rounded-lg z-50 flex flex-col"
+      className="absolute bottom-full right-0 mb-1 w-80 max-h-96 overflow-hidden xi-glass rounded-lg z-50 flex flex-col"
     >
       <div className="p-2 border-b border-gray-100">
         <input

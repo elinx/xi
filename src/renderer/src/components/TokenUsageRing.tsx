@@ -141,7 +141,7 @@ export function TokenUsageRing({
         style={{
           position: 'absolute',
           [tooltipPosition === 'top' ? 'bottom' : 'top']: '100%',
-          left: 0,
+          right: 0,
           [tooltipPosition === 'top' ? 'marginBottom' : 'marginTop']: 6,
           background: 'var(--color-gray-100)',
           borderRadius: 6,
