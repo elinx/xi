@@ -121,7 +121,11 @@
   }
 
   [contenteditable]:focus-visible,
-  [contenteditable]:focus {
+  [contenteditable]:focus,
+  input:focus-visible,
+  input:focus,
+  textarea:focus-visible,
+  textarea:focus {
     outline: none;
   }
 }
@@ -262,7 +266,11 @@
 }
 
 :root.light [contenteditable]:focus-visible,
-:root.light [contenteditable]:focus {
+:root.light [contenteditable]:focus,
+:root.light input:focus-visible,
+:root.light input:focus,
+:root.light textarea:focus-visible,
+:root.light textarea:focus {
   outline: none;
 }
 
