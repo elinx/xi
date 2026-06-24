@@ -7,7 +7,8 @@ import type {
   SessionFileHeader,
   ProjectSessionTree,
   SessionTreeNode,
-  ForkPoint
+  ForkPoint,
+  SubagentMeta
 } from '../renderer/src/types/session'
 
 /**
@@ -137,6 +138,8 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
     let summary: string | null = null
     let parentSessionPath: string | null = header.parentSession ?? null
     let firstUserMessage: string | null = null
+    let origin: 'main' | 'subagent' = 'main'
+    let subagentMeta: SubagentMeta | null = null
 
     for (let i = 1; i < lines.length; i++) {
       try {
@@ -163,6 +166,12 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if ('parentSession' in entry) {
             parentSessionPath = typeof entry.parentSession === 'string' ? entry.parentSession : null
           }
+          if (entry.origin === 'main' || entry.origin === 'subagent') {
+            origin = entry.origin
+          }
+          if (entry.subagentMeta && typeof entry.subagentMeta === 'object') {
+            subagentMeta = entry.subagentMeta as SubagentMeta
+          }
         }
       } catch {
         continue
@@ -176,6 +185,8 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
       status,
       summary,
       firstUserMessage,
+      origin,
+      subagentMeta,
       createdAt: header.timestamp,
       cwd: header.cwd,
       parentSessionPath,
@@ -508,6 +519,33 @@ export function reparentSession(sessionPath: string, newParentPath: string | nul
       type: 'session_info',
       parentSession: newParentPath,
     })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function setSessionOrigin(sessionPath: string, origin: 'main' | 'subagent'): boolean {
+  if (!existsSync(sessionPath)) return false
+  try {
+    const entry = JSON.stringify({ type: 'session_info', origin })
+    appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function setSubagentMeta(sessionPath: string, meta: {
+  agentName: string
+  task: string
+  mode: 'single' | 'parallel' | 'chain'
+  runId: string
+}): boolean {
+  if (!existsSync(sessionPath)) return false
+  try {
+    const entry = JSON.stringify({ type: 'session_info', subagentMeta: meta })
     appendFileSync(sessionPath, entry + '\n')
     return true
   } catch {

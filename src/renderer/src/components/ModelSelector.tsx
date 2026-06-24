@@ -81,7 +81,7 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
   return (
     <div
       ref={popoverRef}
-      className="absolute bottom-full left-0 mb-1 w-80 max-h-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl z-50 flex flex-col"
+      className="absolute bottom-full right-0 mb-1 w-80 max-h-96 overflow-hidden xi-glass rounded-lg z-50 flex flex-col"
     >
       <div className="p-2 border-b border-gray-100">
         <input
@@ -90,7 +90,7 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search models..."
-          className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+          className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-blue-400"
         />
       </div>
 
@@ -119,7 +119,7 @@ function ModelSelector({ currentModel, onSetModel, getAvailableModels, onClose }
                   key={`${model.provider}/${model.id}`}
                   onClick={() => handleSelect(model)}
                   disabled={isSwitching || !model.hasAuth}
-                  className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 transition-colors ${
+                  className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 transition-colors duration-150 ${
                     isCurrent
                       ? 'bg-blue-50 text-blue-700'
                       : model.hasAuth

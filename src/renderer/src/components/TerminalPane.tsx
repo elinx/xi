@@ -2,8 +2,58 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useTheme } from '../hooks/useTheme'
 
 const ptyInstances = new Set<string>()
+
+const darkXtermTheme = {
+  background: '#1e2026',
+  foreground: '#e5e7eb',
+  cursor: '#36d399',
+  cursorAccent: '#1e2026',
+  selectionBackground: 'rgba(54, 211, 153, 0.25)',
+  selectionForeground: '#e5e7eb',
+  black: '#1e2026',
+  red: '#e06c75',
+  green: '#36d399',
+  yellow: '#e5c07b',
+  blue: '#61afef',
+  magenta: '#c678dd',
+  cyan: '#56b6c2',
+  white: '#abb2bf',
+  brightBlack: '#5c6370',
+  brightRed: '#e06c75',
+  brightGreen: '#36d399',
+  brightYellow: '#e5c07b',
+  brightBlue: '#61afef',
+  brightMagenta: '#c678dd',
+  brightCyan: '#56b6c2',
+  brightWhite: '#ffffff',
+}
+
+const lightXtermTheme = {
+  background: '#ffffff',
+  foreground: '#374151',
+  cursor: '#3b82f6',
+  cursorAccent: '#ffffff',
+  selectionBackground: 'rgba(59, 130, 246, 0.15)',
+  black: '#374151',
+  red: '#dc2626',
+  green: '#059669',
+  yellow: '#d97706',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0891b2',
+  white: '#f9fafb',
+  brightBlack: '#6b7280',
+  brightRed: '#ef4444',
+  brightGreen: '#10b981',
+  brightYellow: '#f59e0b',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan: '#06b6d4',
+  brightWhite: '#111827',
+}
 
 interface TerminalPaneProps {
   ptyId: string
@@ -13,6 +63,7 @@ export default function TerminalPane({ ptyId }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const { resolvedTheme } = useTheme()
 
   const handleResize = useCallback(() => {
     if (fitAddonRef.current && termRef.current) {
@@ -34,30 +85,7 @@ export default function TerminalPane({ ptyId }: TerminalPaneProps) {
       cursorBlink: true,
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: {
-        background: '#f8f8f8',
-        foreground: '#383a42',
-        cursor: '#526eff',
-        cursorAccent: '#f8f8f8',
-        selectionBackground: '#add6ff',
-        selectionForeground: '#383a42',
-        black: '#383a42',
-        red: '#e45649',
-        green: '#50a14f',
-        yellow: '#c18401',
-        blue: '#4078f2',
-        magenta: '#a626a4',
-        cyan: '#0184bc',
-        white: '#a0a1a7',
-        brightBlack: '#4f525e',
-        brightRed: '#e06c75',
-        brightGreen: '#98c379',
-        brightYellow: '#e5c07b',
-        brightBlue: '#61afef',
-        brightMagenta: '#c678dd',
-        brightCyan: '#56b6c2',
-        brightWhite: '#ffffff',
-      },
+      theme: resolvedTheme === 'dark' ? darkXtermTheme : lightXtermTheme,
     })
 
     const fitAddon = new FitAddon()
@@ -110,7 +138,13 @@ export default function TerminalPane({ ptyId }: TerminalPaneProps) {
     }
   }, [ptyId, handleResize])
 
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = resolvedTheme === 'dark' ? darkXtermTheme : lightXtermTheme
+    }
+  }, [resolvedTheme])
+
   return (
-    <div ref={containerRef} className="h-full w-full bg-[#f8f8f8]" />
+    <div ref={containerRef} className={`h-full w-full ${resolvedTheme === 'dark' ? 'bg-[#1e2026]' : 'bg-white'}`} />
   )
 }

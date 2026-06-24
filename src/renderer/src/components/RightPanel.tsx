@@ -73,21 +73,21 @@ export default function RightPanel({
       <div className="h-8 flex items-center px-2 border-b border-gray-200 gap-1">
         <button
           onClick={() => onViewChange('files')}
-          className={view === 'files' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+          className={view === 'files' ? 'bg-blue-50 text-blue-600 rounded p-1 transition-colors duration-150' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1 transition-colors duration-150'}
           title="Files"
         >
           <FolderIcon className="w-4 h-4" />
         </button>
         <button
           onClick={() => onViewChange('search')}
-          className={view === 'search' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+          className={view === 'search' ? 'bg-blue-50 text-blue-600 rounded p-1 transition-colors duration-150' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1 transition-colors duration-150'}
           title="Search"
         >
           <SearchIcon className="w-4 h-4" />
         </button>
         <button
           onClick={() => onViewChange('git')}
-          className={view === 'git' ? 'bg-gray-200 text-gray-900 rounded p-1' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1'}
+          className={view === 'git' ? 'bg-blue-50 text-blue-600 rounded p-1 transition-colors duration-150' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1 transition-colors duration-150'}
           title="Git"
         >
           <GitIcon className="w-4 h-4" />

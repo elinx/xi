@@ -105,7 +105,7 @@ export function TokenUsageRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#e5e7eb"
+          className="stroke-gray-300"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -131,7 +131,7 @@ export function TokenUsageRing({
           dominantBaseline="central"
           fontSize={size <= 20 ? 6 : 9}
           fontWeight={600}
-          fill="#374151"
+          className="fill-gray-500"
         >
           {showPercent ? percent : ''}
         </text>
@@ -141,9 +141,11 @@ export function TokenUsageRing({
         style={{
           position: 'absolute',
           [tooltipPosition === 'top' ? 'bottom' : 'top']: '100%',
-          left: 0,
+          right: 0,
           [tooltipPosition === 'top' ? 'marginBottom' : 'marginTop']: 6,
-          background: '#1a1a2e',
+          background: 'rgba(30, 32, 38, 0.92)',
+          backdropFilter: 'blur(16px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(16px) saturate(1.5)',
           borderRadius: 6,
           padding: '8px 10px',
           fontSize: 11,

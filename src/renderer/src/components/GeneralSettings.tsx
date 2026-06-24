@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { DEFAULT_SUMMARY_PROMPT } from '../../../shared/summary-prompt'
+import { useTheme, type Theme } from '../hooks/useTheme'
 
-type Theme = 'system' | 'light' | 'dark'
 type StartupSession = 'last' | 'main'
 
 interface GeneralSettingsProps {
@@ -19,9 +19,7 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
   const [defaultModel, setDefaultModel] = useState(() => {
     return localStorage.getItem('xi-settings-default-model') || ''
   })
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem('xi-settings-theme') as Theme) || 'system'
-  })
+  const { theme, setTheme } = useTheme()
   const [startupSession, setStartupSession] = useState<StartupSession>(() => {
     return (localStorage.getItem('xi-settings-startup-session') as StartupSession) || 'last'
   })
@@ -102,7 +100,6 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
 
   const handleThemeChange = (value: Theme) => {
     setTheme(value)
-    localStorage.setItem('xi-settings-theme', value)
   }
 
   const handleStartupSessionChange = (value: StartupSession) => {
@@ -382,7 +379,6 @@ function GeneralSettings({ captureEnabled, setCaptureEnabled, clearSnapshots, ge
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
-            <span className="text-[10px] text-gray-400">Dark theme coming soon</span>
           </div>
         </div>
       </div>

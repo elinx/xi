@@ -54,7 +54,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
             {onClearQueue && (
               <button
                 onClick={onClearQueue}
-                className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors duration-150 cursor-pointer"
               >
                 Clear all
               </button>
@@ -76,7 +76,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
                 {onSendQueue && (
                   <button
                     onClick={() => onSendQueue(i)}
-                    className="text-blue-400 hover:text-blue-600 transition-colors cursor-pointer shrink-0"
+                    className="text-blue-400 hover:text-blue-600 transition-colors duration-150 cursor-pointer shrink-0"
                     title="Send now"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -87,7 +87,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
                 {onRemoveQueue && (
                   <button
                     onClick={() => onRemoveQueue(i)}
-                    className="text-gray-300 hover:text-gray-500 transition-colors cursor-pointer shrink-0"
+                    className="text-gray-300 hover:text-gray-500 transition-colors duration-150 cursor-pointer shrink-0"
                     title="Remove"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -110,7 +110,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
             </span>
             <button
               onClick={onClear}
-              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors duration-150 cursor-pointer"
             >
               Clear all
             </button>
@@ -142,7 +142,7 @@ export default function QuoteCard({ quotes, onRemove, onClear, queue, onSendQueu
                   </div>
                   <button
                     onClick={() => onRemove(q.messageId)}
-                    className="text-gray-300 hover:text-gray-500 transition-colors cursor-pointer shrink-0"
+                    className="text-gray-300 hover:text-gray-500 transition-colors duration-150 cursor-pointer shrink-0"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

@@ -76,7 +76,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#16181d',
     titleBarStyle: 'hiddenInset',
     icon: iconPath,
     show: false,
@@ -172,6 +172,93 @@ function initWorkerManager(sessionPath?: string): void {
 
   workerManager.on('worker:status', (data: unknown) => {
     broadcastToRenderers('worker:status', data)
+  })
+
+  workerManager.on('subagent:run', async (data: unknown) => {
+    const msg = data as { toolCallId: string; task: string; parentSessionFile: string; senderSessionPath?: string }
+    const { toolCallId, task, parentSessionFile } = msg
+    const senderSessionPath = msg.senderSessionPath ?? ''
+
+    const cwd = projectPath
+    const sessionDir = sessionService.getSessionDir(cwd)
+    const subSessionPath = sessionService.createSessionFile(sessionDir, cwd, 'subagent', parentSessionFile)
+    sessionService.setSessionOrigin(subSessionPath, 'subagent')
+    sessionService.setSubagentMeta(subSessionPath, {
+      agentName: 'subagent',
+      task,
+      mode: 'single',
+      runId: toolCallId,
+    })
+
+    broadcastToRenderers('subagent:status', {
+      type: 'subagent:detected',
+      sessionPath: subSessionPath,
+      parentSessionPath: parentSessionFile,
+      toolCallId,
+    })
+
+    try {
+      const worker = await workerManager!.getOrCreateSecondary(subSessionPath, cwd)
+
+      const agentEndPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          workerManager?.off('event', handler)
+          reject(new Error('Subagent timed out (5 min)'))
+        }, 5 * 60 * 1000)
+
+        const handler = (eventData: unknown) => {
+          const evt = eventData as Record<string, unknown>
+          if (evt.type === 'agent_end' && evt.sessionPath === subSessionPath) {
+            clearTimeout(timeout)
+            workerManager?.off('event', handler)
+            resolve()
+          }
+        }
+        workerManager?.on('event', handler)
+      })
+
+      worker.bridge.sendCommand({ type: 'prompt', message: task })
+
+      await agentEndPromise
+
+      const messages = sessionService.parseSessionMessages(subSessionPath)
+      const lastAssistant = [...messages].reverse().find(
+        (m) => (m as { role?: string }).role === 'assistant'
+      )
+
+      let resultText = '(subagent produced no output)'
+      if (lastAssistant) {
+        const content = (lastAssistant as { content?: unknown }).content
+        if (typeof content === 'string') {
+          resultText = content
+        } else if (Array.isArray(content)) {
+          const parts: string[] = []
+          for (const block of content) {
+            if (block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string') {
+              parts.push(block.text)
+            }
+          }
+          resultText = parts.join('\n') || resultText
+        }
+      }
+
+      const sender = (senderSessionPath ? workerManager?.get(senderSessionPath) : null) ?? workerManager?.getPrimary()
+      sender?.bridge.sendCommand({
+        type: 'subagent:result',
+        toolCallId,
+        result: {
+          content: [{ type: 'text', text: resultText }],
+          details: { sessionPath: subSessionPath, exitStatus: 'success' },
+        },
+      })
+    } catch (err) {
+      const sender = (senderSessionPath ? workerManager?.get(senderSessionPath) : null) ?? workerManager?.getPrimary()
+      sender?.bridge.sendCommand({
+        type: 'subagent:result',
+        toolCallId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   })
 }
 
@@ -838,6 +925,28 @@ function registerIpcHandlers(): void {
     }
   })
 
+  async function switchToProject(newCwd: string): Promise<{ ok: boolean; error?: string }> {
+    process.chdir(newCwd)
+    resetGit(newCwd)
+    sessionService.clearPendingNames()
+    try {
+      await workerManager?.disposeAll()
+    } catch {}
+    workerManager = null
+    let mainSession = sessionService.findMainSession(newCwd)
+    if (mainSession && !mainSession.name) {
+      sessionService.nameSession(mainSession.filePath, 'main')
+      mainSession = { ...mainSession, name: 'main' }
+    }
+    initWorkerManager(mainSession?.filePath)
+    try {
+      await workerManager!.initPrimary(newCwd, initialSessionPath)
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
   ipcMain.handle('project:openDirectory', async () => {
     try {
       const win = BrowserWindow.getFocusedWindow()
@@ -848,28 +957,17 @@ function registerIpcHandlers(): void {
         return { ok: false }
       }
       const newCwd = result.filePaths[0]
-      process.chdir(newCwd)
-      resetGit(newCwd)
-      sessionService.clearPendingNames()
-      try {
-        await workerManager?.disposeAll()
-      } catch {}
-      workerManager = null
-      let mainSession = sessionService.findMainSession(newCwd)
-      if (mainSession && !mainSession.name) {
-        sessionService.nameSession(mainSession.filePath, 'main')
-        mainSession = { ...mainSession, name: 'main' }
-      }
-      initWorkerManager(mainSession?.filePath)
-      try {
-        await workerManager!.initPrimary(newCwd, initialSessionPath)
-        return { ok: true }
-      } catch (err: unknown) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) }
-      }
+      return switchToProject(newCwd)
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('project:openPath', async (_event, path: string) => {
+    if (!path || !existsSync(path)) {
+      return { ok: false, error: 'Path does not exist' }
+    }
+    return switchToProject(path)
   })
 
   ipcMain.handle('pi:stop', async () => {
@@ -2114,7 +2212,7 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
-  nativeTheme.themeSource = 'light'
+  nativeTheme.themeSource = 'dark'
 
   // Restore last project cwd if available and current cwd doesn't match
   try {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
+import { useTheme } from '../hooks/useTheme'
 
 interface FileViewerProps {
   filePath: string
@@ -57,6 +58,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
   const [showSource, setShowSource] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const { resolvedTheme } = useTheme()
 
   const loadFile = useCallback(async (path: string) => {
     setLoading(true)
@@ -95,7 +97,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
         if (cancelled) return
         const html = await codeToHtml(fileData.content, {
           lang: lang ?? 'plaintext',
-          theme: 'github-light',
+          theme: resolvedTheme === 'dark' ? 'github-dark' : 'github-light',
           transformers: [
             {
               name: 'line-numbers',
@@ -118,7 +120,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
     })()
 
     return () => { cancelled = true }
-  }, [fileData])
+  }, [fileData, resolvedTheme])
 
   useEffect(() => {
     if (scrollToLine == null || !containerRef.current) return
@@ -176,11 +178,11 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
   return (
     <div className="flex flex-col h-full">
       {isMarkdown && (
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-gray-50">
           <span className="text-xs text-gray-500">Markdown</span>
           <button
             onClick={() => setShowSource(!showSource)}
-            className="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
             title={showSource ? 'Switch to preview' : 'View raw source'}
           >
             {showSource ? 'Preview' : '</> Source'}
@@ -216,7 +218,7 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
               {lines.map((line, i) => (
                 <div key={i} className="flex hover:bg-gray-50" data-line={i + 1}>
                   <span
-                    className="flex-shrink-0 text-right text-gray-300 select-none pr-4 pl-4 sticky left-0 bg-white"
+                    className="flex-shrink-0 text-right text-gray-300 select-none pr-4 pl-4 sticky left-0 bg-gray-50"
                     style={{ minWidth: `${String(lineCount).length + 2}ch` }}
                   >
                     {i + 1}

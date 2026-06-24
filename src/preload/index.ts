@@ -38,6 +38,12 @@ const api = {
     return () => ipcRenderer.removeListener('worker:status', handler)
   },
 
+  onSubagentStatus: (callback: (data: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data)
+    ipcRenderer.on('subagent:status', handler)
+    return () => ipcRenderer.removeListener('subagent:status', handler)
+  },
+
   onSummaryAutoTriggered: (callback: (sessionPath: string) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, sessionPath: string) => callback(sessionPath)
     ipcRenderer.on('session:summaryAutoTriggered', handler)
@@ -115,6 +121,9 @@ const api = {
 
   openDirectory: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('project:openDirectory'),
+
+  openProjectPath: (path: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:openPath', path),
 
   getMessagesForSession: (sessionPath: string): Promise<unknown[]> =>
     ipcRenderer.invoke('session:getMessagesForSession', sessionPath),

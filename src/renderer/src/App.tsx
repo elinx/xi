@@ -25,6 +25,7 @@ import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
 import { useSkillStore } from './hooks/useSkillStore'
+import { useTheme } from './hooks/useTheme'
 import type { MentionItem } from './hooks/useFileMention'
 
 interface QueuedMessage {
@@ -36,6 +37,7 @@ interface QueuedMessage {
 
 
 function App(): React.ReactElement {
+  useTheme()
   const sessionCache = useSessionCache()
   const {
     displaySession, getCache, ensureCacheSync, clearCache, getOrCreateCache,
@@ -58,6 +60,8 @@ function App(): React.ReactElement {
   const isDisplayedStreamingRef = useRef(sessionCache.isDisplayedStreaming)
   isDisplayedStreamingRef.current = sessionCache.isDisplayedStreaming
 
+  const loadSessionsRef = useRef<(() => Promise<void>) | null>(null)
+
   const piRpcOptions: UsePiRpcOptions = useMemo(() => ({
     onSessionMessagesUpdate: (sessionPath: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
       updateSessionMessages(sessionPath, updater)
@@ -75,6 +79,9 @@ function App(): React.ReactElement {
     onWorkerStatusChange: (sessionPath: string, status: string) => {
       setWorkerStatus(sessionPath, status as WorkerStatus)
     },
+    onSubagentDetected: () => {
+      loadSessionsRef.current?.()
+    },
     onDisplaySession: (sessionPath: string) => {
       sessionCache.displaySession(sessionPath)
     },
@@ -86,6 +93,8 @@ function App(): React.ReactElement {
 
   const { isConnected, currentModel, thinkingLevel, sendPrompt, abort, pendingUiRequests, respondToUiRequest, clearMessages, loadHistory, loadForkPoints, setOnAgentEnd, getAvailableModels, setModel, cycleModel: cycleModelFn, getProviderAuthStatus, setApiKey, removeAuth, registerCustomProvider, deleteCustomProvider, removeModelFromProvider, testProvider, getProviderConfig, listCustomProviders, refreshModelInfo, getPromptSnapshot, setCaptureEnabled, clearSnapshots, getCaptureStatus, captureEnabled } = usePiRpc(piRpcOptions)
   const { sessions, currentSession, forkAtEntry, switchSession, newSession, renameSession, deleteSession, setSessionStatus, reparentSession, getForkMessages, clearSession, clearMessages: clearSessionMessages, setSessionSummary, refresh } = useSessionManager(isConnected)
+
+  loadSessionsRef.current = refresh
 
   const displayedMessages = sessionCache.displayedMessages
   const displayedMessagesRef = useRef(displayedMessages)
@@ -787,6 +796,8 @@ function App(): React.ReactElement {
   const collapseAllSessions = useLayoutStore(s => s.collapseAllSessions)
   const expandAllSessions = useLayoutStore(s => s.expandAllSessions)
   const sessionCollapsedPaths = useLayoutStore(s => s.sessionCollapsedPaths)
+  const sessionViewMode = useLayoutStore(s => s.sessionViewMode)
+  const setSessionViewMode = useLayoutStore(s => s.setSessionViewMode)
   const sessionRoot = projects[0]?.root ?? null
   // Collect expandable paths excluding root (main) — collapsing main would hide everything
   const sessionExpandablePaths = useMemo(() => {
@@ -829,8 +840,8 @@ function App(): React.ReactElement {
   }, [addTab, tabs, setActiveTab])
 
    return (
-        <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-          <div className="flex border-b border-gray-200 bg-gray-50 h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+         <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
+           <div className="flex border-b border-gray-200 xi-titlebar h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
             {!leftPanelCollapsed && (
              <div
                className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
@@ -849,7 +860,7 @@ function App(): React.ReactElement {
                     </svg>
                   </button>
                   {showRecentProjects && (
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-0.5 min-w-[220px] max-h-[300px] overflow-y-auto">
+                    <div className="absolute top-full left-0 mt-1 xi-glass rounded-md z-50 py-0.5 min-w-[220px] max-h-[300px] overflow-y-auto">
                       <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Recent Projects</div>
                       {recentProjects.map((p) => (
                         <button
@@ -857,12 +868,17 @@ function App(): React.ReactElement {
                           onClick={async () => {
                             setShowRecentProjects(false)
                             if (p.path === (projects[0]?.projectPath)) return
-                            const result = await window.api.openDirectory()
+                            const result = await window.api.openProjectPath(p.path)
+                            if (!result?.ok) return
                             sessionCache.clearAllCaches()
                             setMessageQueue([])
                             resetTabs()
                             await refresh()
                             refreshFileIndex(true)
+                            fetchSkills()
+                            const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
+                            try { await fsApi.watchStop?.() } catch {}
+                            try { await fsApi.watchStart?.() } catch {}
                           }}
                           className={`w-full px-3 py-1.5 text-xs text-left hover:bg-gray-100 transition-colors ${p.path === (projects[0]?.projectPath) ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
                           title={p.path}
@@ -970,6 +986,26 @@ function App(): React.ReactElement {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l3-3 3 3M9 15l3 3 3-3" />
                         )}
                       </svg>
+                    </button>
+                    <div className="w-px h-4 bg-gray-300 mx-0.5" />
+                    <button
+                      onClick={() => setSessionViewMode(sessionViewMode === 'tree' ? 'grouped' : 'tree')}
+                      className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${sessionViewMode === 'grouped' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      title={sessionViewMode === 'tree' ? 'Switch to grouped view' : 'Switch to tree view'}
+                    >
+                      {sessionViewMode === 'tree' ? (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.3}>
+                          <rect x="2" y="3" width="12" height="3.5" rx="1"/>
+                          <rect x="2" y="9.5" width="12" height="3.5" rx="1"/>
+                        </svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
+                          <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+                          <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
+                          <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+                          <path d="M4.5 7L9.5 4.5M4.5 9L9.5 11.5" strokeLinecap="round"/>
+                        </svg>
+                      )}
                     </button>
                   </div>
                 )}

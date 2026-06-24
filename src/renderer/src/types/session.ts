@@ -18,6 +18,18 @@ export interface SessionFileHeader {
   parentSession?: string
 }
 
+export interface SubagentMeta {
+  agentName: string
+  task: string
+  mode: 'single' | 'parallel' | 'chain'
+  runId: string
+  currentTool?: string
+  turnCount?: number
+  durationMs?: number
+  activityState?: 'active' | 'active_long_running' | 'needs_attention'
+  status?: 'running' | 'completed' | 'failed'
+}
+
 /** Lightweight metadata for a session file, used in the sidebar list. */
 export interface SessionInfo {
   /** Absolute path to the .jsonl file on disk. */
@@ -42,6 +54,10 @@ export interface SessionInfo {
   summary: string | null
   /** First user message text (truncated), for search/preview. null if no user messages. */
   firstUserMessage: string | null
+  /** Origin: 'main' for normal sessions, 'subagent' for subagent sessions. */
+  origin: 'main' | 'subagent'
+  /** Metadata for subagent sessions. null for normal sessions. */
+  subagentMeta: SubagentMeta | null
 }
 
 /**

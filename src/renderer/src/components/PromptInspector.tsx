@@ -23,7 +23,7 @@ class InspectorErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundary
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="fixed inset-y-0 right-0 z-50 w-[480px] bg-white border-l border-gray-200 shadow-2xl flex flex-col">
+        <div className="fixed inset-y-0 right-0 z-50 w-[480px] bg-gray-50 border-l border-gray-200 shadow-2xl flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
             <h2 className="text-sm font-semibold text-gray-900">Prompt Inspector</h2>
             <button
@@ -732,7 +732,7 @@ function PromptInspector({ snapshot, loading, onClose }: PromptInspectorProps): 
   }, [messages])
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-[480px] bg-white border-l border-gray-200 shadow-2xl flex flex-col animate-slide-in-right">
+    <div className="fixed inset-y-0 right-0 z-50 w-[480px] bg-gray-50 border-l border-gray-200 shadow-2xl flex flex-col animate-slide-in-right">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <h2 className="text-sm font-semibold text-gray-900">Prompt Inspector</h2>
         <button

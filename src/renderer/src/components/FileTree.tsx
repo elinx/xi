@@ -334,7 +334,7 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
           />
           <div
             ref={ctxMenuRef}
-            className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-0.5 min-w-[180px]"
+            className="fixed xi-glass rounded-md py-0.5 min-w-[180px]"
             style={{ left: ctxMenuPos?.x ?? ctxMenu.x, top: ctxMenuPos?.y ?? ctxMenu.y, zIndex: 9999 }}
           >
             <button

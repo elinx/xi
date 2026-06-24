@@ -38,8 +38,8 @@ export const TREE_DEFAULTS = {
   SLOT_W: 16,
   LINE_LEFT: 8,
   DOT_R: 3,
-  GRAY: '#e5e7eb',
-  BLUE: '#3b82f6',
+  GRAY: 'var(--color-gray-500)',
+  BLUE: 'var(--color-blue-500)',
 } as const
 
 interface TreeGraphRowProps {
@@ -240,7 +240,7 @@ function DotSlot({
       ? { width: size, height: size, backgroundColor: color, border: `${borderWidth}px solid ${color}` }
       : dotStyle === 'hollow'
         ? { width: size, height: size, backgroundColor: defaultGray, border: `${borderWidth}px solid ${defaultGray}` }
-        : { width: size, height: size, backgroundColor: 'white', border: `${borderWidth}px solid ${color}` }
+        : { width: size, height: size, backgroundColor: 'var(--color-gray-50)', border: `${borderWidth}px solid ${color}` }
 
   const isGroupHover = dotStyle === 'outlined'
 

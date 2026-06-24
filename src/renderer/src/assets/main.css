@@ -1,14 +1,168 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ============================================================
+   Xi Dark Theme — Conductor-inspired palette
+   ──────────────────────────────────────────────────────────
+   @theme remaps Tailwind's default color variables to dark
+   charcoal values. Existing utility classes (bg-white, 
+   text-gray-900, border-gray-200, etc.) render dark automatically.
+
+   #16181d > #1e2026 > #252830 > #272a32 > #2a2d33 > #2c2f36 > #343840
+   bg          panel       tabbar     bubble     button     border     hover
+
+   Accent: #36d399 (mint green) replaces blue everywhere
+   ============================================================ */
+@theme {
+  --color-white: #16181d;
+  --color-gray-50: #1e2026;
+  --color-gray-100: #252830;
+  --color-gray-200: #2c2f36;
+  --color-gray-300: #343840;
+  --color-gray-400: #6b7280;
+  --color-gray-500: #9ca3af;
+  --color-gray-600: #9ca3af;
+  --color-gray-700: #d1d5db;
+  --color-gray-800: #e5e7eb;
+  --color-gray-900: #e5e7eb;
+
+  --color-blue-50: rgba(54, 211, 153, 0.08);
+  --color-blue-100: rgba(54, 211, 153, 0.12);
+  --color-blue-200: rgba(54, 211, 153, 0.20);
+  --color-blue-300: rgba(54, 211, 153, 0.30);
+  --color-blue-400: #36d399;
+  --color-blue-500: #36d399;
+  --color-blue-600: #2bc78b;
+  --color-blue-700: #25b37a;
+
+  --color-red-50: rgba(239, 68, 68, 0.10);
+  --color-red-100: rgba(239, 68, 68, 0.15);
+  --color-red-200: rgba(239, 68, 68, 0.25);
+  --color-amber-50: rgba(245, 158, 11, 0.10);
+  --color-amber-100: rgba(245, 158, 11, 0.15);
+  --color-amber-200: rgba(245, 158, 11, 0.25);
+  --color-green-50: rgba(34, 197, 94, 0.10);
+  --color-green-100: rgba(34, 197, 94, 0.15);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root.light {
+  --color-white: #ffffff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-green-50: #f0fdf4;
+  --color-green-100: #dcfce7;
+}
+
+@layer base {
+  body {
+    background-color: #16181d;
+    color: #e5e7eb;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: rgba(54, 211, 153, 0.25);
+    color: #e5e7eb;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #2c2f36;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #3a3f4a;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(54, 211, 153, 0.5);
+    outline-offset: 1px;
+  }
+
+  [contenteditable]:focus-visible,
+  [contenteditable]:focus,
+  input:focus-visible,
+  input:focus,
+  textarea:focus-visible,
+  textarea:focus {
+    outline: none;
+  }
+}
+
+.prose {
+  --tw-prose-body: #e5e7eb;
+  --tw-prose-headings: #f3f4f6;
+  --tw-prose-lead: #9ca3af;
+  --tw-prose-links: #36d399;
+  --tw-prose-bold: #f3f4f6;
+  --tw-prose-counters: #9ca3af;
+  --tw-prose-bullets: #4b5563;
+  --tw-prose-hr: #2c2f36;
+  --tw-prose-quotes: #9ca3af;
+  --tw-prose-quote-borders: #36d399;
+  --tw-prose-captions: #6b7280;
+  --tw-prose-code: #36d399;
+  --tw-prose-pre-code: #e5e7eb;
+  --tw-prose-pre-bg: #1e2026;
+  --tw-prose-th-borders: #2c2f36;
+  --tw-prose-td-borders: #2c2f36;
+}
+
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
+
 .shiki-highlight pre {
-  background: white !important;
+  background: #1e2026 !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
+  border-radius: 6px !important;
   font-size: 13px !important;
   line-height: 20px !important;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !important;
+  font-family: var(--font-mono) !important;
   counter-reset: line;
 }
 
@@ -30,25 +184,13 @@
   width: 4ch;
   margin-right: 16px;
   text-align: right;
-  color: #d1d5db;
+  color: #4b5563;
   user-select: none;
   flex-shrink: 0;
 }
 
 .shiki-highlight .line:hover {
-  background-color: #f9fafb;
-}
-
-/* Remove backtick pseudo-elements added by @tailwindcss/typography for inline code.
-   ReactMarkdown already strips markdown backticks, so these are redundant. */
-.prose code::before,
-.prose code::after {
-  content: none !important;
-}
-
-.line-flash {
-  background-color: rgba(255, 200, 0, 0.15);
-  transition: background-color 2s ease-out;
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 @keyframes slide-in-right {
@@ -58,4 +200,150 @@
 
 .animate-slide-in-right {
   animation: slide-in-right 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.xi-bubble {
+  background-color: #272a32;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.xi-bubble-user {
+  background-color: #2a2d33;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.xi-glass {
+  background-color: rgba(30, 32, 38, 0.88);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.xi-surface {
+  background-color: #1e2026;
+  border: 1px solid #2c2f36;
+  border-radius: 6px;
+}
+
+@layer utilities {
+  .text-white { color: #e5e7eb; }
+  .text-gray-300 { color: #6b7280; }
+  :root.light .text-white { color: #ffffff; }
+  :root.light .text-gray-300 { color: #d1d5db; }
+}
+
+.xi-titlebar {
+  background: linear-gradient(180deg, #1e2026 0%, #1a1c22 100%);
+}
+
+.line-flash {
+  background-color: rgba(54, 211, 153, 0.12);
+  transition: background-color 2s ease-out;
+}
+
+:root.light body {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+:root.light ::selection {
+  background-color: rgba(59, 130, 246, 0.20);
+  color: #111827;
+}
+
+:root.light ::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+}
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+:root.light :focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+}
+
+:root.light [contenteditable]:focus-visible,
+:root.light [contenteditable]:focus,
+:root.light input:focus-visible,
+:root.light input:focus,
+:root.light textarea:focus-visible,
+:root.light textarea:focus {
+  outline: none;
+}
+
+:root.light .prose {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: #111827;
+  --tw-prose-lead: #6b7280;
+  --tw-prose-links: #2563eb;
+  --tw-prose-bold: #111827;
+  --tw-prose-counters: #6b7280;
+  --tw-prose-bullets: #d1d5db;
+  --tw-prose-hr: #e5e7eb;
+  --tw-prose-quotes: #4b5563;
+  --tw-prose-quote-borders: #2563eb;
+  --tw-prose-captions: #9ca3af;
+  --tw-prose-code: #2563eb;
+  --tw-prose-pre-code: #374151;
+  --tw-prose-pre-bg: #f6f8fa;
+  --tw-prose-th-borders: #e5e7eb;
+  --tw-prose-td-borders: #e5e7eb;
+}
+
+:root.light .shiki-highlight pre {
+  background: #f6f8fa !important;
+}
+
+:root.light .shiki-highlight .line::before {
+  color: #d1d5db;
+}
+
+:root.light .shiki-highlight .line:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+:root.light .xi-bubble {
+  background-color: #f3f4f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+:root.light .xi-bubble-user {
+  background-color: #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+:root.light .xi-glass {
+  background-color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+:root.light .xi-surface {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+:root.light .xi-titlebar {
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+:root.light .line-flash {
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+@keyframes xi-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0); }
+}
+
+.xi-pulse-ring {
+  animation: xi-pulse-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes xi-row-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }

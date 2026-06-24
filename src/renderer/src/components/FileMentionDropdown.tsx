@@ -20,7 +20,7 @@ export default function FileMentionDropdown({ files, selectedIndex, onSelect, vi
   if (!visible || files.length === 0) return null
 
   return (
-    <div className="absolute bottom-full left-0 mb-1 w-full max-h-[240px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl z-50 py-1">
+    <div className="absolute bottom-full left-0 mb-1 w-full max-h-[240px] overflow-y-auto xi-glass rounded-lg z-50 py-1">
       {files.length === 0 ? (
         <div className="px-3 py-2 text-xs text-gray-400">No files found</div>
       ) : (
@@ -28,7 +28,7 @@ export default function FileMentionDropdown({ files, selectedIndex, onSelect, vi
           <button
             key={file.path}
             ref={i === selectedIndex ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors duration-150 ${
               i === selectedIndex
                 ? 'bg-blue-50 text-blue-900'
                 : 'text-gray-700 hover:bg-gray-50'

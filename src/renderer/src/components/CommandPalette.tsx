@@ -122,7 +122,7 @@ export default function CommandPalette({
       label="Command Palette"
       loop
       overlayClassName="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
-      contentClassName="fixed top-[15vh] left-1/2 -translate-x-1/2 w-[560px] max-h-[min(480px,60vh)] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50"
+      contentClassName="fixed top-[15vh] left-1/2 -translate-x-1/2 w-[560px] max-h-[min(480px,60vh)] xi-glass rounded-xl flex flex-col overflow-hidden z-50"
     >
         <VisuallyHidden>
           <Title>Command Palette</Title>
@@ -153,7 +153,7 @@ export default function CommandPalette({
                   value={`session:${s.name}:${s.filePath}`}
                   keywords={[s.summary, s.firstUserMessage]}
                   onSelect={() => handleSessionSelect(s.filePath)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer transition-colors duration-150 data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                 >
                   <SessionIcon className="w-4 h-4 text-gray-400 shrink-0" />
                   <span className="truncate flex-1">{s.name || 'Untitled'}</span>
@@ -171,7 +171,7 @@ export default function CommandPalette({
                   value={`folder:${f.relativePath}`}
                   keywords={[f.name, f.relativePath]}
                   onSelect={() => {}}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer transition-colors duration-150 data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                 >
                   <FolderIcon className="w-4 h-4 text-gray-400 shrink-0" />
                   <span className="truncate flex-1">{f.relativePath}</span>
@@ -189,7 +189,7 @@ export default function CommandPalette({
                   value={`file:${f.relativePath}`}
                   keywords={[f.name, f.relativePath]}
                   onSelect={() => handleFileSelect(f.path)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer transition-colors duration-150 data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                 >
                   <FileIcon className="w-4 h-4 text-gray-400 shrink-0" />
                   <span className="truncate flex-1">{f.relativePath}</span>
@@ -210,7 +210,7 @@ export default function CommandPalette({
                   value={`cmd:${cmd.label}:${cmd.id}`}
                   keywords={cmd.keywords}
                   onSelect={() => handleCommandSelect(cmd.id)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 cursor-pointer transition-colors duration-150 data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                 >
                   <CommandIcon className="w-4 h-4 text-gray-400 shrink-0" />
                   <span className="truncate flex-1">{cmd.label}</span>

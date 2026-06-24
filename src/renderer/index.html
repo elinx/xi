@@ -8,6 +8,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="../build/icon/16.png">
   </head>
   <body class="bg-white text-gray-900">
+    <script>
+      (function() {
+        var t = localStorage.getItem('xi-settings-theme') || 'system';
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (!isDark) document.documentElement.classList.add('light');
+      })();
+    </script>
     <style>
       * { -webkit-touch-callout: none; }
     </style>

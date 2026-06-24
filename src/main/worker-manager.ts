@@ -242,6 +242,10 @@ export class WorkerManager extends EventEmitter {
     bridge.on('error', (err: Error) => {
       this.emit('error', err)
     })
+
+    bridge.on('subagent:run', (data: unknown) => {
+      this.emit('subagent:run', { ...(data as Record<string, unknown>), senderSessionPath: state.sessionPath })
+    })
   }
 
   private async evictLRU(): Promise<void> {

@@ -20,12 +20,12 @@ export default function SessionMentionDropdown({ sessions, selectedIndex, onSele
   if (!visible || sessions.length === 0) return null
 
   return (
-    <div className="absolute bottom-full left-0 mb-1 w-full max-h-[240px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl z-50 py-1">
+    <div className="absolute bottom-full left-0 mb-1 w-full max-h-[240px] overflow-y-auto xi-glass rounded-lg z-50 py-1">
       {sessions.map((session, i) => (
         <button
           key={session.filePath}
           ref={i === selectedIndex ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors duration-150 ${
             i === selectedIndex
               ? 'bg-purple-50 text-purple-900'
               : 'text-gray-700 hover:bg-gray-50'
