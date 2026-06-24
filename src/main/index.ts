@@ -925,6 +925,28 @@ function registerIpcHandlers(): void {
     }
   })
 
+  async function switchToProject(newCwd: string): Promise<{ ok: boolean; error?: string }> {
+    process.chdir(newCwd)
+    resetGit(newCwd)
+    sessionService.clearPendingNames()
+    try {
+      await workerManager?.disposeAll()
+    } catch {}
+    workerManager = null
+    let mainSession = sessionService.findMainSession(newCwd)
+    if (mainSession && !mainSession.name) {
+      sessionService.nameSession(mainSession.filePath, 'main')
+      mainSession = { ...mainSession, name: 'main' }
+    }
+    initWorkerManager(mainSession?.filePath)
+    try {
+      await workerManager!.initPrimary(newCwd, initialSessionPath)
+      return { ok: true }
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
   ipcMain.handle('project:openDirectory', async () => {
     try {
       const win = BrowserWindow.getFocusedWindow()
@@ -935,28 +957,17 @@ function registerIpcHandlers(): void {
         return { ok: false }
       }
       const newCwd = result.filePaths[0]
-      process.chdir(newCwd)
-      resetGit(newCwd)
-      sessionService.clearPendingNames()
-      try {
-        await workerManager?.disposeAll()
-      } catch {}
-      workerManager = null
-      let mainSession = sessionService.findMainSession(newCwd)
-      if (mainSession && !mainSession.name) {
-        sessionService.nameSession(mainSession.filePath, 'main')
-        mainSession = { ...mainSession, name: 'main' }
-      }
-      initWorkerManager(mainSession?.filePath)
-      try {
-        await workerManager!.initPrimary(newCwd, initialSessionPath)
-        return { ok: true }
-      } catch (err: unknown) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) }
-      }
+      return switchToProject(newCwd)
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('project:openPath', async (_event, path: string) => {
+    if (!path || !existsSync(path)) {
+      return { ok: false, error: 'Path does not exist' }
+    }
+    return switchToProject(path)
   })
 
   ipcMain.handle('pi:stop', async () => {

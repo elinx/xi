@@ -122,6 +122,9 @@ const api = {
   openDirectory: (): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('project:openDirectory'),
 
+  openProjectPath: (path: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:openPath', path),
+
   getMessagesForSession: (sessionPath: string): Promise<unknown[]> =>
     ipcRenderer.invoke('session:getMessagesForSession', sessionPath),
 

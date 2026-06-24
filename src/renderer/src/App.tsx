@@ -866,12 +866,17 @@ function App(): React.ReactElement {
                           onClick={async () => {
                             setShowRecentProjects(false)
                             if (p.path === (projects[0]?.projectPath)) return
-                            const result = await window.api.openDirectory()
+                            const result = await window.api.openProjectPath(p.path)
+                            if (!result?.ok) return
                             sessionCache.clearAllCaches()
                             setMessageQueue([])
                             resetTabs()
                             await refresh()
                             refreshFileIndex(true)
+                            fetchSkills()
+                            const fsApi = window.api as typeof window.api & { watchStop?: () => Promise<{ ok: boolean }>; watchStart?: () => Promise<{ ok: boolean }> }
+                            try { await fsApi.watchStop?.() } catch {}
+                            try { await fsApi.watchStart?.() } catch {}
                           }}
                           className={`w-full px-3 py-1.5 text-xs text-left hover:bg-gray-100 transition-colors ${p.path === (projects[0]?.projectPath) ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
                           title={p.path}
