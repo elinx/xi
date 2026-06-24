@@ -244,7 +244,7 @@ export class WorkerManager extends EventEmitter {
     })
 
     bridge.on('subagent:run', (data: unknown) => {
-      this.emit('subagent:run', data)
+      this.emit('subagent:run', { ...(data as Record<string, unknown>), senderSessionPath: state.sessionPath })
     })
   }
 

@@ -99,7 +99,7 @@ export class PiSDKBridge extends EventEmitter {
 
     const child = utilityProcess.fork(workerPath, [], {
       serviceName: `pi-sdk-${this.sessionId}`,
-      stdio: 'pipe',
+      stdio: 'inherit',
       env: { ...process.env },
     }) as unknown as UtilityChild
 
@@ -227,7 +227,7 @@ export class PiSDKBridge extends EventEmitter {
       }
 
       case 'subagent:run': {
-        this.emit('subagent:run', msg)
+        this.emit('subagent:run', { ...msg, senderSessionId: this.sessionId })
         break
       }
 

@@ -175,10 +175,11 @@ function initWorkerManager(sessionPath?: string): void {
   })
 
   workerManager.on('subagent:run', async (data: unknown) => {
-    const msg = data as { toolCallId: string; task: string; parentSessionFile: string }
+    const msg = data as { toolCallId: string; task: string; parentSessionFile: string; senderSessionPath?: string }
     const { toolCallId, task, parentSessionFile } = msg
-    const cwd = projectPath
+    const senderSessionPath = msg.senderSessionPath ?? ''
 
+    const cwd = projectPath
     const sessionDir = sessionService.getSessionDir(cwd)
     const subSessionPath = sessionService.createSessionFile(sessionDir, cwd, 'subagent', parentSessionFile)
     sessionService.setSessionOrigin(subSessionPath, 'subagent')
@@ -199,10 +200,16 @@ function initWorkerManager(sessionPath?: string): void {
     try {
       const worker = await workerManager!.getOrCreateSecondary(subSessionPath, cwd)
 
-      const agentEndPromise = new Promise<void>((resolve) => {
+      const agentEndPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          workerManager?.off('event', handler)
+          reject(new Error('Subagent timed out (5 min)'))
+        }, 5 * 60 * 1000)
+
         const handler = (eventData: unknown) => {
           const evt = eventData as Record<string, unknown>
           if (evt.type === 'agent_end' && evt.sessionPath === subSessionPath) {
+            clearTimeout(timeout)
             workerManager?.off('event', handler)
             resolve()
           }
@@ -235,8 +242,8 @@ function initWorkerManager(sessionPath?: string): void {
         }
       }
 
-      const primary = workerManager?.getPrimary()
-      primary?.bridge.sendCommand({
+      const sender = (senderSessionPath ? workerManager?.get(senderSessionPath) : null) ?? workerManager?.getPrimary()
+      sender?.bridge.sendCommand({
         type: 'subagent:result',
         toolCallId,
         result: {
@@ -245,8 +252,8 @@ function initWorkerManager(sessionPath?: string): void {
         },
       })
     } catch (err) {
-      const primary = workerManager?.getPrimary()
-      primary?.bridge.sendCommand({
+      const sender = (senderSessionPath ? workerManager?.get(senderSessionPath) : null) ?? workerManager?.getPrimary()
+      sender?.bridge.sendCommand({
         type: 'subagent:result',
         toolCallId,
         error: err instanceof Error ? err.message : String(err),
