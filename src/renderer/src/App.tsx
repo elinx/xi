@@ -853,7 +853,7 @@ function App(): React.ReactElement {
             {!leftPanelCollapsed && (
              <div
                className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
-               style={{ width: leftPanelWidth, paddingTop: isMac ? '18px' : '0', paddingLeft: isMac ? '72px' : undefined }}
+                style={{ width: leftPanelWidth, paddingLeft: isMac ? '96px' : undefined }}
               >
                 <div className="relative flex items-center gap-1 min-w-0" ref={recentProjectsRef}>
                   <button
@@ -925,7 +925,7 @@ function App(): React.ReactElement {
                 </div>
              </div>
            )}
-             <div className="flex items-center flex-1 px-4 min-w-0 gap-2 h-full" style={{ paddingTop: isMac ? '18px' : '0', paddingLeft: isMac && leftPanelCollapsed ? '72px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
+              <div className="flex items-center flex-1 px-4 min-w-0 gap-2 h-full" style={{ paddingLeft: isMac && leftPanelCollapsed ? '96px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
 
               {error && (
                 <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 border border-red-200 max-w-[200px] truncate" title={error}>

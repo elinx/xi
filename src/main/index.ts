@@ -80,7 +80,7 @@ function createWindow(): void {
     backgroundColor: '#16181d',
     titleBarStyle: isMac ? 'hidden' : undefined,
     ...(isMac
-      ? { trafficLightPosition: { x: 12, y: 10 } }
+      ? { trafficLightPosition: { x: 12, y: 17 } }
       : { frame: false }),
     autoHideMenuBar: true,
     icon: iconPath,
