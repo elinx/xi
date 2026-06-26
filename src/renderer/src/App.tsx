@@ -789,6 +789,14 @@ function App(): React.ReactElement {
   }, [activeTab?.type, setRightPanelView])
 
   const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+  const [isMaximized, setIsMaximized] = useState(false)
+
+  useEffect(() => {
+    window.api.windowIsMaximized().then(setIsMaximized)
+    const cleanup = window.api.onMaximizedChanged((maximized: boolean) => setIsMaximized(maximized))
+    return cleanup
+  }, [])
+
   const projects = sessions?.projects ?? []
   const projectPath = projects[0]?.projectPath
 
@@ -841,11 +849,11 @@ function App(): React.ReactElement {
 
    return (
          <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-gray-900">
-           <div className="flex border-b border-gray-200 xi-titlebar h-16 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+           <div className="flex border-b border-gray-200 xi-titlebar h-12 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
             {!leftPanelCollapsed && (
              <div
                className="flex items-center justify-between px-3 flex-shrink-0 border-r border-gray-200 h-full"
-               style={{ width: leftPanelWidth, paddingTop: isMac ? '28px' : '0' }}
+               style={{ width: leftPanelWidth, paddingTop: isMac ? '18px' : '0', paddingLeft: isMac ? '72px' : undefined }}
               >
                 <div className="relative flex items-center gap-1 min-w-0" ref={recentProjectsRef}>
                   <button
@@ -917,7 +925,7 @@ function App(): React.ReactElement {
                 </div>
              </div>
            )}
-             <div className="flex items-center flex-1 px-4 min-w-0 gap-3 h-full" style={{ paddingTop: isMac ? '28px' : '0', paddingLeft: isMac && leftPanelCollapsed ? '76px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
+             <div className="flex items-center flex-1 px-4 min-w-0 gap-2 h-full" style={{ paddingTop: isMac ? '18px' : '0', paddingLeft: isMac && leftPanelCollapsed ? '72px' : undefined, WebkitAppRegion: 'drag' } as React.CSSProperties}>
 
               {error && (
                 <span className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 border border-red-200 max-w-[200px] truncate" title={error}>
@@ -1063,6 +1071,47 @@ function App(): React.ReactElement {
                 </div>
 
            </div>
+
+           {/* Window controls for Windows/Linux */}
+           {!isMac && (
+             <div className="flex items-stretch h-full ml-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+               <button
+                 onClick={() => window.api.windowMinimize()}
+                 className="flex items-center justify-center w-[46px] h-full hover:bg-gray-200/60 active:bg-gray-300/70 transition-colors text-gray-500"
+                 title="Minimize"
+               >
+                 <svg className="w-[12px] h-[12px]" viewBox="0 0 12 12">
+                   <rect x="1" y="5.5" width="10" height="1" fill="currentColor" />
+                 </svg>
+               </button>
+               <button
+                 onClick={() => window.api.windowMaximize()}
+                 className="flex items-center justify-center w-[46px] h-full hover:bg-gray-200/60 active:bg-gray-300/70 transition-colors text-gray-500"
+                 title={isMaximized ? 'Restore' : 'Maximize'}
+               >
+                 {isMaximized ? (
+                   <svg className="w-[12px] h-[12px]" viewBox="0 0 12 12">
+                     <rect x="1.5" y="3" width="8" height="8" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1" />
+                     <rect x="2.5" y="1.5" width="8" height="8" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1" />
+                   </svg>
+                 ) : (
+                   <svg className="w-[12px] h-[12px]" viewBox="0 0 12 12">
+                     <rect x="1" y="1" width="10" height="10" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1" />
+                   </svg>
+                 )}
+               </button>
+               <button
+                 onClick={() => window.api.windowClose()}
+                 className="flex items-center justify-center w-[46px] h-full hover:bg-red-500 hover:text-white active:bg-red-600 transition-colors text-gray-500"
+                 title="Close"
+               >
+                 <svg className="w-[12px] h-[12px]" viewBox="0 0 12 12">
+                   <line x1="1" y1="1" x2="11" y2="11" stroke="currentColor" strokeWidth="1.2" />
+                   <line x1="11" y1="1" x2="1" y2="11" stroke="currentColor" strokeWidth="1.2" />
+                 </svg>
+               </button>
+             </div>
+           )}
          </div>
 
           <div className="flex flex-1 overflow-hidden">

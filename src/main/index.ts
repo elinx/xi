@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, dialog, shell, Menu } from 'electron'
 import { join, basename, extname, dirname, resolve } from 'path'
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { execFile } from 'child_process'
@@ -73,11 +73,16 @@ async function withRetry<T>(fn: (git: SimpleGit) => Promise<T>, retries = 2, del
 
 function createWindow(): void {
   const iconPath = join(__dirname, 'icon.png')
+  const isMac = process.platform === 'darwin'
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     backgroundColor: '#16181d',
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: isMac ? 'hidden' : undefined,
+    ...(isMac
+      ? { trafficLightPosition: { x: 12, y: 10 } }
+      : { frame: false }),
+    autoHideMenuBar: true,
     icon: iconPath,
     show: false,
     webPreferences: {
@@ -96,6 +101,14 @@ function createWindow(): void {
 
   mainWindow.webContents.on('context-menu', (event) => {
     event.preventDefault()
+  })
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximizedChanged', true)
+  })
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximizedChanged', false)
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -887,6 +900,28 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('window:minimize', () => {
+    BrowserWindow.getFocusedWindow()?.minimize()
+  })
+
+  ipcMain.handle('window:maximize', () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return
+    if (win.isMaximized()) {
+      win.unmaximize()
+    } else {
+      win.maximize()
+    }
+  })
+
+  ipcMain.handle('window:close', () => {
+    BrowserWindow.getFocusedWindow()?.close()
+  })
+
+  ipcMain.handle('window:isMaximized', () => {
+    return BrowserWindow.getFocusedWindow()?.isMaximized() ?? false
   })
 
   ipcMain.handle('pi:start', async () => {
@@ -2213,6 +2248,9 @@ function registerIpcHandlers(): void {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark'
+
+  // Remove the application menu entirely (no menus visible even with Alt key)
+  Menu.setApplicationMenu(null)
 
   // Restore last project cwd if available and current cwd doesn't match
   try {

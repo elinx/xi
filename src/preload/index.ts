@@ -397,6 +397,27 @@ const api = {
 
   saveLastSession: (sessionPath: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('session:saveLastSession', sessionPath),
+
+  windowMinimize: (): void => {
+    ipcRenderer.invoke('window:minimize')
+  },
+
+  windowMaximize: (): void => {
+    ipcRenderer.invoke('window:maximize')
+  },
+
+  windowClose: (): void => {
+    ipcRenderer.invoke('window:close')
+  },
+
+  windowIsMaximized: (): Promise<boolean> =>
+    ipcRenderer.invoke('window:isMaximized'),
+
+  onMaximizedChanged: (callback: (maximized: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized)
+    ipcRenderer.on('window:maximizedChanged', handler)
+    return () => ipcRenderer.removeListener('window:maximizedChanged', handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)
