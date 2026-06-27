@@ -11,9 +11,11 @@ import type {
   ImageBlock,
   HtmlBlock,
   Annotation,
+  ChangeAnchor,
 } from '../types/message'
 import ChatContextMenu from './ChatContextMenu'
 import SkillBlockRenderer from './SkillBlockRenderer'
+import ForkAskDialog from './ForkAskDialog'
 import type { ForkableMessage, ForkPoint } from '../types/session'
 import { ImageAnnotator, annotationsToPrompt } from './ImageAnnotator'
 import type { ImageAnnotatorHandle } from './ImageAnnotator'
@@ -46,6 +48,7 @@ interface ChatViewProps {
   sessionSummary?: string | null
   onSetSessionSummary?: (sessionPath: string, summary: string) => Promise<boolean>
   currentSessionPathForSummary?: string | null
+  onForkAskConfirm?: (anchor: ChangeAnchor, sessionName: string, question: string) => void
 }
 
 function CopyButton({ blocks }: { blocks: ContentBlock[] }): React.ReactElement {
@@ -365,6 +368,56 @@ function ThinkingBlockRenderer({ content, isStreaming }: { content: string; isSt
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function buildChangeAnchor(toolCall: ToolCallBlock, explanation?: string): ChangeAnchor | null {
+  const filePath = typeof toolCall.args.path === 'string' ? toolCall.args.path : ''
+  if (!filePath) return null
+
+  if (toolCall.toolName === 'edit') {
+    let oldText = ''
+    let newText = ''
+    if (Array.isArray(toolCall.args.edits)) {
+      const edits = toolCall.args.edits as Array<{ oldText?: string; newText?: string }>
+      oldText = edits.map((e) => e.oldText ?? '').join('\n')
+      newText = edits.map((e) => e.newText ?? '').join('\n')
+    } else {
+      oldText = typeof toolCall.args.oldText === 'string' ? toolCall.args.oldText : ''
+      newText = typeof toolCall.args.newText === 'string' ? toolCall.args.newText : ''
+    }
+    return { toolCallId: toolCall.toolCallId, toolName: 'edit', filePath, oldText, newText, explanation }
+  }
+
+  if (toolCall.toolName === 'write') {
+    const content = typeof toolCall.args.content === 'string' ? toolCall.args.content : ''
+    return { toolCallId: toolCall.toolCallId, toolName: 'write', filePath, newText: content, explanation }
+  }
+
+  return null
+}
+
+function ExplanationBlockRenderer({ content, anchor, onForkAsk }: { content: string; anchor: ChangeAnchor; onForkAsk: (anchor: ChangeAnchor) => void }): React.ReactElement {
+  return (
+    <div className="rounded-md border-l-2 border-cyan-400 bg-cyan-50/5 pl-3 py-1.5 pr-2">
+      <div className="flex items-start gap-1.5">
+        <span className="text-xs mt-0.5">💬</span>
+        <div className="flex-1 min-w-0">
+          <div className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-300">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent }}>{content}</ReactMarkdown>
+          </div>
+          <button
+            onClick={() => onForkAsk(anchor)}
+            className="mt-1 inline-flex items-center gap-0.5 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors duration-150"
+          >
+            追问
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -858,6 +911,7 @@ function MergedBlocksRenderer({
   onFileSelect,
   onSessionSelect,
   sessionNames,
+  onForkAsk,
 }: {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -869,6 +923,7 @@ function MergedBlocksRenderer({
   onFileSelect?: (filePath: string) => void
   onSessionSelect?: (sessionName: string) => void
   sessionNames?: Set<string>
+  onForkAsk?: (anchor: ChangeAnchor) => void
 }): React.ReactElement {
   // Flatten all blocks, track which message each came from
   const allBlocks: { block: ContentBlock; msgId: string; blockIdx: number; isUser: boolean }[] = []
@@ -922,6 +977,30 @@ function MergedBlocksRenderer({
       continue
     }
 
+    if (block.type === 'text' && (block as TextBlock).subtype === 'explanation' && onForkAsk) {
+      let toolCallBlock: ToolCallBlock | null = null
+      for (let k = j - 1; k >= 0; k--) {
+        if (allBlocks[k].block.type === 'tool_call') {
+          toolCallBlock = allBlocks[k].block as ToolCallBlock
+          break
+        }
+      }
+      if (toolCallBlock) {
+        const anchor = buildChangeAnchor(toolCallBlock, block.content)
+        if (anchor) {
+          elements.push(
+            <ExplanationBlockRenderer
+              key={`expl-${msgId}-${blockIdx}`}
+              content={block.content}
+              anchor={anchor}
+              onForkAsk={onForkAsk}
+            />
+          )
+          continue
+        }
+      }
+    }
+
     elements.push(
       <ContentBlockRenderer
         key={`cb-${msgId}-${blockIdx}`}
@@ -960,6 +1039,7 @@ function MessageBlocksRenderer({
   onFileSelect,
   onSessionSelect,
   sessionNames,
+  onForkAsk,
 }: {
   msg: ChatMessage
   isStreaming: boolean
@@ -971,6 +1051,7 @@ function MessageBlocksRenderer({
   onFileSelect?: (filePath: string) => void
   onSessionSelect?: (sessionName: string) => void
   sessionNames?: Set<string>
+  onForkAsk?: (anchor: ChangeAnchor) => void
 }): React.ReactElement {
   const toolResultById = new Map<string, number>()
   for (let j = 0; j < msg.blocks.length; j++) {
@@ -1012,6 +1093,30 @@ function MessageBlocksRenderer({
         <OrphanToolResultRenderer key={`tr-${msg.id}-${j}`} block={block} />
       )
       continue
+    }
+
+    if (block.type === 'text' && (block as TextBlock).subtype === 'explanation' && onForkAsk) {
+      let toolCallBlock: ToolCallBlock | null = null
+      for (let k = j - 1; k >= 0; k--) {
+        if (msg.blocks[k].type === 'tool_call') {
+          toolCallBlock = msg.blocks[k] as ToolCallBlock
+          break
+        }
+      }
+      if (toolCallBlock) {
+        const anchor = buildChangeAnchor(toolCallBlock, block.content)
+        if (anchor) {
+          elements.push(
+            <ExplanationBlockRenderer
+              key={`expl-${msg.id}-${j}`}
+              content={block.content}
+              anchor={anchor}
+              onForkAsk={onForkAsk}
+            />
+          )
+          continue
+        }
+      }
     }
 
     elements.push(
@@ -1165,7 +1270,7 @@ function ForkNameInput({
 }
 
 /** Collapsible agent content within Turn mode */
-function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingTarget, onEnterAnnotation, onExitAnnotation, onSendFeedback, onFileSelect, onSessionSelect, sessionNames, isStreaming, streamingMessageId, forkPoints, onForkClick, forkInputMessageId, forkEntryId, onForkClose, onForkAtEntry, onQuoteMessage, onForwardClick, sessions }: {
+function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingTarget, onEnterAnnotation, onExitAnnotation, onSendFeedback, onFileSelect, onSessionSelect, sessionNames, isStreaming, streamingMessageId, forkPoints, onForkClick, forkInputMessageId, forkEntryId, onForkClose, onForkAtEntry, onQuoteMessage, onForwardClick, sessions, onForkAsk }: {
   turn: ConversationTurn
   isExpanded: boolean
   onToggleExpand: () => void
@@ -1187,6 +1292,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
   onQuoteMessage?: (messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => void
   onForwardClick?: (messageId: string, role: 'user' | 'assistant', content: string) => void
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
+  onForkAsk?: (anchor: ChangeAnchor) => void
 }): React.ReactElement {
   const allBlocks = turn.assistantMessages.flatMap((m) => m.blocks)
   const textBlocks = allBlocks.filter((b): b is TextBlock => b.type === 'text' && !b.subtype)
@@ -1213,6 +1319,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
             onFileSelect={onFileSelect}
             onSessionSelect={onSessionSelect}
             sessionNames={sessionNames}
+            onForkAsk={onForkAsk}
           />
         ) : (
           <div className="relative max-h-[4.8em] overflow-hidden">
@@ -1227,6 +1334,7 @@ function CollapsibleAgentContent({ turn, isExpanded, onToggleExpand, annotatingT
               onFileSelect={onFileSelect}
               onSessionSelect={onSessionSelect}
               sessionNames={sessionNames}
+              onForkAsk={onForkAsk}
             />
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent" />
           </div>
@@ -1282,6 +1390,7 @@ function TurnCard({
   sessions,
   captureEnabled,
   onInspect,
+  onForkAsk,
 }: {
   turn: ConversationTurn
   isFirst: boolean
@@ -1308,6 +1417,7 @@ function TurnCard({
   sessions?: Array<{ filePath: string; name: string | null; isMain: boolean }>
   captureEnabled?: boolean
   onInspect?: (messageId: string) => void
+  onForkAsk?: (anchor: ChangeAnchor) => void
 }): React.ReactElement {
   const userSummary = getUserSummary(turn.userMessage)
   const allUserBlocks = turn.userMessage.blocks
@@ -1439,6 +1549,7 @@ function TurnCard({
             onFileSelect={onFileSelect}
             onSessionSelect={onSessionSelect}
             sessionNames={sessionNames}
+            onForkAsk={onForkAsk}
           />
         </div>
         <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-blue-500">
@@ -1475,6 +1586,7 @@ function TurnCard({
               onQuoteMessage={onQuoteMessage}
               onForwardClick={onForwardClick}
               sessions={sessions}
+              onForkAsk={onForkAsk}
             />
           </div>
         </div>
@@ -1723,7 +1835,7 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
   )
 }
 
-function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onSessionSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary }: ChatViewProps): React.ReactElement {
+function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onSessionSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary, onForkAskConfirm }: ChatViewProps): React.ReactElement {
   // Pre-compute session name set for mention validation
   const sessionNames = useMemo(() => new Set((sessions ?? []).map(s => s.name).filter(Boolean) as string[]), [sessions])
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -1759,6 +1871,11 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
     messageBlocks: ContentBlock[]
     selectedText?: string
   } | null>(null)
+  const [forkAskAnchor, setForkAskAnchor] = useState<ChangeAnchor | null>(null)
+
+  const handleForkAsk = useCallback((anchor: ChangeAnchor) => {
+    setForkAskAnchor(anchor)
+  }, [])
 
   const handleEnterAnnotation = useCallback((messageId: string, blockIndex: number) => {
     setAnnotatingTarget({ messageId, blockIndex })
@@ -2130,9 +2247,9 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       onClose={() => { setForkInputMessageId(null); setForkEntryId(null) }}
                       defaultEntryId={forkEntryId}
                     />
-                  )}
-                </div>
-              )
+      )}
+    </div>
+  )
 
               return isUser ? (
                 <div
@@ -2154,6 +2271,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                       onFileSelect={onFileSelect}
                       onSessionSelect={onSessionSelect}
                       sessionNames={sessionNames}
+                      onForkAsk={handleForkAsk}
                     />
                     {msgForkPoints.length > 0 && (
                       <div className="mt-1 flex flex-wrap justify-end gap-1.5">
@@ -2198,6 +2316,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
                         onFileSelect={onFileSelect}
                         onSessionSelect={onSessionSelect}
                         sessionNames={sessionNames}
+                        onForkAsk={handleForkAsk}
                       />
                       {msgForkPoints.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1.5">
@@ -2256,6 +2375,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
               sessions={sessions}
               captureEnabled={captureEnabled}
               onInspect={(id) => { handleInspect(id) }}
+              onForkAsk={handleForkAsk}
             />
           ))}
           <div ref={bottomRef} />
@@ -2318,6 +2438,16 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
             setForwardingMessage(null)
           }}
           onClose={() => setForwardingMessage(null)}
+        />
+      )}
+      {forkAskAnchor && onForkAskConfirm && (
+        <ForkAskDialog
+          anchor={forkAskAnchor}
+          onConfirm={(sessionName, question) => {
+            onForkAskConfirm(forkAskAnchor, sessionName, question)
+            setForkAskAnchor(null)
+          }}
+          onClose={() => setForkAskAnchor(null)}
         />
       )}
       {contextMenu && createPortal(

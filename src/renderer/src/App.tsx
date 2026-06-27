@@ -19,7 +19,7 @@ import SettingsPanel from './components/SettingsPanel'
 import SkillViewer from './components/SkillViewer'
 import CommandPalette from './components/CommandPalette'
 import type { ViewMode } from './utils/compact-view'
-import type { ChatMessage, TextBlock } from './types/message'
+import type { ChatMessage, TextBlock, ChangeAnchor } from './types/message'
 import type { ForkPoint, SessionTreeNode } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
@@ -443,6 +443,53 @@ function App(): React.ReactElement {
       window.api.saveLastSession(newPath)
     }
   }, [abort, getForkMessages, forkAtEntry, newSession, refresh, isPiStreaming])
+
+  const handleForkAskConfirm = useCallback(async (anchor: ChangeAnchor, sessionName: string, question: string) => {
+    try {
+    const currentPath = displayedSessionPathRef.current
+    if (isPiStreaming()) {
+      await abort(currentPath)
+    }
+    const msgs = await getForkMessages(currentPath)
+    const lastEntry = msgs[msgs.length - 1]
+
+    let newPath: string | null = null
+    if (lastEntry?.entryId) {
+      newPath = await forkAtEntry(currentPath, lastEntry.entryId, sessionName)
+    }
+    if (!newPath) {
+      newPath = await newSession(currentPath, sessionName, currentPath ?? undefined)
+    }
+    if (!newPath) {
+      console.error('[ForkAsk] Failed to create fork/session')
+      return
+    }
+
+    await refresh()
+    await displaySessionRef.current(newPath)
+    const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+    if (apiWithWorker.workerEnsureReady) {
+      await apiWithWorker.workerEnsureReady(newPath)
+    }
+    window.api.saveLastSession(newPath)
+
+    let anchoredText = `[追问修改]\n文件: ${anchor.filePath}\n操作: ${anchor.toolName === 'edit' ? '修改' : '新建/重写'}\n`
+    if (anchor.oldText) {
+      anchoredText += `改动:\n  - ${anchor.oldText}\n  + ${anchor.newText}\n`
+    } else {
+      const preview = anchor.newText.length > 500 ? anchor.newText.slice(0, 500) + '...' : anchor.newText
+      anchoredText += `内容:\n  ${preview}\n`
+    }
+    if (anchor.explanation) {
+      anchoredText += `\nAgent 解释: ${anchor.explanation}\n`
+    }
+    anchoredText += `\n问题: ${question}`
+
+    sendPrompt(newPath, anchoredText)
+    } catch (err) {
+      console.error('[ForkAsk] Error during fork ask:', err)
+    }
+  }, [abort, getForkMessages, forkAtEntry, newSession, refresh, isPiStreaming, sendPrompt])
 
   const handleQuoteMessage = useCallback((messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => {
     setQuotes(prev => {
@@ -1182,6 +1229,7 @@ function App(): React.ReactElement {
                 sessionSummary={activeSession?.summary}
                 onSetSessionSummary={setSessionSummary}
                 currentSessionPathForSummary={activeSessionPath}
+                onForkAskConfirm={handleForkAskConfirm}
               />
             </div>
             {activeTab?.type === 'file' && (
