@@ -455,7 +455,7 @@ function App(): React.ReactElement {
 
     let newPath: string | null = null
     if (lastEntry?.entryId) {
-      newPath = await forkAtEntry(currentPath, lastEntry.entryId, sessionName)
+      newPath = await forkAtEntry(currentPath, lastEntry.entryId, sessionName, 'fork_ask')
     }
     if (!newPath) {
       newPath = await newSession(currentPath, sessionName, currentPath ?? undefined)

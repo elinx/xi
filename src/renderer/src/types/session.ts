@@ -55,7 +55,7 @@ export interface SessionInfo {
   /** First user message text (truncated), for search/preview. null if no user messages. */
   firstUserMessage: string | null
   /** Origin: 'main' for normal sessions, 'subagent' for subagent sessions. */
-  origin: 'main' | 'subagent'
+  origin: 'main' | 'subagent' | 'fork_ask'
   /** Metadata for subagent sessions. null for normal sessions. */
   subagentMeta: SubagentMeta | null
 }

@@ -385,7 +385,21 @@ function SessionNode({
             <span className="flex-shrink-0 w-5" />
           )}
           {node.session.origin === 'subagent' && (
-            <span className="flex-shrink-0 text-amber-500 text-sm leading-none" title="Subagent session">⚡</span>
+            <span className="flex-shrink-0 text-amber-500 leading-none" title="Subagent session">
+              <svg className="w-[14px] h-[14px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="8" r="3" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 20a7 7 0 0114 0" />
+              </svg>
+            </span>
+          )}
+          {node.session.origin === 'fork_ask' && (
+            <span className="flex-shrink-0 text-blue-400 text-sm leading-none" title="追问 session">
+              <svg className="w-[14px] h-[14px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="10" cy="10" r="6.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l4 4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6v4.5l3 2" />
+              </svg>
+            </span>
           )}
           {isRenaming ? (
             <input

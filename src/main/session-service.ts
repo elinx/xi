@@ -138,7 +138,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
     let summary: string | null = null
     let parentSessionPath: string | null = header.parentSession ?? null
     let firstUserMessage: string | null = null
-    let origin: 'main' | 'subagent' = 'main'
+    let origin: 'main' | 'subagent' | 'fork_ask' = 'main'
     let subagentMeta: SubagentMeta | null = null
 
     for (let i = 1; i < lines.length; i++) {
@@ -166,7 +166,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if ('parentSession' in entry) {
             parentSessionPath = typeof entry.parentSession === 'string' ? entry.parentSession : null
           }
-          if (entry.origin === 'main' || entry.origin === 'subagent') {
+          if (entry.origin === 'main' || entry.origin === 'subagent' || entry.origin === 'fork_ask') {
             origin = entry.origin
           }
           if (entry.subagentMeta && typeof entry.subagentMeta === 'object') {
@@ -526,7 +526,7 @@ export function reparentSession(sessionPath: string, newParentPath: string | nul
   }
 }
 
-export function setSessionOrigin(sessionPath: string, origin: 'main' | 'subagent'): boolean {
+export function setSessionOrigin(sessionPath: string, origin: 'main' | 'subagent' | 'fork_ask'): boolean {
   if (!existsSync(sessionPath)) return false
   try {
     const entry = JSON.stringify({ type: 'session_info', origin })

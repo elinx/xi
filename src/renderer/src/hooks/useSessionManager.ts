@@ -4,7 +4,7 @@ import type { SessionListResult, SessionInfo, ForkableMessage, ForkPoint, Sessio
 type ExtendedApi = typeof window.api & SessionIpcApi & {
   workerEnsureReady: (sessionPath: string) => Promise<{ ok: boolean; status?: string; error?: string }>
   newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<{ success: boolean; error?: string }>
-  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string) => Promise<{ success: boolean; text?: string; error?: string }>
+  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string, origin?: 'main' | 'subagent' | 'fork_ask') => Promise<{ success: boolean; text?: string; error?: string; sessionPath?: string }>
   renameSession: (sessionPath: string | null, name: string) => Promise<{ success: boolean; error?: string }>
   clearSession: (sessionPath: string | null) => Promise<{ success: boolean; error?: string }>
   clearMessages: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
@@ -17,7 +17,7 @@ interface UseSessionManagerReturn {
   currentSession: SessionInfo | null
   forkMessages: ForkableMessage[]
   loadSessions: () => Promise<void>
-  forkAtEntry: (sessionPath: string | null, entryId: string, name: string) => Promise<string | null>
+  forkAtEntry: (sessionPath: string | null, entryId: string, name: string, origin?: 'main' | 'subagent' | 'fork_ask') => Promise<string | null>
   switchSession: (sessionPath: string) => Promise<{ success: boolean; error?: string }>
   newSession: (sessionPath: string | null, name: string, parentSessionPath?: string) => Promise<string | null>
   renameSession: (sessionPath: string | null, name: string) => Promise<void>
@@ -66,8 +66,8 @@ export function useSessionManager(isConnected: boolean): UseSessionManagerReturn
     }
   }, [])
 
-  const forkAtEntry = useCallback(async (sessionPath: string | null, entryId: string, name: string) => {
-    const result = await api.forkAtEntry(sessionPath, entryId, name)
+  const forkAtEntry = useCallback(async (sessionPath: string | null, entryId: string, name: string, origin?: 'main' | 'subagent' | 'fork_ask') => {
+    const result = await api.forkAtEntry(sessionPath, entryId, name, origin)
     if (result.success) {
       await loadSessions()
       await loadCurrentSession()

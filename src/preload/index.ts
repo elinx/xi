@@ -77,8 +77,8 @@ const api = {
   getForkMessages: (sessionPath: string | null): Promise<ForkableMessage[]> =>
     ipcRenderer.invoke('session:getForkMessages', sessionPath),
 
-  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string): Promise<{ success: boolean; text?: string; error?: string }> =>
-    ipcRenderer.invoke('session:forkAtEntry', sessionPath, entryId, name),
+  forkAtEntry: (sessionPath: string | null, entryId: string, name?: string, origin?: 'main' | 'subagent' | 'fork_ask'): Promise<{ success: boolean; text?: string; error?: string; sessionPath?: string }> =>
+    ipcRenderer.invoke('session:forkAtEntry', sessionPath, entryId, name, origin),
 
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),

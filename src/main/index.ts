@@ -1050,7 +1050,7 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('session:forkAtEntry', async (_event, sessionPath: string | null, entryId: string, name?: string) => {
+  ipcMain.handle('session:forkAtEntry', async (_event, sessionPath: string | null, entryId: string, name?: string, origin?: 'main' | 'subagent' | 'fork_ask') => {
     const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) {
       return { success: false, error: 'Worker not connected' }
@@ -1083,6 +1083,9 @@ function registerIpcHandlers(): void {
           if (name) {
             sessionService.nameSession(sp, name)
             sessionService.flushPendingName(sp)
+          }
+          if (origin) {
+            sessionService.setSessionOrigin(sp, origin)
           }
         }
       } catch {}

@@ -204,7 +204,7 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
         piEntryId,
       })
     } else if (msg.role === 'toolResult') {
-      prevContentWasToolCall = false
+      prevContentWasToolCall = true
       const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
       if (lastAssistant) {
         const content = msg.content as PiContentBlock[]
