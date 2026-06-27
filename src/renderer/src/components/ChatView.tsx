@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued'
 import type {
   ChatMessage,
   ContentBlock,
@@ -377,17 +378,20 @@ function buildChangeAnchor(toolCall: ToolCallBlock, explanation?: string): Chang
   if (!filePath) return null
 
   if (toolCall.toolName === 'edit') {
-    let oldText = ''
-    let newText = ''
+    const edits: { oldText: string; newText: string }[] = []
     if (Array.isArray(toolCall.args.edits)) {
-      const edits = toolCall.args.edits as Array<{ oldText?: string; newText?: string }>
-      oldText = edits.map((e) => e.oldText ?? '').join('\n')
-      newText = edits.map((e) => e.newText ?? '').join('\n')
+      const rawEdits = toolCall.args.edits as Array<{ oldText?: string; newText?: string }>
+      for (const e of rawEdits) {
+        edits.push({ oldText: e.oldText ?? '', newText: e.newText ?? '' })
+      }
     } else {
-      oldText = typeof toolCall.args.oldText === 'string' ? toolCall.args.oldText : ''
-      newText = typeof toolCall.args.newText === 'string' ? toolCall.args.newText : ''
+      const oldText = typeof toolCall.args.oldText === 'string' ? toolCall.args.oldText : ''
+      const newText = typeof toolCall.args.newText === 'string' ? toolCall.args.newText : ''
+      edits.push({ oldText, newText })
     }
-    return { toolCallId: toolCall.toolCallId, toolName: 'edit', filePath, oldText, newText, explanation }
+    const oldText = edits.map((e) => e.oldText).join('\n')
+    const newText = edits.map((e) => e.newText).join('\n')
+    return { toolCallId: toolCall.toolCallId, toolName: 'edit', filePath, oldText, newText, edits, explanation }
   }
 
   if (toolCall.toolName === 'write') {
@@ -433,6 +437,22 @@ function extractHtmlFromResult(result: ToolResultBlock | undefined): HtmlBlock[]
 const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
+  const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains('light'))
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(!document.documentElement.classList.contains('light'))
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+  const diffBg = isDark ? 'rgba(0, 0, 0, 0.22)' : 'rgba(0, 0, 0, 0.03)'
+  const diffFg = isDark ? '#adbac7' : '#57606a'
+  const diffAddedBg = isDark ? 'rgba(46, 160, 67, 0.16)' : 'rgba(26, 127, 55, 0.12)'
+  const diffAddedFg = isDark ? '#7ee787' : '#1a7f37'
+  const diffRemovedBg = isDark ? 'rgba(248, 81, 73, 0.16)' : 'rgba(207, 34, 46, 0.12)'
+  const diffRemovedFg = isDark ? '#ffa198' : '#cf222e'
+  const diffWordAddedBg = isDark ? 'rgba(46, 160, 67, 0.45)' : 'rgba(26, 127, 55, 0.35)'
+  const diffWordRemovedBg = isDark ? 'rgba(248, 81, 73, 0.45)' : 'rgba(207, 34, 46, 0.35)'
 
   // Tool-specific header info
   const toolIcon: Record<string, string> = {
@@ -577,25 +597,93 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
               {Array.isArray(block.args.edits) ? (
                 (block.args.edits as Array<{ oldText?: string; newText?: string }>).map((edit, i) => (
                   <div key={i} className={Array.isArray(block.args.edits) && (block.args.edits as unknown[]).length > 1 ? 'mb-2 pb-2 border-b border-gray-200 last:border-b-0' : ''}>
-                    <div className="text-xs text-red-400 mb-0.5">- old</div>
-                    <pre className="overflow-x-auto text-xs text-red-400 bg-red-50 rounded border border-red-500/20 px-2 py-1 mb-1 whitespace-pre-wrap">{String(edit.oldText ?? '')}</pre>
-                    <div className="text-xs text-green-400 mb-0.5">+ new</div>
-                    <pre className="overflow-x-auto text-xs text-green-400 bg-green-50 rounded border border-green-500/20 px-2 py-1 whitespace-pre-wrap">{String(edit.newText ?? '')}</pre>
+                    <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                    <ReactDiffViewer
+                      oldValue={String(edit.oldText ?? '')}
+                      newValue={String(edit.newText ?? '')}
+                      splitView={false}
+                      compareMethod={DiffMethod.WORDS}
+                      useDarkTheme={isDark}
+                      hideLineNumbers
+                      hideSummary
+                      styles={{
+                        variables: isDark ? {
+                          dark: {
+                            diffViewerBackground: diffBg,
+                            diffViewerColor: diffFg,
+                            addedBackground: diffAddedBg,
+                            addedColor: diffAddedFg,
+                            removedBackground: diffRemovedBg,
+                            removedColor: diffRemovedFg,
+                            wordAddedBackground: diffWordAddedBg,
+                            wordRemovedBackground: diffWordRemovedBg,
+                            gutterBackground: diffBg,
+                            gutterBackgroundDark: diffBg,
+                          },
+                        } : {
+                          light: {
+                            diffViewerBackground: diffBg,
+                            diffViewerColor: diffFg,
+                            addedBackground: diffAddedBg,
+                            addedColor: diffAddedFg,
+                            removedBackground: diffRemovedBg,
+                            removedColor: diffRemovedFg,
+                            wordAddedBackground: diffWordAddedBg,
+                            wordRemovedBackground: diffWordRemovedBg,
+                            gutterBackground: diffBg,
+                          },
+                        },
+                        contentText: { color: diffFg, fontFamily: 'ui-monospace, monospace', fontSize: '12px', wordBreak: 'break-word' },
+                        line: { padding: '0 8px' },
+                      }}
+                    />
+                    </div>
                   </div>
                 ))
               ) : (
                 <>
-                  {block.args.oldText != null && (
-                    <>
-                      <div className="text-xs text-red-400 mb-0.5">- old</div>
-                      <pre className="overflow-x-auto text-xs text-red-400 bg-red-50 rounded border border-red-500/20 px-2 py-1 mb-1 whitespace-pre-wrap">{String(block.args.oldText)}</pre>
-                    </>
-                  )}
-                  {block.args.newText != null && (
-                    <>
-                      <div className="text-xs text-green-400 mb-0.5">+ new</div>
-                      <pre className="overflow-x-auto text-xs text-green-400 bg-green-50 rounded border border-green-500/20 px-2 py-1 whitespace-pre-wrap">{String(block.args.newText)}</pre>
-                    </>
+                  {block.args.oldText != null && block.args.newText != null && (
+                    <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                    <ReactDiffViewer
+                      oldValue={String(block.args.oldText)}
+                      newValue={String(block.args.newText)}
+                      splitView={false}
+                      compareMethod={DiffMethod.WORDS}
+                      useDarkTheme={isDark}
+                      hideLineNumbers
+                      hideSummary
+                      styles={{
+                        variables: isDark ? {
+                          dark: {
+                            diffViewerBackground: diffBg,
+                            diffViewerColor: diffFg,
+                            addedBackground: diffAddedBg,
+                            addedColor: diffAddedFg,
+                            removedBackground: diffRemovedBg,
+                            removedColor: diffRemovedFg,
+                            wordAddedBackground: diffWordAddedBg,
+                            wordRemovedBackground: diffWordRemovedBg,
+                            gutterBackground: diffBg,
+                            gutterBackgroundDark: diffBg,
+                          },
+                        } : {
+                          light: {
+                            diffViewerBackground: diffBg,
+                            diffViewerColor: diffFg,
+                            addedBackground: diffAddedBg,
+                            addedColor: diffAddedFg,
+                            removedBackground: diffRemovedBg,
+                            removedColor: diffRemovedFg,
+                            wordAddedBackground: diffWordAddedBg,
+                            wordRemovedBackground: diffWordRemovedBg,
+                            gutterBackground: diffBg,
+                          },
+                        },
+                        contentText: { color: diffFg, fontFamily: 'ui-monospace, monospace', fontSize: '12px', wordBreak: 'break-word' },
+                        line: { padding: '0 8px' },
+                      }}
+                    />
+                    </div>
                   )}
                 </>
               )}
@@ -1836,8 +1924,15 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
 }
 
 function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pendingUiRequests, respondToUiRequest, onForkAtEntry, getForkMessages, forkPoints, viewMode, onFileSelect, onSessionSelect, onQuoteMessage, onForwardMessage, currentSessionPath, sessions, onInspectPrompt, captureEnabled, sessionSummary, onSetSessionSummary, currentSessionPathForSummary, onForkAskConfirm }: ChatViewProps): React.ReactElement {
-  // Pre-compute session name set for mention validation
   const sessionNames = useMemo(() => new Set((sessions ?? []).map(s => s.name).filter(Boolean) as string[]), [sessions])
+  const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains('light'))
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(!document.documentElement.classList.contains('light'))
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
@@ -2443,6 +2538,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
       {forkAskAnchor && onForkAskConfirm && (
         <ForkAskDialog
           anchor={forkAskAnchor}
+          isDark={isDark}
           onConfirm={(sessionName, question) => {
             onForkAskConfirm(forkAskAnchor, sessionName, question)
             setForkAskAnchor(null)

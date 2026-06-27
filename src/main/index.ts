@@ -93,17 +93,23 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
-    if (process.env.ELECTRON_RENDERER_URL) {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' })
-    }
   })
 
   mainWindow.on('closed', () => {
     mainWindow = null
   })
 
-  mainWindow.webContents.on('context-menu', (event) => {
+  mainWindow.webContents.on('context-menu', (event, params) => {
     event.preventDefault()
+    if (process.env.ELECTRON_RENDERER_URL) {
+      const menu = Menu.buildFromTemplate([
+        { label: 'Inspect Element', click: () => { mainWindow?.webContents.inspectElement(params.x, params.y) } },
+        { label: 'Toggle DevTools', click: () => { mainWindow?.webContents.toggleDevTools() } },
+        { type: 'separator' },
+        { label: 'Reload', click: () => { mainWindow?.reload() } },
+      ])
+      menu.popup()
+    }
   })
 
   mainWindow.on('maximize', () => {
@@ -2252,8 +2258,26 @@ function registerIpcHandlers(): void {
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark'
 
-  // Remove the application menu entirely (no menus visible even with Alt key)
-  Menu.setApplicationMenu(null)
+  // Keep default macOS menus, append Dev submenu in dev mode
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const defaultMenu = Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'fileMenu' },
+      { role: 'editMenu' },
+      { role: 'viewMenu' },
+      { role: 'windowMenu' },
+      {
+        label: 'Dev',
+        submenu: [
+          { label: 'Toggle DevTools', accelerator: 'CmdOrCtrl+Option+I', click: () => { mainWindow?.webContents.toggleDevTools() } },
+          { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => { mainWindow?.reload() } },
+        ],
+      },
+    ])
+    Menu.setApplicationMenu(defaultMenu)
+  } else {
+    Menu.setApplicationMenu(null)
+  }
 
   // Restore last project cwd if available and current cwd doesn't match
   try {

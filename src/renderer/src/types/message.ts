@@ -87,5 +87,6 @@ export interface ChangeAnchor {
   filePath: string;
   oldText?: string;
   newText: string;
+  edits?: { oldText: string; newText: string }[];
   explanation?: string;
 }
