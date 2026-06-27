@@ -403,17 +403,25 @@ function buildChangeAnchor(toolCall: ToolCallBlock, explanation?: string): Chang
 }
 
 function ExplanationBlockRenderer({ content, anchor, onForkAsk }: { content: string; anchor: ChangeAnchor; onForkAsk: (anchor: ChangeAnchor) => void }): React.ReactElement {
+  const [isDark] = useState(() => !document.documentElement.classList.contains('light'))
   return (
-    <div className="rounded-md border-l-2 border-cyan-400 bg-cyan-50/5 pl-3 py-1.5 pr-2">
+    <div
+      className="rounded-md border-l-2 pl-3 py-1.5 pr-2"
+      style={{ borderColor: '#36d399', backgroundColor: isDark ? 'rgba(54, 211, 153, 0.06)' : 'rgba(54, 211, 153, 0.05)' }}
+    >
       <div className="flex items-start gap-1.5">
         <span className="text-xs mt-0.5">💬</span>
         <div className="flex-1 min-w-0">
-          <div className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-300">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent }}>{content}</ReactMarkdown>
+          <div
+            className="text-xs leading-relaxed"
+            style={{ color: isDark ? '#d1d5db' : '#374151' }}
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent, p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>, ul: ({ children }) => <ul className="list-disc pl-4 mb-1 last:mb-0">{children}</ul>, li: ({ children }) => <li className="mb-0.5">{children}</li> }}>{content}</ReactMarkdown>
           </div>
           <button
             onClick={() => onForkAsk(anchor)}
-            className="mt-1 inline-flex items-center gap-0.5 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors duration-150"
+            className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] transition-colors duration-150"
+            style={{ color: '#36d399' }}
           >
             追问
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
