@@ -609,6 +609,7 @@ Guidelines:
 - Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.
 - Use write only for new files or complete rewrites.
 - Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
+- After each non-trivial edit or write, briefly explain what you changed and why (1-2 sentences). Skip this for trivial changes like formatting fixes or typo corrections. Place this explanation immediately after the tool call in the same response.
 - Be concise in your responses.
 - Show file paths clearly when working with files.
 

@@ -190,6 +190,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
       switch (event.type) {
         case 'agent_start': {
           const cache = getCache(sessionPath)
+          if (cache) cache.lastToolCallId = null
           onSessionStreamingChange(sessionPath, true, cache?.currentAssistantId ?? null)
           break
         }
@@ -261,9 +262,16 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           if (!cache?.currentAssistantId) break
 
           switch (ame.type) {
-            case 'text_start':
-              cache.currentContentBlocks.set(ame.contentIndex, { type: 'text', content: '' })
+            case 'text_start': {
+              const isExplanation = !!cache.lastToolCallId
+              cache.currentContentBlocks.set(ame.contentIndex, {
+                type: 'text',
+                content: '',
+                ...(isExplanation ? { subtype: 'explanation' as const } : {}),
+              })
+              cache.lastToolCallId = null
               break
+            }
 
             case 'text_delta':
               updateContentBlock(sessionPath, ame.contentIndex, (block) => {
@@ -339,6 +347,7 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
               })
               cache.pendingToolCallArgs.set(ame.toolCall.id, parsedArgs)
               cache.toolCallArgsBuffer.delete(ame.contentIndex)
+              cache.lastToolCallId = ame.toolCall.id
               flushSync(sessionPath)
               break
             }
@@ -466,6 +475,20 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           const toolResultBlock: ContentBlock | null = resultBlocks.length > 0
             ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks }
             : null
+
+          if (cache) {
+            for (const [idx, block] of cache.currentContentBlocks) {
+              if (block.type === 'tool_call' && (block as ToolCallBlock).toolCallId === toolEvent.toolCallId) {
+                cache.currentContentBlocks.set(idx, { ...block, status: 'completed' as const })
+              }
+            }
+            if (toolResultBlock) {
+              const maxIdx = cache.currentContentBlocks.size > 0
+                ? Math.max(...cache.currentContentBlocks.keys())
+                : -1
+              cache.currentContentBlocks.set(maxIdx + 1, toolResultBlock)
+            }
+          }
 
           onSessionMessagesUpdate(sessionPath, (prev) =>
             prev.map((msg) => {
