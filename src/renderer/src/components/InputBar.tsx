@@ -724,16 +724,17 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
               {showStop ? (
                 <button
                   onClick={onStop}
-                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-red-600 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold transition-colors duration-150 hover:bg-red-600 active:scale-95"
+                  style={{ color: '#fff' }}
                 >
-                  <span className="h-2.5 w-2.5 rounded-sm bg-white" />
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: '#fff' }} />
                   Stop
                 </button>
               ) : (
                 <button
                   onClick={handleSubmit}
                   disabled={disabled || noModel || (isEmpty() && pastedImages.length === 0)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-900 text-white transition-all duration-150 hover:bg-black disabled:bg-gray-300 disabled:cursor-not-allowed active:scale-90"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white transition-all duration-150 hover:bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed active:scale-90"
                   title="Send (Enter)"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
