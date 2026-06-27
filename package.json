@@ -1,6 +1,6 @@
 {
   "name": "xi",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Xi /ksi/ — The next-generation AI coding tool",
   "main": "./out/main/index.js",
   "author": {
