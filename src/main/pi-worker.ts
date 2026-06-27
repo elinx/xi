@@ -443,6 +443,7 @@ let pi: typeof import('@earendil-works/pi-coding-agent') | null = null
 let captureEnabled = false
 let lastClearedTimestamp = 0
 let activeSnapshotCount = 0
+let promptCaptureRegistered = false
 const MAX_SNAPSHOTS_PER_SESSION = 20
 
 /**
@@ -628,8 +629,13 @@ Session features:
         },
         extensionFactories: [
           (extensionApi: Record<string, unknown>) => {
+            // Dedup: bindExtensions() runs on every session switch/fork/new,
+            // but our handler only references module-level state (captureEnabled,
+            // sessionManager, activeSnapshotCount) — no need to re-register.
+            // Without this guard, listeners accumulate on the shared EventEmitter.
+            if (promptCaptureRegistered) return
+            promptCaptureRegistered = true
             const on = extensionApi['on'] as (event: string, handler: (...args: unknown[]) => void) => void
-            console.error('[prompt-capture] extension factory registered')
             on('before_provider_request', (event: unknown) => {
               if (!captureEnabled || !sessionManager) return
               if (activeSnapshotCount >= MAX_SNAPSHOTS_PER_SESSION) return

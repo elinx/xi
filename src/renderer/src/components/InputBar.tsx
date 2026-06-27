@@ -616,8 +616,15 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
       <div className="px-4 pb-3 pt-1">
         <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl">
           {noModel && (
-            <div className="mb-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
-              No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium hover:text-amber-900 transition-colors duration-150">select a model</button> to start chatting
+            <div
+              className="mb-2 rounded-md border px-3 py-1.5 text-xs"
+              style={{
+                backgroundColor: document.documentElement.classList.contains('light') ? 'rgba(255, 251, 235, 0.95)' : 'rgba(245, 158, 11, 0.08)',
+                borderColor: document.documentElement.classList.contains('light') ? '#fde68a' : 'rgba(245, 158, 11, 0.20)',
+                color: document.documentElement.classList.contains('light') ? '#b45309' : '#fbbf24',
+              }}
+            >
+              No model configured — <button onClick={() => setShowModelSelector(true)} className="underline font-medium transition-colors duration-150">select a model</button> to start chatting
             </div>
           )}
           {showModelSelector && onSetModel && getAvailableModels && (

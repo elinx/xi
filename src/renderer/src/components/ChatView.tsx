@@ -1848,7 +1848,7 @@ function SessionPickerModal({ sessions, currentSessionPath, onSelect, onClose }:
   )
 }
 
-function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string; onSave: (sessionPath: string, summary: string) => Promise<boolean>; sessionPath: string | null }): React.ReactElement {
+function SessionSummaryCard({ summary, onSave, sessionPath, isDark }: { summary: string; onSave: (sessionPath: string, summary: string) => Promise<boolean>; sessionPath: string | null; isDark: boolean }): React.ReactElement {
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(summary)
   const [isSaving, setIsSaving] = useState(false)
@@ -1857,36 +1857,67 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
   const handleSave = useCallback(async () => {
     if (!sessionPath) return
     setIsSaving(true)
-    const ok = await onSave(sessionPath, editText.trim())
-    setIsSaving(false)
-    if (ok) {
-      setIsEditing(false)
+    try {
+      await onSave(sessionPath, editText.trim())
+    } finally {
+      setIsSaving(false)
     }
-  }, [onSave, editText, sessionPath])
+    setIsEditing(false)
+  }, [editText, onSave, sessionPath])
 
   const handleCancel = useCallback(() => {
     setEditText(summary)
     setIsEditing(false)
   }, [summary])
 
+  const cardStyle: React.CSSProperties = isDark
+    ? { backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.20)' }
+    : { backgroundColor: 'rgba(255, 251, 235, 0.95)', borderColor: '#fde68a' }
+
+  const titleColor = isDark ? '#fbbf24' : '#d97706'
+  const titleHoverColor = isDark ? '#fcd34d' : '#b45309'
+  const editHoverBg = isDark ? 'rgba(245, 158, 11, 0.12)' : '#fef3c7'
+  const textColor = isDark ? '#e5e7eb' : '#78350f'
+  const textareaBg = isDark ? '#1e2026' : '#ffffff'
+  const textareaText = isDark ? '#e5e7eb' : '#1f2937'
+  const textareaBorder = isDark ? 'rgba(245, 158, 11, 0.30)' : '#fcd34d'
+  const saveBtnBg = isDark ? '#d97706' : '#d97706'
+  const saveBtnHoverBg = isDark ? '#b45309' : '#b45309'
+  const cancelBtnBg = isDark ? '#2c2f36' : '#e5e7eb'
+  const cancelBtnText = isDark ? '#d1d5db' : '#374151'
+  const cancelBtnHoverBg = isDark ? '#343840' : '#d1d5db'
+
   return (
-    <div className="rounded-lg bg-amber-50/95 backdrop-blur-sm border border-amber-200 shadow-sm">
+    <div className="rounded-lg backdrop-blur-sm border shadow-sm" style={cardStyle}>
       <div className="flex items-center justify-between px-3 py-1.5">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-1.5 text-amber-400 font-medium text-xs hover:text-amber-300 transition-colors duration-150"
+          className="flex items-center gap-1.5 font-medium text-xs transition-colors duration-150"
+          style={{ color: titleColor }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = titleHoverColor }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = titleColor }}
         >
           <svg className={`w-3 h-3 transition-transform ${collapsed ? '' : 'rotate-90'}`} fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
           </svg>
-          <span>📋</span>
+          <span className="w-3 h-3 flex items-center justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="9" x2="15" y2="9" />
+              <line x1="9" y1="13" x2="15" y2="13" />
+              <line x1="9" y1="17" x2="13" y2="17" />
+            </svg>
+          </span>
           <span>Summary</span>
         </button>
         <div className="flex items-center gap-0.5">
           {!isEditing && !collapsed && (
             <button
               onClick={() => { setEditText(summary); setIsEditing(true) }}
-              className="rounded p-1 text-amber-400 hover:text-amber-300 hover:bg-amber-100 transition-colors duration-150"
+              className="rounded p-1 transition-colors duration-150"
+              style={{ color: titleColor }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = titleHoverColor; e.currentTarget.style.backgroundColor = editHoverBg }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = titleColor; e.currentTarget.style.backgroundColor = 'transparent' }}
               title="Edit summary"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1902,28 +1933,40 @@ function SessionSummaryCard({ summary, onSave, sessionPath }: { summary: string;
             <textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-xs text-gray-800 resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full rounded border px-2 py-1.5 text-xs resize-y min-h-[60px] focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: textareaBg,
+                color: textareaText,
+                borderColor: textareaBorder,
+                '--tw-ring-color': isDark ? 'rgba(245, 158, 11, 0.4)' : '#fbbf24',
+              } as React.CSSProperties}
               autoFocus
             />
             <div className="flex items-center gap-2 mt-1.5">
               <button
                 onClick={handleSave}
                 disabled={isSaving || !editText.trim()}
-                className="rounded bg-amber-600 px-2.5 py-0.5 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded px-2.5 py-0.5 text-[11px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: saveBtnBg }}
+                onMouseEnter={(e) => { if (!isSaving && editText.trim()) e.currentTarget.style.backgroundColor = saveBtnHoverBg }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = saveBtnBg }}
               >
-                {isSaving ? 'Saving...' : '✓ Save'}
+                {isSaving ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={handleCancel}
-                className="rounded bg-gray-200 px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-300"
+                className="rounded px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+                style={{ backgroundColor: cancelBtnBg, color: cancelBtnText }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = cancelBtnHoverBg }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = cancelBtnBg }}
               >
-                ✗ Cancel
+                Cancel
               </button>
             </div>
           </div>
         ) : (
           <div className="px-3 pb-2">
-            <p className="text-xs text-amber-900 whitespace-pre-wrap leading-relaxed line-clamp-3">{summary}</p>
+            <p className="text-xs whitespace-pre-wrap leading-relaxed line-clamp-3" style={{ color: textColor }}>{summary}</p>
           </div>
         )
       )}
@@ -2518,7 +2561,7 @@ function ChatView({ messages, isStreaming, streamingMessageId, onSendPrompt, pen
       {sessionSummary && onSetSessionSummary && messages.length > 0 && (
         <div className="absolute top-2 left-4 right-4 z-10 pointer-events-none">
           <div className="mx-auto max-w-2xl xl:max-w-4xl 2xl:max-w-5xl pointer-events-auto">
-            <SessionSummaryCard summary={sessionSummary} onSave={onSetSessionSummary} sessionPath={currentSessionPathForSummary ?? null} />
+            <SessionSummaryCard summary={sessionSummary} onSave={onSetSessionSummary} sessionPath={currentSessionPathForSummary ?? null} isDark={isDark} />
           </div>
         </div>
       )}
