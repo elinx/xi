@@ -148,12 +148,14 @@ function splitTextWithQuotes(content: string): ContentBlock[] {
 
 export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertResult {
   const chatMessages: ChatMessage[] = []
+  let prevContentWasToolCall = false
 
   for (const raw of piMessages) {
     const msg = raw as Record<string, unknown>
     const piEntryId = typeof msg.id === 'string' ? msg.id : undefined
 
     if (msg.role === 'user') {
+      prevContentWasToolCall = false
       const content = typeof msg.content === 'string'
         ? msg.content
         : Array.isArray(msg.content)
@@ -173,11 +175,15 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
       const blocks: ContentBlock[] = []
       const content = msg.content as PiContentBlock[]
       if (Array.isArray(content)) {
-        for (const c of content) {
+        for (let i = 0; i < content.length; i++) {
+          const c = content[i]
           if (c.type === 'text') {
-            blocks.push({ type: 'text', content: c.text })
+            const isExplanation = prevContentWasToolCall || (i > 0 && content[i - 1]?.type === 'toolCall')
+            blocks.push({ type: 'text', content: c.text, ...(isExplanation ? { subtype: 'explanation' as const } : {}) })
+            prevContentWasToolCall = false
           } else if (c.type === 'thinking') {
             blocks.push({ type: 'text', content: c.thinking, subtype: 'thinking' })
+            prevContentWasToolCall = false
           } else if (c.type === 'toolCall') {
             blocks.push({
               type: 'tool_call',
@@ -186,6 +192,7 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
               args: c.arguments,
               status: 'completed',
             })
+            prevContentWasToolCall = true
           }
         }
       }
@@ -197,6 +204,7 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
         piEntryId,
       })
     } else if (msg.role === 'toolResult') {
+      prevContentWasToolCall = false
       const lastAssistant = chatMessages.findLast((m) => m.role === 'assistant')
       if (lastAssistant) {
         const content = msg.content as PiContentBlock[]

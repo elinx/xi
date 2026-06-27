@@ -19,6 +19,7 @@ export interface SessionCache {
   toolCallArgsBuffer: Map<number, string>
   pendingToolCallArgs: Map<string, Record<string, unknown>>
   countedResponseIds: Set<string>
+  lastToolCallId: string | null
 }
 
 interface UseSessionCacheReturn {
@@ -73,6 +74,7 @@ function createEmptyCache(sessionPath: string): SessionCache {
     toolCallArgsBuffer: new Map(),
     pendingToolCallArgs: new Map(),
     countedResponseIds: new Set(),
+    lastToolCallId: null,
   }
 }
 

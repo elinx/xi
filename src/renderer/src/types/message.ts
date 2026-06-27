@@ -19,7 +19,7 @@ export type ContentBlock =
 export interface TextBlock {
   type: 'text';
   content: string;
-  subtype?: 'thinking';
+  subtype?: 'thinking' | 'explanation';
 }
 
 export interface QuoteBlock {
@@ -79,4 +79,13 @@ export interface Annotation {
   coords: number[];
   label?: string;
   color?: string;
+}
+
+export interface ChangeAnchor {
+  toolCallId: string;
+  toolName: 'edit' | 'write';
+  filePath: string;
+  oldText?: string;
+  newText: string;
+  explanation?: string;
 }
