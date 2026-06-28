@@ -1,7 +1,9 @@
 import FileTree from './FileTree'
 import GitPanel from './GitPanel'
 import SearchPanel from './SearchPanel'
+import TodoPanel from './TodoPanel'
 import type { RightPanelView } from '../hooks/useLayoutStore'
+import type { ChatMessage } from '../types/message'
 
 interface RightPanelProps {
   view: RightPanelView
@@ -15,6 +17,7 @@ interface RightPanelProps {
   onRequestCommitMessage?: (diff: string) => void
   commitMessageFromAI?: string
   projectPath?: string
+  messages: ChatMessage[]
 }
 
 function FolderIcon({ className }: { className?: string }) {
@@ -45,6 +48,14 @@ function SearchIcon({ className }: { className?: string }) {
   )
 }
 
+function TaskIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
 export default function RightPanel({
   view,
   onViewChange,
@@ -57,6 +68,7 @@ export default function RightPanel({
   onRequestCommitMessage,
   commitMessageFromAI,
   projectPath,
+  messages,
 }: RightPanelProps) {
   if (collapsed) return null
 
@@ -92,6 +104,13 @@ export default function RightPanel({
         >
           <GitIcon className="w-4 h-4" />
         </button>
+        <button
+          onClick={() => onViewChange('tasks')}
+          className={view === 'tasks' ? 'bg-blue-50 text-blue-600 rounded p-1 transition-colors duration-150' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded p-1 transition-colors duration-150'}
+          title="Tasks"
+        >
+          <TaskIcon className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -110,6 +129,9 @@ export default function RightPanel({
         )}
         {view === 'search' && (
           <SearchPanel onFileSelect={onFileSelect} />
+        )}
+        {view === 'tasks' && (
+          <TodoPanel messages={messages} />
         )}
       </div>
     </div>

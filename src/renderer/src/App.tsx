@@ -162,6 +162,23 @@ function App(): React.ReactElement {
   const toggleRightPanel = useLayoutStore(s => s.toggleRightPanel)
   const setRightPanelWidth = useLayoutStore(s => s.setRightPanelWidth)
 
+  const lastTodoToolCallId = useRef<string | null>(null)
+  useEffect(() => {
+    for (let i = displayedMessages.length - 1; i >= 0; i--) {
+      const msg = displayedMessages[i]
+      for (let j = msg.blocks.length - 1; j >= 0; j--) {
+        const block = msg.blocks[j]
+        if (block.type === 'tool_result' && block.details?.todos && block.details.todos.length > 0) {
+          if (lastTodoToolCallId.current !== block.toolCallId) {
+            lastTodoToolCallId.current = block.toolCallId
+            setRightPanelView('tasks')
+          }
+          return
+        }
+      }
+    }
+  }, [displayedMessages, setRightPanelView])
+
   const tabs = useTabStore(s => s.tabs)
   const activeTabId = useTabStore(s => s.activeTabId)
   const setActiveTab = useTabStore(s => s.setActiveTab)
@@ -1326,6 +1343,7 @@ function App(): React.ReactElement {
           onRequestCommitMessage={handleRequestCommitMessage}
           commitMessageFromAI={commitMessageFromAI}
           projectPath={projectPath}
+          messages={displayedMessages}
         />
       </div>
 
