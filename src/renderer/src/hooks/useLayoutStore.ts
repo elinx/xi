@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type LeftPanelView = 'sessions' | 'skills' | 'mcp'
+export type LeftPanelView = 'sessions' | 'skills' | 'mcp' | 'tools'
 export type RightPanelView = 'files' | 'git' | 'search' | 'tasks'
 export type SessionViewMode = 'tree' | 'grouped'
 
