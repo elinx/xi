@@ -56,6 +56,7 @@ export interface ToolResultBlock {
   type: 'tool_result';
   toolCallId: string;
   content: ContentBlock[];
+  details?: TodoDetails;
 }
 
 export interface ActionBlock {
@@ -79,6 +80,16 @@ export interface Annotation {
   coords: number[];
   label?: string;
   color?: string;
+}
+
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface TodoDetails {
+  todos: TodoItem[];
 }
 
 export interface ChangeAnchor {
