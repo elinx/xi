@@ -100,8 +100,9 @@ export interface QuestionOption {
 export interface QuestionDetails {
   question: string;
   options: string[];
-  answer: string | null;
+  answer: string | string[] | null;
   wasCustom?: boolean;
+  multiSelect?: boolean;
 }
 
 export interface ChangeAnchor {

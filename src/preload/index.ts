@@ -26,13 +26,13 @@ const api = {
     return () => ipcRenderer.removeListener('pi:extensionUiRequest', handler)
   },
 
-  onQuestion: (callback: (data: { toolCallId: string; question: string; options: { label: string; description?: string }[]; senderSessionPath?: string; sessionPath?: string }) => void): (() => void) => {
+  onQuestion: (callback: (data: { toolCallId: string; question: string; options: { label: string; description?: string }[]; multiSelect?: boolean; senderSessionPath?: string; sessionPath?: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data as Parameters<typeof callback>[0])
     ipcRenderer.on('pi:question', handler)
     return () => ipcRenderer.removeListener('pi:question', handler)
   },
 
-  answerQuestion: (sessionPath: string, payload: { toolCallId: string; answer: string | null; wasCustom: boolean }): Promise<{ ok: boolean }> =>
+  answerQuestion: (sessionPath: string, payload: { toolCallId: string; answer: string | string[] | null; wasCustom: boolean }): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('question:answer', sessionPath, payload),
 
   onStateChanged: (callback: (state: { connected: boolean }) => void): (() => void) => {

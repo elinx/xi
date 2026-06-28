@@ -283,7 +283,7 @@ function App(): React.ReactElement {
   const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
-  const [pendingQuestion, setPendingQuestion] = useState<{ toolCallId: string; question: string; options: QuestionOption[]; sessionPath: string } | null>(null)
+  const [pendingQuestion, setPendingQuestion] = useState<{ toolCallId: string; question: string; options: QuestionOption[]; multiSelect: boolean; sessionPath: string } | null>(null)
 
   /** Tracks whether the current agent response is a summary reply.
    *  Set to true when /summary is sent or mark-completed auto-triggers.
@@ -510,7 +510,7 @@ function App(): React.ReactElement {
     }
   }, [abort, getForkMessages, forkAtEntry, newSession, refresh, isPiStreaming, sendPrompt])
 
-  const handleQuestionAnswer = useCallback(async (answer: string | null, wasCustom: boolean) => {
+  const handleQuestionAnswer = useCallback(async (answer: string | string[] | null, wasCustom: boolean) => {
     if (!pendingQuestion) return
     const { toolCallId, sessionPath } = pendingQuestion
     setPendingQuestion(null)
@@ -854,6 +854,7 @@ function App(): React.ReactElement {
         toolCallId: data.toolCallId,
         question: data.question,
         options: data.options,
+        multiSelect: data.multiSelect ?? false,
         sessionPath: data.senderSessionPath ?? data.sessionPath ?? '',
       })
     })
@@ -1411,6 +1412,7 @@ function App(): React.ReactElement {
         <QuestionDialog
           question={pendingQuestion.question}
           options={pendingQuestion.options}
+          multiSelect={pendingQuestion.multiSelect}
           onAnswer={handleQuestionAnswer}
         />
       )}

@@ -499,7 +499,7 @@ interface QuestionOption {
 }
 
 interface QuestionResult {
-  answer: string
+  answer: string | string[]
   wasCustom: boolean
 }
 
@@ -511,6 +511,7 @@ function requestQuestionAsk(
   toolCallId: string,
   question: string,
   options: QuestionOption[],
+  multiSelect: boolean,
 ): Promise<QuestionResult | null> {
   return new Promise((resolve) => {
     pendingQuestionRequests.set(toolCallId, { resolve })
@@ -519,6 +520,7 @@ function requestQuestionAsk(
       toolCallId,
       question,
       options,
+      multiSelect,
       sessionFile: session?.sessionFile,
     })
   })
@@ -739,18 +741,20 @@ function createTodowriteTool() {
 interface QuestionDetails {
   question: string
   options: string[]
-  answer: string | null
+  answer: string | string[] | null
   wasCustom?: boolean
+  multiSelect?: boolean
 }
 
 function createQuestionTool() {
   return {
     name: 'question',
     label: 'question',
-    description:
-      'Ask the user a question and wait for their answer. ' +
-      'Use when you need user input or a decision before proceeding. ' +
-      'Provide clear options with descriptions. The user can also type a custom answer.',
+      description:
+        'Ask the user a question and wait for their answer. ' +
+        'Use when you need user input or a decision before proceeding. ' +
+        'Provide clear options with descriptions. The user can also type a custom answer. ' +
+        'Set multiSelect=true to allow choosing multiple options.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -770,10 +774,14 @@ function createQuestionTool() {
           },
           description: 'Options for the user to choose from',
         },
+        multiSelect: {
+          type: 'boolean' as const,
+          description: 'If true, user can select multiple options. Default is false (single select).',
+        },
       },
       required: ['question', 'options'],
     },
-    execute: async (_toolCallId: string, params: { question: string; options: { label: string; description?: string }[] }) => {
+    execute: async (_toolCallId: string, params: { question: string; options: { label: string; description?: string }[]; multiSelect?: boolean }) => {
       if (!params.question?.trim()) {
         return { content: [{ type: 'text' as const, text: 'Error: question is required' }] }
       }
@@ -781,7 +789,8 @@ function createQuestionTool() {
         return { content: [{ type: 'text' as const, text: 'Error: at least one option is required' }] }
       }
 
-      const result = await requestQuestionAsk(_toolCallId, params.question, params.options)
+      const multiSelect = params.multiSelect ?? false
+      const result = await requestQuestionAsk(_toolCallId, params.question, params.options, multiSelect)
 
       if (!result) {
         return {
@@ -790,13 +799,15 @@ function createQuestionTool() {
             question: params.question,
             options: params.options.map(o => o.label),
             answer: null,
+            multiSelect,
           } as QuestionDetails,
         }
       }
 
+      const answerText = Array.isArray(result.answer) ? result.answer.join(', ') : result.answer
       const summary = result.wasCustom
-        ? `User wrote: ${result.answer}`
-        : `User selected: ${result.answer}`
+        ? `User wrote: ${answerText}`
+        : `User selected: ${answerText}`
 
       return {
         content: [{ type: 'text' as const, text: summary }],
@@ -805,6 +816,7 @@ function createQuestionTool() {
           options: params.options.map(o => o.label),
           answer: result.answer,
           wasCustom: result.wasCustom,
+          multiSelect,
         } as QuestionDetails,
       }
     },
@@ -1560,7 +1572,7 @@ process.parentPort.on('message', (event: Electron.ParentPortMessageEvent) => {
         pending.resolve(null)
       } else {
         pending.resolve({
-          answer: msg.answer as string,
+          answer: msg.answer as string | string[],
           wasCustom: (msg.wasCustom as boolean) ?? false,
         })
       }

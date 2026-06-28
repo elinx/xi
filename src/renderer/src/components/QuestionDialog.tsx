@@ -5,18 +5,21 @@ import type { QuestionOption } from '../types/message'
 interface QuestionDialogProps {
   question: string
   options: QuestionOption[]
-  onAnswer: (answer: string | null, wasCustom: boolean) => void
+  multiSelect?: boolean
+  onAnswer: (answer: string | string[] | null, wasCustom: boolean) => void
 }
 
 export default function QuestionDialog({
   question,
   options,
+  multiSelect = false,
   onAnswer,
 }: QuestionDialogProps): React.ReactElement {
   const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains('light'))
   const [mode, setMode] = useState<'options' | 'text'>('options')
   const [customText, setCustomText] = useState('')
   const [hoveredIndex, setHoveredIndex] = useState<number>(-1)
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
   const firstOptionRef = useRef<HTMLButtonElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -52,6 +55,7 @@ export default function QuestionDialog({
     btnPrimaryText: '#ffffff',
     selectedBg: 'rgba(54, 211, 153, 0.12)',
     descColor: '#6b7280',
+    checkColor: '#36d399',
   } : {
     overlayBg: '#ffffff',
     titleColor: '#111827',
@@ -66,15 +70,38 @@ export default function QuestionDialog({
     btnPrimaryText: '#ffffff',
     selectedBg: 'rgba(59, 130, 246, 0.08)',
     descColor: '#9ca3af',
+    checkColor: '#2563eb',
   }
 
   const handleCancel = useCallback(() => {
     onAnswer(null, false)
   }, [onAnswer])
 
-  const handleSelectOption = useCallback((label: string) => {
+  const handleSelectSingle = useCallback((label: string) => {
     onAnswer(label, false)
   }, [onAnswer])
+
+  const handleToggleMulti = useCallback((idx: number) => {
+    setSelectedIndices(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) {
+        next.delete(idx)
+      } else {
+        next.add(idx)
+      }
+      return next
+    })
+  }, [])
+
+  const handleConfirmMulti = useCallback(() => {
+    const selected = options
+      .map((opt, idx) => ({ opt, idx }))
+      .filter(({ idx }) => selectedIndices.has(idx))
+      .map(({ opt }) => opt.label)
+    if (selected.length > 0) {
+      onAnswer(selected, false)
+    }
+  }, [options, selectedIndices, onAnswer])
 
   const handleSwitchToText = useCallback(() => {
     setMode('text')
@@ -110,6 +137,8 @@ export default function QuestionDialog({
     }
   }, [mode, handleCancel, handleSubmitCustom, handleBackToOptions])
 
+  const selectedCount = selectedIndices.size
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
@@ -127,29 +156,45 @@ export default function QuestionDialog({
         {mode === 'options' ? (
           <>
             <div className="mb-3 space-y-1.5">
-              {options.map((opt, idx) => (
-                <button
-                  key={idx}
-                  ref={idx === 0 ? firstOptionRef : undefined}
-                  onClick={() => handleSelectOption(opt.label)}
-                  onMouseEnter={() => setHoveredIndex(idx)}
-                  onMouseLeave={() => setHoveredIndex(-1)}
-                  className="w-full rounded-md border px-3 py-2 text-left transition-colors"
-                  style={{
-                    borderColor: hoveredIndex === idx ? c.inputBorder : c.borderColor,
-                    backgroundColor: hoveredIndex === idx ? c.selectedBg : 'transparent',
-                  }}
-                >
-                  <div className="text-xs font-medium" style={{ color: c.titleColor }}>
-                    {opt.label}
-                  </div>
-                  {opt.description && (
-                    <div className="mt-0.5 text-xs" style={{ color: c.descColor }}>
-                      {opt.description}
+              {options.map((opt, idx) => {
+                const isSelected = multiSelect && selectedIndices.has(idx)
+                return (
+                  <button
+                    key={idx}
+                    ref={idx === 0 ? firstOptionRef : undefined}
+                    onClick={() => multiSelect ? handleToggleMulti(idx) : handleSelectSingle(opt.label)}
+                    onMouseEnter={() => setHoveredIndex(idx)}
+                    onMouseLeave={() => setHoveredIndex(-1)}
+                    className="w-full rounded-md border px-3 py-2 text-left transition-colors"
+                    style={{
+                      borderColor: isSelected || hoveredIndex === idx ? c.inputBorder : c.borderColor,
+                      backgroundColor: isSelected ? c.selectedBg : hoveredIndex === idx ? c.selectedBg : 'transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {multiSelect && (
+                        <span className="shrink-0 w-4 h-4 rounded border flex items-center justify-center" style={{ borderColor: isSelected ? c.checkColor : c.inputBorder, backgroundColor: isSelected ? c.checkColor : 'transparent' }}>
+                          {isSelected && (
+                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
+                              <path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium" style={{ color: c.titleColor }}>
+                          {opt.label}
+                        </div>
+                        {opt.description && (
+                          <div className="mt-0.5 text-xs" style={{ color: c.descColor }}>
+                            {opt.description}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </button>
-              ))}
+                  </button>
+                )
+              })}
 
               <button
                 onClick={handleSwitchToText}
@@ -168,14 +213,29 @@ export default function QuestionDialog({
               </button>
             </div>
 
-            <div className="flex justify-end">
-              <button
-                onClick={handleCancel}
-                className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
-                style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
-              >
-                Cancel
-              </button>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: c.labelColor }}>
+                {multiSelect ? (selectedCount > 0 ? `${selectedCount} selected` : 'Select options') : ''}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancel}
+                  className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
+                >
+                  Cancel
+                </button>
+                {multiSelect && (
+                  <button
+                    onClick={handleConfirmMulti}
+                    disabled={selectedCount === 0}
+                    className="rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
+                  >
+                    Confirm{selectedCount > 0 ? ` (${selectedCount})` : ''}
+                  </button>
+                )}
+              </div>
             </div>
           </>
         ) : (

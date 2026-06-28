@@ -496,6 +496,7 @@ function QuestionResultRenderer({ details }: { details: QuestionDetails }): Reac
   if (details.answer === null) {
     return <span className="text-gray-400 text-xs italic">Cancelled</span>
   }
+  const answerText = Array.isArray(details.answer) ? details.answer.join(', ') : details.answer
   return (
     <div className="space-y-1 py-0.5">
       <div className="text-gray-500 text-[11px]">{details.question}</div>
@@ -505,7 +506,7 @@ function QuestionResultRenderer({ details }: { details: QuestionDetails }): Reac
         </svg>
         <span className="text-gray-600">
           {details.wasCustom ? '(wrote) ' : ''}
-          {details.answer}
+          {answerText}
         </span>
       </div>
     </div>
@@ -613,9 +614,12 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
     case 'question': {
       const d = result?.details as QuestionDetails | undefined
       if (d) {
-        headerSummary = d.answer
-          ? d.wasCustom ? `wrote: ${d.answer.slice(0, 30)}` : `selected: ${d.answer}`
-          : 'cancelled'
+        if (!d.answer) {
+          headerSummary = 'cancelled'
+        } else {
+          const text = Array.isArray(d.answer) ? d.answer.join(', ') : d.answer
+          headerSummary = d.wasCustom ? `wrote: ${text.slice(0, 30)}` : `selected: ${text.slice(0, 30)}`
+        }
       } else {
         headerSummary = ''
       }
