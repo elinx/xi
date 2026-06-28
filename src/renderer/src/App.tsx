@@ -18,8 +18,9 @@ import WelcomeDialog from './components/WelcomeDialog'
 import SettingsPanel from './components/SettingsPanel'
 import SkillViewer from './components/SkillViewer'
 import CommandPalette from './components/CommandPalette'
+import QuestionDialog from './components/QuestionDialog'
 import type { ViewMode } from './utils/compact-view'
-import type { ChatMessage, TextBlock, ChangeAnchor } from './types/message'
+import type { ChatMessage, TextBlock, ChangeAnchor, QuestionOption } from './types/message'
 import type { ForkPoint, SessionTreeNode } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
@@ -282,6 +283,7 @@ function App(): React.ReactElement {
   const [pendingForwards, setPendingForwards] = useState<Map<string, QuotedMessage[]>>(new Map())
   const [commitMessageFromAI, setCommitMessageFromAI] = useState<string | undefined>(undefined)
   const pendingCommitGenerationRef = useRef(false)
+  const [pendingQuestion, setPendingQuestion] = useState<{ toolCallId: string; question: string; options: QuestionOption[]; sessionPath: string } | null>(null)
 
   /** Tracks whether the current agent response is a summary reply.
    *  Set to true when /summary is sent or mark-completed auto-triggers.
@@ -507,6 +509,13 @@ function App(): React.ReactElement {
       console.error('[ForkAsk] Error during fork ask:', err)
     }
   }, [abort, getForkMessages, forkAtEntry, newSession, refresh, isPiStreaming, sendPrompt])
+
+  const handleQuestionAnswer = useCallback(async (answer: string | null, wasCustom: boolean) => {
+    if (!pendingQuestion) return
+    const { toolCallId, sessionPath } = pendingQuestion
+    setPendingQuestion(null)
+    await window.api.answerQuestion(sessionPath, { toolCallId, answer, wasCustom })
+  }, [pendingQuestion])
 
   const handleQuoteMessage = useCallback((messageId: string, role: 'user' | 'assistant', content: string, timestamp: number) => {
     setQuotes(prev => {
@@ -835,6 +844,13 @@ function App(): React.ReactElement {
       if (evt.type === 'extension_error' && evt.error) {
         setError(`Extension error: ${evt.error}`)
       }
+    })
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    const cleanup = window.api.onQuestion((data) => {
+      setPendingQuestion(data)
     })
     return cleanup
   }, [])
@@ -1385,6 +1401,14 @@ function App(): React.ReactElement {
         onFileSelect={(filePath) => addTab({ type: 'file', title: filePath.split(/[/\\]/).pop() ?? filePath, closable: true, meta: { filePath } })}
         onSessionSelect={(sessionPath) => handleSwitchSession(sessionPath)}
       />
+
+      {pendingQuestion && (
+        <QuestionDialog
+          question={pendingQuestion.question}
+          options={pendingQuestion.options}
+          onAnswer={handleQuestionAnswer}
+        />
+      )}
     </div>
   )
 }
