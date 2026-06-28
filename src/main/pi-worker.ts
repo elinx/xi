@@ -845,6 +845,7 @@ async function bindSession(): Promise<void> {
   unsubscribe?.()
   if (!session) return
 
+  promptCaptureRegistered = false
   await session.bindExtensions({})
 
   unsubscribe = session.subscribe((event) => {
