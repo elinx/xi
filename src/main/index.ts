@@ -282,6 +282,10 @@ function initWorkerManager(sessionPath?: string): void {
       })
     }
   })
+
+  workerManager.on('question:ask', (data: unknown) => {
+    broadcastToRenderers('pi:question', data)
+  })
 }
 
 function registerIpcHandlers(): void {
@@ -505,6 +509,19 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('question:answer', async (_event, sessionPath: string, payload: { toolCallId: string; answer: string | null; wasCustom: boolean }) => {
+    const state = workerManager?.get(sessionPath)
+    if (state) {
+      state.bridge.sendCommand({
+        type: 'question:answer',
+        toolCallId: payload.toolCallId,
+        answer: payload.answer,
+        wasCustom: payload.wasCustom,
+      })
+    }
+    return { ok: true }
   })
 
   ipcMain.handle('provider:listCustomProviders', async () => {

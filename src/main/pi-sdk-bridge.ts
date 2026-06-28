@@ -231,6 +231,11 @@ export class PiSDKBridge extends EventEmitter {
         break
       }
 
+      case 'question:ask': {
+        this.emit('question:ask', { ...msg, senderSessionId: this.sessionId })
+        break
+      }
+
       default:
         this.emit('event', { ...msg, sessionId: this.sessionId })
     }

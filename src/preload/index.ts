@@ -26,6 +26,15 @@ const api = {
     return () => ipcRenderer.removeListener('pi:extensionUiRequest', handler)
   },
 
+  onQuestion: (callback: (data: { toolCallId: string; question: string; options: { label: string; description?: string }[]; sessionPath: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data as Parameters<typeof callback>[0])
+    ipcRenderer.on('pi:question', handler)
+    return () => ipcRenderer.removeListener('pi:question', handler)
+  },
+
+  answerQuestion: (sessionPath: string, payload: { toolCallId: string; answer: string | null; wasCustom: boolean }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('question:answer', sessionPath, payload),
+
   onStateChanged: (callback: (state: { connected: boolean }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { connected: boolean }) => callback(data)
     ipcRenderer.on('pi:stateChanged', handler)

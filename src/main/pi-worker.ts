@@ -491,6 +491,39 @@ function requestSubagentRun(toolCallId: string, task: string): Promise<unknown> 
   })
 }
 
+// ── question tool: blocking IPC to ask user a question ────────────────────
+
+interface QuestionOption {
+  label: string
+  description?: string
+}
+
+interface QuestionResult {
+  answer: string
+  wasCustom: boolean
+}
+
+const pendingQuestionRequests = new Map<string, {
+  resolve: (result: QuestionResult | null) => void
+}>()
+
+function requestQuestionAsk(
+  toolCallId: string,
+  question: string,
+  options: QuestionOption[],
+): Promise<QuestionResult | null> {
+  return new Promise((resolve) => {
+    pendingQuestionRequests.set(toolCallId, { resolve })
+    send({
+      channel: 'question:ask',
+      toolCallId,
+      question,
+      options,
+      sessionFile: session?.sessionFile,
+    })
+  })
+}
+
 function createSubagentTool() {
   return {
     name: 'subagent',
@@ -701,6 +734,83 @@ function createTodowriteTool() {
   }
 }
 
+// ── question tool ─────────────────────────────────────────────────────────
+
+interface QuestionDetails {
+  question: string
+  options: string[]
+  answer: string | null
+  wasCustom?: boolean
+}
+
+function createQuestionTool() {
+  return {
+    name: 'question',
+    label: 'question',
+    description:
+      'Ask the user a question and wait for their answer. ' +
+      'Use when you need user input or a decision before proceeding. ' +
+      'Provide clear options with descriptions. The user can also type a custom answer.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        question: {
+          type: 'string' as const,
+          description: 'The question to ask the user',
+        },
+        options: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: {
+              label: { type: 'string' as const, description: 'Display label for the option' },
+              description: { type: 'string' as const, description: 'Optional explanation shown below the label' },
+            },
+            required: ['label'],
+          },
+          description: 'Options for the user to choose from',
+        },
+      },
+      required: ['question', 'options'],
+    },
+    execute: async (_toolCallId: string, params: { question: string; options: { label: string; description?: string }[] }) => {
+      if (!params.question?.trim()) {
+        return { content: [{ type: 'text' as const, text: 'Error: question is required' }] }
+      }
+      if (!params.options || params.options.length === 0) {
+        return { content: [{ type: 'text' as const, text: 'Error: at least one option is required' }] }
+      }
+
+      const result = await requestQuestionAsk(_toolCallId, params.question, params.options)
+
+      if (!result) {
+        return {
+          content: [{ type: 'text' as const, text: 'User cancelled the question' }],
+          details: {
+            question: params.question,
+            options: params.options.map(o => o.label),
+            answer: null,
+          } as QuestionDetails,
+        }
+      }
+
+      const summary = result.wasCustom
+        ? `User wrote: ${result.answer}`
+        : `User selected: ${result.answer}`
+
+      return {
+        content: [{ type: 'text' as const, text: summary }],
+        details: {
+          question: params.question,
+          options: params.options.map(o => o.label),
+          answer: result.answer,
+          wasCustom: result.wasCustom,
+        } as QuestionDetails,
+      }
+    },
+  }
+}
+
 function redactSensitiveFields(payload: Record<string, unknown>): Record<string, unknown> {
   const safe = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>
   if (typeof safe === 'object' && safe !== null) {
@@ -794,6 +904,7 @@ Available tools:
 - subagent: Delegate a task to a subagent with its own session. The subagent runs in parallel with full tool access and real-time streaming in the sidebar.
 - webfetch: Fetch a URL and return content as Markdown. Use for reading docs, API references, or web pages. For JSON APIs, use bash + curl.
 - todowrite: Create or update a task list for multi-step work. Pass the COMPLETE list every time.
+- question: Ask the user a question with options and wait for their answer. Use when you need a decision or clarification before proceeding.
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
 
@@ -807,6 +918,9 @@ Guidelines:
 - Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
 - Use webfetch to read web pages (documentation, API references, articles). For JSON APIs or when you need headers/status codes, use bash + curl.
 - For tasks with 3+ steps, use todowrite to create a task list BEFORE starting work. Mark exactly one item as in_progress when starting it. Update it to completed when done, and mark the next item in_progress in the same call. Pass the COMPLETE todo array every time.
+- Use question when you need user input to proceed (e.g., choosing between approaches, confirming a risky action). Do not use it for things you can decide yourself.
+- Keep questions specific. Provide 2-5 options with clear labels and brief descriptions.
+- Do not ask questions you can answer from the codebase or project files — use search_sessions, read, or grep instead.
 - After each non-trivial edit or write, briefly explain what you changed and why (1-2 sentences). Skip this for trivial changes like formatting fixes or typo corrections. Place this explanation immediately after the tool call in the same response.
 - Be concise in your responses.
 - Show file paths clearly when working with files.
@@ -885,8 +999,8 @@ Session features:
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent', 'webfetch', 'todowrite'],
-        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool(), createWebfetchTool(), createTodowriteTool()],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent', 'webfetch', 'todowrite', 'question'],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool(), createWebfetchTool(), createTodowriteTool(), createQuestionTool()],
       })),
       services,
       diagnostics: services.diagnostics,
@@ -1433,6 +1547,22 @@ process.parentPort.on('message', (event: Electron.ParentPortMessageEvent) => {
         pending.reject(new Error(msg.error as string))
       } else {
         pending.resolve(msg.result)
+      }
+    }
+    return
+  }
+
+  if (msg.type === 'question:answer') {
+    const pending = pendingQuestionRequests.get(msg.toolCallId as string)
+    if (pending) {
+      pendingQuestionRequests.delete(msg.toolCallId as string)
+      if (msg.answer === null) {
+        pending.resolve(null)
+      } else {
+        pending.resolve({
+          answer: msg.answer as string,
+          wasCustom: (msg.wasCustom as boolean) ?? false,
+        })
       }
     }
     return
