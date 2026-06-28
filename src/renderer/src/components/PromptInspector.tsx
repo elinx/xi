@@ -126,9 +126,12 @@ function CollapsibleSection({ title, count, copyText, defaultCollapsed = false, 
 
   return (
     <div className="rounded-lg border border-gray-200 overflow-hidden">
-      <button
+      <div
         onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(c => !c) } }}
+        className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <svg
@@ -143,7 +146,7 @@ function CollapsibleSection({ title, count, copyText, defaultCollapsed = false, 
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           {copyText && <CopyButton text={copyText} />}
         </div>
-      </button>
+      </div>
       {!collapsed && <div className="px-3 py-2">{children}</div>}
     </div>
   )
