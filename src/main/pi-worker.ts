@@ -683,7 +683,7 @@ function createTodowriteTool() {
           items: {
             type: 'object' as const,
             properties: {
-              content: { type: 'string' as const, description: 'Brief description of the task' },
+              content: { type: 'string' as const, description: 'Brief description of the task. Plain text only — no emoji prefixes.' },
               status: {
                 type: 'string' as const,
                 enum: ['pending', 'in_progress', 'completed'],
@@ -929,7 +929,7 @@ Guidelines:
 - Use write only for new files or complete rewrites.
 - Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
 - Use webfetch to read web pages (documentation, API references, articles). For JSON APIs or when you need headers/status codes, use bash + curl.
-- For tasks with 3+ steps, use todowrite to create a task list BEFORE starting work. Mark exactly one item as in_progress when starting it. Update it to completed when done, and mark the next item in_progress in the same call. Pass the COMPLETE todo array every time.
+- For tasks with 3+ steps, use todowrite to create a task list BEFORE starting work. Mark exactly one item as in_progress when starting it. Update it to completed when done, and mark the next item in_progress in the same call. Pass the COMPLETE todo array every time. Do not prefix todo content with emoji — the UI renders priority with a colored dot.
 - Use question when you need user input to proceed (e.g., choosing between approaches, confirming a risky action). Do not use it for things you can decide yourself.
 - Keep questions specific. Provide 2-5 options with clear labels and brief descriptions.
 - Do not ask questions you can answer from the codebase or project files — use search_sessions, read, or grep instead.
