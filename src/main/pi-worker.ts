@@ -622,6 +622,85 @@ function createWebfetchTool() {
   }
 }
 
+// ── todowrite tool ───────────────────────────────────────────────────────
+
+interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  priority: 'high' | 'medium' | 'low'
+}
+
+function createTodowriteTool() {
+  return {
+    name: 'todowrite',
+    label: 'todowrite',
+    description:
+      'Create or update a structured task list for tracking multi-step work. ' +
+      'Pass the COMPLETE todo array every time (full replacement, not incremental). ' +
+      'Create the list BEFORE starting work. ' +
+      'Mark exactly one item as in_progress when starting it, then completed when done. ' +
+      'The user sees this list in real-time as a checklist.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        todos: {
+          type: 'array' as const,
+          items: {
+            type: 'object' as const,
+            properties: {
+              content: { type: 'string' as const, description: 'Brief description of the task' },
+              status: {
+                type: 'string' as const,
+                enum: ['pending', 'in_progress', 'completed'],
+                description: 'pending = not started, in_progress = actively working on it, completed = done',
+              },
+              priority: {
+                type: 'string' as const,
+                enum: ['high', 'medium', 'low'],
+                description: 'Task priority level',
+              },
+            },
+            required: ['content', 'status', 'priority'],
+          },
+          description: 'Complete todo list. Replaces the entire previous list.',
+        },
+      },
+      required: ['todos'],
+    },
+    execute: async (_toolCallId: string, params: { todos: TodoItem[] }) => {
+      const todos = params.todos ?? []
+
+      const validStatuses = new Set(['pending', 'in_progress', 'completed'])
+      const validPriorities = new Set(['high', 'medium', 'low'])
+
+      for (const t of todos) {
+        if (!validStatuses.has(t.status)) {
+          return { content: [{ type: 'text' as const, text: `Error: invalid status "${t.status}"` }] }
+        }
+        if (!validPriorities.has(t.priority)) {
+          return { content: [{ type: 'text' as const, text: `Error: invalid priority "${t.priority}"` }] }
+        }
+      }
+
+      const inProgressCount = todos.filter(t => t.status === 'in_progress').length
+      if (inProgressCount > 1) {
+        return { content: [{ type: 'text' as const, text: 'Error: at most one todo can be in_progress at a time' }] }
+      }
+
+      const completed = todos.filter(t => t.status === 'completed').length
+      const total = todos.length
+      const summary = inProgressCount > 0
+        ? `Todos updated: ${completed}/${total} completed, 1 in progress`
+        : `Todos updated: ${completed}/${total} completed`
+
+      return {
+        content: [{ type: 'text' as const, text: summary }],
+        details: { todos },
+      }
+    },
+  }
+}
+
 function redactSensitiveFields(payload: Record<string, unknown>): Record<string, unknown> {
   const safe = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>
   if (typeof safe === 'object' && safe !== null) {
@@ -714,6 +793,7 @@ Available tools:
 - search_sessions: Search conversations from other sessions — recovers past decisions, design rationale, and failed approaches that the filesystem cannot provide
 - subagent: Delegate a task to a subagent with its own session. The subagent runs in parallel with full tool access and real-time streaming in the sidebar.
 - webfetch: Fetch a URL and return content as Markdown. Use for reading docs, API references, or web pages. For JSON APIs, use bash + curl.
+- todowrite: Create or update a task list for multi-step work. Pass the COMPLETE list every time.
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
 
@@ -726,6 +806,7 @@ Guidelines:
 - Use write only for new files or complete rewrites.
 - Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
 - Use webfetch to read web pages (documentation, API references, articles). For JSON APIs or when you need headers/status codes, use bash + curl.
+- For tasks with 3+ steps, use todowrite to create a task list BEFORE starting work. Mark exactly one item as in_progress when starting it. Update it to completed when done, and mark the next item in_progress in the same call. Pass the COMPLETE todo array every time.
 - After each non-trivial edit or write, briefly explain what you changed and why (1-2 sentences). Skip this for trivial changes like formatting fixes or typo corrections. Place this explanation immediately after the tool call in the same response.
 - Be concise in your responses.
 - Show file paths clearly when working with files.
@@ -804,8 +885,8 @@ Session features:
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent', 'webfetch'],
-        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool(), createWebfetchTool()],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent', 'webfetch', 'todowrite'],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool(), createWebfetchTool(), createTodowriteTool()],
       })),
       services,
       diagnostics: services.diagnostics,
