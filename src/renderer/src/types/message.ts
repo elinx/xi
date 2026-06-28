@@ -56,7 +56,7 @@ export interface ToolResultBlock {
   type: 'tool_result';
   toolCallId: string;
   content: ContentBlock[];
-  details?: TodoDetails;
+  details?: TodoDetails | QuestionDetails;
 }
 
 export interface ActionBlock {
@@ -90,6 +90,18 @@ export interface TodoItem {
 
 export interface TodoDetails {
   todos: TodoItem[];
+}
+
+export interface QuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface QuestionDetails {
+  question: string;
+  options: string[];
+  answer: string | null;
+  wasCustom?: boolean;
 }
 
 export interface ChangeAnchor {
