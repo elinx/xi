@@ -1394,18 +1394,29 @@ function registerIpcHandlers(): void {
         return { success: false, error: 'Failed to clear session file' }
       }
 
-      // 2. If this is the worker's active session, tell it to reload from the cleared file
-      const primary = workerManager?.getPrimary()
-      if (primary?.bridge.isConnected) {
+      // 2. Find the worker that owns this session (primary or secondary)
+      // and reload it so the worker picks up the cleared file
+      const worker = workerManager?.get(sessionPath)
+      if (worker?.bridge.isConnected) {
         try {
-          const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
-          const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
-          if (currentPath === sessionPath) {
-            // Reload the session so the worker picks up the cleared state
-            await primary.bridge.sendRpcCommand({ type: 'switch_session', sessionPath })
-          }
+          await worker.bridge.sendRpcCommand({ type: 'switch_session', sessionPath })
         } catch {
-          // Worker might be in a different session — that's fine
+          // Worker might be in a different state — that's fine
+        }
+      } else {
+        // Fallback: check primary via get_state (handles case where primary
+        // switched sessions in-memory but state.sessionPath wasn't updated)
+        const primary = workerManager?.getPrimary()
+        if (primary?.bridge.isConnected) {
+          try {
+            const stateData = (await primary.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+            const currentPath = typeof stateData.sessionFile === 'string' ? stateData.sessionFile : null
+            if (currentPath === sessionPath) {
+              await primary.bridge.sendRpcCommand({ type: 'switch_session', sessionPath })
+            }
+          } catch {
+            // Worker might be in a different session — that's fine
+          }
         }
       }
 
