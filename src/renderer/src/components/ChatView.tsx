@@ -447,7 +447,7 @@ function extractHtmlFromResult(result: ToolResultBlock | undefined): HtmlBlock[]
 function TodoStatusIcon({ status, className }: { status: TodoItem['status']; className?: string }) {
   if (status === 'completed') {
     return (
-      <svg className={`shrink-0 ${className ?? 'text-green-500'}`} width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <svg className={`shrink-0 ${className ?? 'text-blue-500'}`} width="14" height="14" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-30" />
         <path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

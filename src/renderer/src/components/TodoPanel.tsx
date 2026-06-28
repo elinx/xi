@@ -20,7 +20,7 @@ function extractLatestTodos(messages: ChatMessage[]): TodoItem[] | null {
 function TodoStatusIcon({ status }: { status: TodoItem['status'] }) {
   if (status === 'completed') {
     return (
-      <svg className="w-3.5 h-3.5 text-green-500 shrink-0 mt-px" viewBox="0 0 24 24" fill="none">
+      <svg className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-px" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-30" />
         <path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -75,12 +75,12 @@ export default function TodoPanel({ messages }: TodoPanelProps) {
     <div className="h-full flex flex-col">
       <div className="px-3 py-2 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-mono ${allDone ? 'text-green-500' : 'text-gray-500'}`}>
+          <span className={`text-xs font-mono ${allDone ? 'text-blue-500' : 'text-gray-500'}`}>
             {completed}/{total} {allDone ? '✓ done' : 'tasks'}
           </span>
           <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${allDone ? 'bg-green-500' : 'bg-blue-500'}`}
+              className={`h-full rounded-full transition-all duration-300 bg-blue-500`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
