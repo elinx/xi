@@ -2,6 +2,7 @@ import type { AgentSession, AgentSessionEvent, AgentSessionRuntime } from '@eare
 import { resolve, relative, join, dirname } from 'node:path'
 import * as fs from 'node:fs/promises'
 import * as fsSync from 'node:fs'
+import TurndownService from 'turndown'
 import { parseSessionFile } from './session-service'
 
 process.on('uncaughtException', (err: Error) => {
@@ -508,6 +509,119 @@ function createSubagentTool() {
   }
 }
 
+// ── webfetch tool ────────────────────────────────────────────────────────
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+  emDelimiter: '*',
+})
+turndown.remove(['script', 'style', 'noscript', 'iframe', 'svg'])
+
+const MAX_CONTENT_LENGTH = 51_200
+const FETCH_TIMEOUT_MS = 30_000
+
+function getProxyDispatcher(): unknown {
+  const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY
+    || process.env.http_proxy || process.env.HTTP_PROXY
+    || process.env.all_proxy || process.env.ALL_PROXY
+  if (!proxyUrl) return undefined
+  try {
+    const { ProxyAgent } = require('undici')
+    return new ProxyAgent(proxyUrl)
+  } catch {
+    return undefined
+  }
+}
+
+let proxyDispatcher: unknown
+function getFetchDispatcher(): unknown {
+  if (proxyDispatcher === undefined) proxyDispatcher = getProxyDispatcher() ?? null
+  return proxyDispatcher ?? undefined
+}
+
+function createWebfetchTool() {
+  return {
+    name: 'webfetch',
+    label: 'webfetch',
+    description:
+      'Fetch content from a URL and return it as clean, readable text. ' +
+      'HTML pages are automatically converted to Markdown, stripping tags and scripts. ' +
+      'Use this to read documentation, API references, blog posts, or any web page. ' +
+      'For JSON APIs or raw text, use bash + curl instead.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        url: {
+          type: 'string' as const,
+          description: 'The URL to fetch. HTTP URLs are automatically upgraded to HTTPS.',
+        },
+        format: {
+          type: 'string' as const,
+          enum: ['markdown', 'text', 'html'],
+          description: 'Output format: "markdown" (default, HTML to Markdown), "text" (plain text, no tags), "html" (raw HTML).',
+          default: 'markdown',
+        },
+      },
+      required: ['url'],
+    },
+    execute: async (_toolCallId: string, params: { url: string; format?: string }) => {
+      let url: string
+      try {
+        const parsed = new URL(params.url)
+        if (parsed.protocol === 'http:') parsed.protocol = 'https:'
+        if (parsed.protocol !== 'https:') {
+          return { content: [{ type: 'text' as const, text: `Error: Only http/https URLs are supported. Got: ${parsed.protocol}` }] }
+        }
+        url = parsed.toString()
+      } catch {
+        return { content: [{ type: 'text' as const, text: `Error: Invalid URL: ${params.url}` }] }
+      }
+
+      const fetchOptions: Record<string, unknown> = {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: { 'User-Agent': 'Xi/1.0 (webfetch tool)' },
+        redirect: 'follow',
+      }
+      const dispatcher = getFetchDispatcher()
+      if (dispatcher) fetchOptions.dispatcher = dispatcher
+
+      let response: Response
+      try {
+        response = await fetch(url, fetchOptions)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { content: [{ type: 'text' as const, text: `Error fetching ${url}: ${msg}` }] }
+      }
+
+      if (!response.ok) {
+        return { content: [{ type: 'text' as const, text: `HTTP ${response.status} ${response.statusText}: ${url}` }] }
+      }
+
+      const contentType = response.headers.get('content-type') || ''
+      const raw = await response.text()
+      const format = params.format ?? 'markdown'
+
+      let text: string
+
+      if (format === 'html' || contentType.includes('json') || contentType.includes('text/plain') || contentType.includes('xml')) {
+        text = raw
+      } else if (format === 'text') {
+        text = raw.replace(/<[^>]+>/g, '').replace(/\s{3,}/g, '\n\n').trim()
+      } else {
+        text = turndown.turndown(raw)
+      }
+
+      if (text.length > MAX_CONTENT_LENGTH) {
+        text = text.substring(0, MAX_CONTENT_LENGTH) + '\n\n...[truncated]'
+      }
+
+      return { content: [{ type: 'text' as const, text }] }
+    },
+  }
+}
+
 function redactSensitiveFields(payload: Record<string, unknown>): Record<string, unknown> {
   const safe = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>
   if (typeof safe === 'object' && safe !== null) {
@@ -599,6 +713,7 @@ Available tools:
 - ls: List directory contents
 - search_sessions: Search conversations from other sessions — recovers past decisions, design rationale, and failed approaches that the filesystem cannot provide
 - subagent: Delegate a task to a subagent with its own session. The subagent runs in parallel with full tool access and real-time streaming in the sidebar.
+- webfetch: Fetch a URL and return content as Markdown. Use for reading docs, API references, or web pages. For JSON APIs, use bash + curl.
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
 
@@ -610,6 +725,7 @@ Guidelines:
 - Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.
 - Use write only for new files or complete rewrites.
 - Use search_sessions when you need to understand not just what exists, but why it exists — past decisions, design rationale, and evolving understanding live in other sessions.
+- Use webfetch to read web pages (documentation, API references, articles). For JSON APIs or when you need headers/status codes, use bash + curl.
 - After each non-trivial edit or write, briefly explain what you changed and why (1-2 sentences). Skip this for trivial changes like formatting fixes or typo corrections. Place this explanation immediately after the tool call in the same response.
 - Be concise in your responses.
 - Show file paths clearly when working with files.
@@ -688,8 +804,8 @@ Session features:
         services,
         sessionManager: sm,
         sessionStartEvent,
-        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent'],
-        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool()],
+        tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'search_sessions', 'subagent', 'webfetch'],
+        customTools: [guardedWriteTool, guardedEditTool, createSearchSessionsTool(cwd, sm.getSessionFile()), createSubagentTool(), createWebfetchTool()],
       })),
       services,
       diagnostics: services.diagnostics,
