@@ -13,6 +13,7 @@ import type {
   HtmlBlock,
   Annotation,
   ChangeAnchor,
+  TodoItem,
 } from '../types/message'
 import ChatContextMenu from './ChatContextMenu'
 import SkillBlockRenderer from './SkillBlockRenderer'
@@ -442,6 +443,54 @@ function extractHtmlFromResult(result: ToolResultBlock | undefined): HtmlBlock[]
   return result.content.filter((c): c is HtmlBlock => c.type === 'html')
 }
 
+function TodoStatusIcon({ status, className }: { status: TodoItem['status']; className?: string }) {
+  if (status === 'completed') {
+    return (
+      <svg className={`shrink-0 ${className ?? 'text-green-500'}`} width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-30" />
+        <path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (status === 'in_progress') {
+    return (
+      <svg className={`shrink-0 animate-spin ${className ?? 'text-blue-500'}`} width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-25" />
+        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+    )
+  }
+  return (
+    <svg className={`shrink-0 ${className ?? 'text-gray-400'}`} width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-40" />
+    </svg>
+  )
+}
+
+function TodoListRenderer({ todos }: { todos: TodoItem[] }): React.ReactElement {
+  const priorityDot: Record<TodoItem['priority'], string> = {
+    high: 'bg-red-400',
+    medium: 'bg-yellow-400',
+    low: 'bg-gray-400',
+  }
+
+  return (
+    <div className="py-1 space-y-0.5">
+      {todos.map((todo, i) => (
+        <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
+          <TodoStatusIcon status={todo.status} />
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[todo.priority]}`} />
+          <span className={
+            todo.status === 'completed' ? 'text-gray-400 line-through'
+            : todo.status === 'in_progress' ? 'text-blue-500'
+            : 'text-gray-600'
+          }>{todo.content}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
@@ -472,6 +521,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
     find: '🔍',
     grep: '🔎',
     search_sessions: '💬',
+    todowrite: '📋',
   }
   const icon = toolIcon[block.toolName] ?? '🔧'
 
@@ -528,6 +578,16 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
     case 'search_sessions':
       headerSummary = block.args.query ? String(block.args.query) : ''
       break
+    case 'todowrite': {
+      const todos = result?.details?.todos
+      if (todos && todos.length > 0) {
+        const completed = todos.filter(t => t.status === 'completed').length
+        headerSummary = `${completed}/${todos.length} tasks`
+      } else {
+        headerSummary = block.args.todos ? `${(block.args.todos as unknown[]).length} tasks` : ''
+      }
+      break
+    }
     default:
       headerSummary = ''
   }
@@ -737,6 +797,10 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
             <pre className="overflow-x-auto text-xs text-gray-500">
               {JSON.stringify(block.args, null, 2)}
             </pre>
+          )}
+          {/* Todo list */}
+          {block.toolName === 'todowrite' && result?.details?.todos && result.details.todos.length > 0 && (
+            <TodoListRenderer todos={result.details.todos} />
           )}
           {/* Output */}
           {resultText.trim().length > 0 && (
