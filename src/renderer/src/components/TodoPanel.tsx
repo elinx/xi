@@ -47,10 +47,9 @@ const priorityDot: Record<TodoItem['priority'], string> = {
   low: 'bg-gray-400',
 }
 
-const priorityLabel: Record<TodoItem['priority'], string> = {
-  high: 'high',
-  medium: 'medium',
-  low: 'low',
+/** Strip leading priority emoji (🔴🟡🟢) that LLMs sometimes add */
+function stripPriorityEmoji(content: string): string {
+  return content.replace(/^[🔴🟡🟢]\s*/, '')
 }
 
 export default function TodoPanel({ messages }: TodoPanelProps) {
@@ -101,8 +100,7 @@ export default function TodoPanel({ messages }: TodoPanelProps) {
               todo.status === 'completed' ? 'text-gray-400 line-through'
               : todo.status === 'in_progress' ? 'text-blue-500'
               : 'text-gray-600'
-            }>{todo.content}</span>
-            <span className="ml-auto text-[9px] text-gray-400 mt-px shrink-0">{priorityLabel[todo.priority]}</span>
+            }>{stripPriorityEmoji(todo.content)}</span>
           </div>
         ))}
       </div>

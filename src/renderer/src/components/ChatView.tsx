@@ -475,6 +475,8 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }): React.ReactElement 
     low: 'bg-gray-400',
   }
 
+  const stripEmoji = (s: string) => s.replace(/^[🔴🟡🟢]\s*/, '')
+
   return (
     <div className="py-1 space-y-0.5">
       {todos.map((todo, i) => (
@@ -485,7 +487,7 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }): React.ReactElement 
             todo.status === 'completed' ? 'text-gray-400 line-through'
             : todo.status === 'in_progress' ? 'text-blue-500'
             : 'text-gray-600'
-          }>{todo.content}</span>
+          }>{stripEmoji(todo.content)}</span>
         </div>
       ))}
     </div>
