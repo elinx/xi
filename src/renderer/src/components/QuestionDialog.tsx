@@ -113,9 +113,6 @@ export default function QuestionDialog({
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) handleCancel()
-      }}
     >
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg p-4 shadow-2xl"

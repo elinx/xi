@@ -512,7 +512,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('question:answer', async (_event, sessionPath: string, payload: { toolCallId: string; answer: string | null; wasCustom: boolean }) => {
-    const state = workerManager?.get(sessionPath)
+    const state = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (state) {
       state.bridge.sendCommand({
         type: 'question:answer',

@@ -850,7 +850,12 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     const cleanup = window.api.onQuestion((data) => {
-      setPendingQuestion(data)
+      setPendingQuestion({
+        toolCallId: data.toolCallId,
+        question: data.question,
+        options: data.options,
+        sessionPath: data.senderSessionPath ?? data.sessionPath ?? '',
+      })
     })
     return cleanup
   }, [])
