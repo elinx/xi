@@ -16,10 +16,10 @@ export default function QuestionDialog({
   onAnswer,
 }: QuestionDialogProps): React.ReactElement {
   const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains('light'))
-  const [mode, setMode] = useState<'options' | 'text'>('options')
   const [customText, setCustomText] = useState('')
   const [hoveredIndex, setHoveredIndex] = useState<number>(-1)
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+  const [showCustomInput, setShowCustomInput] = useState(false)
   const firstOptionRef = useRef<HTMLButtonElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -36,10 +36,10 @@ export default function QuestionDialog({
   }, [])
 
   useEffect(() => {
-    if (mode === 'text') {
+    if (showCustomInput) {
       textAreaRef.current?.focus()
     }
-  }, [mode])
+  }, [showCustomInput])
 
   const c = isDark ? {
     overlayBg: '#1e2026',
@@ -93,27 +93,27 @@ export default function QuestionDialog({
     })
   }, [])
 
-  const handleConfirmMulti = useCallback(() => {
+  const buildMultiAnswer = useCallback((): string[] => {
     const selected = options
       .map((opt, idx) => ({ opt, idx }))
       .filter(({ idx }) => selectedIndices.has(idx))
       .map(({ opt }) => opt.label)
-    if (selected.length > 0) {
-      onAnswer(selected, false)
+    const trimmed = customText.trim()
+    if (trimmed) {
+      selected.push(trimmed)
     }
-  }, [options, selectedIndices, onAnswer])
+    return selected
+  }, [options, selectedIndices, customText])
 
-  const handleSwitchToText = useCallback(() => {
-    setMode('text')
-    setHoveredIndex(-1)
-  }, [])
+  const handleConfirmMulti = useCallback(() => {
+    const answer = buildMultiAnswer()
+    const hasCustom = customText.trim().length > 0
+    if (answer.length > 0) {
+      onAnswer(answer, hasCustom)
+    }
+  }, [buildMultiAnswer, customText, onAnswer])
 
-  const handleBackToOptions = useCallback(() => {
-    setMode('options')
-    setCustomText('')
-  }, [])
-
-  const handleSubmitCustom = useCallback(() => {
+  const handleSubmitSingleCustom = useCallback(() => {
     const trimmed = customText.trim()
     if (trimmed) {
       onAnswer(trimmed, true)
@@ -121,23 +121,31 @@ export default function QuestionDialog({
   }, [customText, onAnswer])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (mode === 'options') {
+    if (multiSelect) {
       if (e.key === 'Escape') {
         e.preventDefault()
         handleCancel()
       }
-    } else {
+    } else if (showCustomInput) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        handleSubmitCustom()
+        handleSubmitSingleCustom()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        handleBackToOptions()
+        setShowCustomInput(false)
+        setCustomText('')
+      }
+    } else {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleCancel()
       }
     }
-  }, [mode, handleCancel, handleSubmitCustom, handleBackToOptions])
+  }, [multiSelect, showCustomInput, handleCancel, handleSubmitSingleCustom])
 
   const selectedCount = selectedIndices.size
+  const customTrimmed = customText.trim()
+  const multiAnswerCount = selectedCount + (customTrimmed ? 1 : 0)
 
   return createPortal(
     <div
@@ -153,69 +161,66 @@ export default function QuestionDialog({
           <span>{question}</span>
         </h2>
 
-        {mode === 'options' ? (
-          <>
-            <div className="mb-3 space-y-1.5">
-              {options.map((opt, idx) => {
-                const isSelected = multiSelect && selectedIndices.has(idx)
-                return (
-                  <button
-                    key={idx}
-                    ref={idx === 0 ? firstOptionRef : undefined}
-                    onClick={() => multiSelect ? handleToggleMulti(idx) : handleSelectSingle(opt.label)}
-                    onMouseEnter={() => setHoveredIndex(idx)}
-                    onMouseLeave={() => setHoveredIndex(-1)}
-                    className="w-full rounded-md border px-3 py-2 text-left transition-colors"
-                    style={{
-                      borderColor: isSelected || hoveredIndex === idx ? c.inputBorder : c.borderColor,
-                      backgroundColor: isSelected ? c.selectedBg : hoveredIndex === idx ? c.selectedBg : 'transparent',
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      {multiSelect && (
-                        <span className="shrink-0 w-4 h-4 rounded border flex items-center justify-center" style={{ borderColor: isSelected ? c.checkColor : c.inputBorder, backgroundColor: isSelected ? c.checkColor : 'transparent' }}>
-                          {isSelected && (
-                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
-                              <path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </span>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium" style={{ color: c.titleColor }}>
-                          {opt.label}
-                        </div>
-                        {opt.description && (
-                          <div className="mt-0.5 text-xs" style={{ color: c.descColor }}>
-                            {opt.description}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-
+        <div className="mb-3 space-y-1.5">
+          {options.map((opt, idx) => {
+            const isSelected = multiSelect && selectedIndices.has(idx)
+            return (
               <button
-                onClick={handleSwitchToText}
-                onMouseEnter={() => setHoveredIndex(options.length)}
+                key={idx}
+                ref={idx === 0 ? firstOptionRef : undefined}
+                onClick={() => multiSelect ? handleToggleMulti(idx) : handleSelectSingle(opt.label)}
+                onMouseEnter={() => setHoveredIndex(idx)}
                 onMouseLeave={() => setHoveredIndex(-1)}
                 className="w-full rounded-md border px-3 py-2 text-left transition-colors"
                 style={{
-                  borderColor: hoveredIndex === options.length ? c.inputBorder : c.borderColor,
-                  backgroundColor: hoveredIndex === options.length ? c.selectedBg : 'transparent',
+                  borderColor: isSelected || hoveredIndex === idx ? c.inputBorder : c.borderColor,
+                  backgroundColor: isSelected ? c.selectedBg : hoveredIndex === idx ? c.selectedBg : 'transparent',
                 }}
               >
-                <div className="flex items-center gap-1.5 text-xs" style={{ color: c.labelColor }}>
-                  <span>✎</span>
-                  <span>Type something...</span>
+                <div className="flex items-center gap-2">
+                  {multiSelect && (
+                    <span className="shrink-0 w-4 h-4 rounded border flex items-center justify-center" style={{ borderColor: isSelected ? c.checkColor : c.inputBorder, backgroundColor: isSelected ? c.checkColor : 'transparent' }}>
+                      {isSelected && (
+                        <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
+                          <path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium" style={{ color: c.titleColor }}>
+                      {opt.label}
+                    </div>
+                    {opt.description && (
+                      <div className="mt-0.5 text-xs" style={{ color: c.descColor }}>
+                        {opt.description}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </button>
-            </div>
+            )
+          })}
+        </div>
 
+        {multiSelect ? (
+          <>
+            <textarea
+              ref={textAreaRef}
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              rows={2}
+              placeholder="Add a custom answer (optional)..."
+              className="w-full resize-none rounded border px-2 py-1.5 font-mono text-[11px] outline-none focus:border-blue-500 mb-3"
+              style={{
+                borderColor: c.inputBorder,
+                backgroundColor: c.inputBg,
+                color: c.inputText,
+              }}
+            />
             <div className="flex items-center justify-between">
               <span className="text-xs" style={{ color: c.labelColor }}>
-                {multiSelect ? (selectedCount > 0 ? `${selectedCount} selected` : 'Select options') : ''}
+                {multiAnswerCount > 0 ? `${multiAnswerCount} selected` : 'Select options'}
               </span>
               <div className="flex gap-2">
                 <button
@@ -225,20 +230,18 @@ export default function QuestionDialog({
                 >
                   Cancel
                 </button>
-                {multiSelect && (
-                  <button
-                    onClick={handleConfirmMulti}
-                    disabled={selectedCount === 0}
-                    className="rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
-                  >
-                    Confirm{selectedCount > 0 ? ` (${selectedCount})` : ''}
-                  </button>
-                )}
+                <button
+                  onClick={handleConfirmMulti}
+                  disabled={multiAnswerCount === 0}
+                  className="rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
+                >
+                  Confirm{multiAnswerCount > 0 ? ` (${multiAnswerCount})` : ''}
+                </button>
               </div>
             </div>
           </>
-        ) : (
+        ) : showCustomInput ? (
           <>
             <div className="mb-3">
               <textarea
@@ -258,17 +261,16 @@ export default function QuestionDialog({
                 Enter to submit · Esc to go back
               </p>
             </div>
-
             <div className="flex justify-end gap-2">
               <button
-                onClick={handleBackToOptions}
+                onClick={() => { setShowCustomInput(false); setCustomText('') }}
                 className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
               >
                 Back
               </button>
               <button
-                onClick={handleSubmitCustom}
+                onClick={handleSubmitSingleCustom}
                 disabled={!customText.trim()}
                 className="rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
@@ -277,6 +279,28 @@ export default function QuestionDialog({
               </button>
             </div>
           </>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span />
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancel}
+                className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowCustomInput(true)}
+                onMouseEnter={() => setHoveredIndex(options.length)}
+                onMouseLeave={() => setHoveredIndex(-1)}
+                className="rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
+              >
+                ✎ Type something...
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>,
