@@ -10,6 +10,7 @@ import type {
   ContentBlock,
   TodoDetails,
   TodoItem,
+  QuestionDetails,
 } from '../types/message'
 import type {
   PiContentBlock,
@@ -256,11 +257,16 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
             msg.toolName === 'todowrite' && msg.details
               ? { todos: ((msg.details as { todos?: TodoItem[] }).todos ?? []) }
               : undefined
+          const questionDetails: QuestionDetails | undefined =
+            msg.toolName === 'question' && msg.details
+              ? msg.details as QuestionDetails
+              : undefined
+          const toolDetails = todoDetails ?? questionDetails
           lastAssistant.blocks.push({
             type: 'tool_result',
             toolCallId: msg.toolCallId as string || '',
             content: resultBlocks,
-            ...(todoDetails ? { details: todoDetails } : {}),
+            ...(toolDetails ? { details: toolDetails } : {}),
           })
         }
       }

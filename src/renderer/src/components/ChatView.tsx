@@ -14,6 +14,7 @@ import type {
   Annotation,
   ChangeAnchor,
   TodoItem,
+  QuestionDetails,
 } from '../types/message'
 import ChatContextMenu from './ChatContextMenu'
 import SkillBlockRenderer from './SkillBlockRenderer'
@@ -491,6 +492,26 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }): React.ReactElement 
   )
 }
 
+function QuestionResultRenderer({ details }: { details: QuestionDetails }): React.ReactElement {
+  if (details.answer === null) {
+    return <span className="text-gray-400 text-xs italic">Cancelled</span>
+  }
+  return (
+    <div className="space-y-1 py-0.5">
+      <div className="text-gray-500 text-[11px]">{details.question}</div>
+      <div className="flex items-center gap-1.5 text-[11px] font-mono">
+        <svg className="w-3.5 h-3.5 text-green-500 shrink-0" viewBox="0 0 24 24" fill="none">
+          <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="text-gray-600">
+          {details.wasCustom ? '(wrote) ' : ''}
+          {details.answer}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
@@ -522,6 +543,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
     grep: '🔎',
     search_sessions: '💬',
     todowrite: '📋',
+    question: '❓',
   }
   const icon = toolIcon[block.toolName] ?? '🔧'
 
@@ -588,6 +610,17 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
       }
       break
     }
+    case 'question': {
+      const d = result?.details as QuestionDetails | undefined
+      if (d) {
+        headerSummary = d.answer
+          ? d.wasCustom ? `wrote: ${d.answer.slice(0, 30)}` : `selected: ${d.answer}`
+          : 'cancelled'
+      } else {
+        headerSummary = ''
+      }
+      break
+    }
     default:
       headerSummary = ''
   }
@@ -625,6 +658,9 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
   const displayResult = (outputCollapsed && resultIsLong)
     ? resultLines.slice(0, COLLAPSE_THRESHOLD).join('\n')
     : resultText
+
+  const todoDetails = result?.details && 'todos' in result.details ? result.details.todos : undefined
+  const questionDetails = result?.details && 'question' in result.details ? result.details as QuestionDetails : undefined
 
   return (
     <div className="first:border-t-0">
@@ -798,12 +834,12 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
               {JSON.stringify(block.args, null, 2)}
             </pre>
           )}
-          {/* Todo list */}
-          {block.toolName === 'todowrite' && result?.details?.todos && result.details.todos.length > 0 && (
-            <TodoListRenderer todos={result.details.todos} />
-          )}
-          {/* Output */}
-          {resultText.trim().length > 0 && (
+          {/* Structured result rendering: todo list, question result, or text output */}
+          {todoDetails && todoDetails.length > 0 ? (
+            <TodoListRenderer todos={todoDetails} />
+          ) : questionDetails ? (
+            <QuestionResultRenderer details={questionDetails} />
+          ) : resultText.trim().length > 0 ? (
             <div className="mt-1">
               <div className="flex items-center justify-between py-0.5">
                 <span className="text-xs text-gray-400">
@@ -832,7 +868,7 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
                 </div>
               )}
             </div>
-          )}
+          ) : null}
           {/* Non-text result content (images only — html is rendered inline above) */}
           {result && result.content.map((child, i) => {
             if (child.type === 'image') {
