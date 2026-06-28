@@ -8,6 +8,8 @@
 import type {
   ChatMessage,
   ContentBlock,
+  TodoDetails,
+  TodoItem,
 } from '../types/message'
 import type {
   PiContentBlock,
@@ -250,10 +252,15 @@ export function convertPiMessagesToChatMessages(piMessages: unknown[]): ConvertR
           })
         }
         if (resultBlocks.length > 0) {
+          const todoDetails: TodoDetails | undefined =
+            msg.toolName === 'todowrite' && msg.details
+              ? { todos: ((msg.details as { todos?: TodoItem[] }).todos ?? []) }
+              : undefined
           lastAssistant.blocks.push({
             type: 'tool_result',
             toolCallId: msg.toolCallId as string || '',
             content: resultBlocks,
+            ...(todoDetails ? { details: todoDetails } : {}),
           })
         }
       }

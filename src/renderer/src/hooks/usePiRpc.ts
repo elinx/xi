@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { ChatMessage, ContentBlock, ToolCallBlock } from '../types/message'
+import type { ChatMessage, ContentBlock, ToolCallBlock, TodoDetails, TodoItem } from '../types/message'
 import type {
   AgentSessionEvent,
   MessageUpdateEvent,
@@ -472,8 +472,13 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
             })
           }
 
+          const todoDetails: TodoDetails | undefined =
+            toolEvent.toolName === 'todowrite' && toolEvent.result?.details
+              ? { todos: ((toolEvent.result.details as { todos?: TodoItem[] }).todos ?? []) }
+              : undefined
+
           const toolResultBlock: ContentBlock | null = resultBlocks.length > 0
-            ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks }
+            ? { type: 'tool_result', toolCallId: toolEvent.toolCallId, content: resultBlocks, ...(todoDetails ? { details: todoDetails } : {}) }
             : null
 
           if (cache) {
