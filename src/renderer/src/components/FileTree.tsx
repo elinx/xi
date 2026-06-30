@@ -15,6 +15,8 @@ interface TreeNode {
 
 const HIDDEN = new Set(['node_modules', '.git', 'out', 'dist', '.pi', '.DS_Store'])
 
+const persistedExpandedDirs = new Set<string>()
+
 type ReadDirectoryApi = typeof window.api & FileSystemIpcApi
 
 function isHidden(name: string): boolean {
@@ -135,7 +137,7 @@ function TreeNodeRow({
 
 export default function FileTree({ onFileSelect }: FileTreeProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(persistedExpandedDirs))
   const [loading, setLoading] = useState(true)
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null)
   const [ctxMenuPos, setCtxMenuPos] = useState<{ x: number; y: number } | null>(null)
@@ -184,8 +186,10 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
         const next = new Set(prev)
         if (next.has(dirPath)) {
           next.delete(dirPath)
+          persistedExpandedDirs.delete(dirPath)
         } else {
           next.add(dirPath)
+          persistedExpandedDirs.add(dirPath)
           loadChildren(dirPath)
         }
         return next
@@ -274,6 +278,29 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
   useEffect(() => {
     loadRoot()
   }, [loadRoot])
+
+  useEffect(() => {
+    if (tree.length === 0 || persistedExpandedDirs.size === 0) return
+    const hasEmptyChildren = (nodes: TreeNode[]): boolean => {
+      for (const n of nodes) {
+        if (n.isDirectory && persistedExpandedDirs.has(n.path) && n.children?.length === 0) return true
+        if (n.isDirectory && n.children && hasEmptyChildren(n.children)) return true
+      }
+      return false
+    }
+    if (!hasEmptyChildren(tree)) return
+    const dirsToLoad: string[] = []
+    const collect = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        if (n.isDirectory && persistedExpandedDirs.has(n.path) && n.children?.length === 0) {
+          dirsToLoad.push(n.path)
+        }
+        if (n.isDirectory && n.children) collect(n.children)
+      }
+    }
+    collect(tree)
+    dirsToLoad.forEach((dir) => loadChildren(dir))
+  }, [tree, loadChildren])
 
   useEffect(() => {
     const api = window.api as typeof window.api & { onFsChanged?: (cb: () => void) => () => void }
