@@ -30,6 +30,8 @@ const LANG_MAP: Record<string, string> = {
 
 const MARKDOWN_EXTS = new Set(['md', 'markdown', 'mdx'])
 
+const scrollPositions = new Map<string, number>()
+
 function getShikiLang(ext: string): string | undefined {
   return LANG_MAP[ext.toLowerCase()]
 }
@@ -121,6 +123,20 @@ export default function FileViewer({ filePath, scrollToLine }: FileViewerProps) 
 
     return () => { cancelled = true }
   }, [fileData, resolvedTheme])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const saved = scrollPositions.get(filePath)
+    if (saved != null) {
+      el.scrollTop = saved
+    }
+    const handleScroll = () => {
+      scrollPositions.set(filePath, el.scrollTop)
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [filePath, highlightedHtml, fileData])
 
   useEffect(() => {
     if (scrollToLine == null || !containerRef.current) return
