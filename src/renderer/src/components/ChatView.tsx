@@ -404,7 +404,7 @@ function buildChangeAnchor(toolCall: ToolCallBlock, explanation?: string): Chang
   return null
 }
 
-function ExplanationBlockRenderer({ content, anchor, onForkAsk }: { content: string; anchor: ChangeAnchor; onForkAsk: (anchor: ChangeAnchor) => void }): React.ReactElement {
+function ExplanationBlockRenderer({ content }: { content: string }): React.ReactElement {
   const [isDark] = useState(() => !document.documentElement.classList.contains('light'))
   return (
     <div
@@ -420,16 +420,6 @@ function ExplanationBlockRenderer({ content, anchor, onForkAsk }: { content: str
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: LinkComponent, p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>, ul: ({ children }) => <ul className="list-disc pl-4 mb-1 last:mb-0">{children}</ul>, li: ({ children }) => <li className="mb-0.5">{children}</li> }}>{content}</ReactMarkdown>
           </div>
-          <button
-            onClick={() => onForkAsk(anchor)}
-            className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] transition-colors duration-150"
-            style={{ color: '#36d399' }}
-          >
-            追问
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
-          </button>
         </div>
       </div>
     </div>
@@ -515,7 +505,7 @@ function QuestionResultRenderer({ details }: { details: QuestionDetails }): Reac
   )
 }
 
-const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void }): React.ReactElement {
+const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileSelect, onForkAsk }: { block: ToolCallBlock; result?: ToolResultBlock; onFileSelect?: (filePath: string) => void; onForkAsk?: (anchor: ChangeAnchor) => void }): React.ReactElement {
   // Always collapsed by default
   const [expanded, setExpanded] = useState(false)
   const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains('light'))
@@ -668,29 +658,47 @@ const ToolCallRenderer = memo(function ToolCallRenderer({ block, result, onFileS
   const todoDetails = result?.details && 'todos' in result.details ? result.details.todos : undefined
   const questionDetails = result?.details && 'question' in result.details ? result.details as QuestionDetails : undefined
 
+  const forkAskAnchor = (block.toolName === 'write' || block.toolName === 'edit') && onForkAsk
+    ? buildChangeAnchor(block)
+    : null
+
   return (
     <div className="first:border-t-0">
-      {/* Header line — always visible */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-1.5 py-0.5 text-left text-gray-400 hover:text-gray-600 transition-colors duration-150"
-      >
-        <span className="text-[10px]">{icon}</span>
-        <span className="font-mono text-[11px]">{block.toolName}</span>
-        {headerSummary ? (
-          <span className="flex-1 truncate font-mono text-[11px] text-gray-300">{headerSummary}</span>
-        ) : (
-          <span className="flex-1" />
-        )}
-        {statusEl}
-        <svg
-          className={`h-3 w-3 text-gray-300 transition-transform ${expanded ? 'rotate-90' : ''}`}
-          fill="currentColor"
-          viewBox="0 0 20 20"
+      <div className="flex w-full items-center gap-1.5 py-0.5 text-gray-400 transition-colors duration-150">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex flex-1 items-center gap-1.5 text-left hover:text-gray-600 transition-colors duration-150"
         >
-          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-        </svg>
-      </button>
+          <span className="text-[10px]">{icon}</span>
+          <span className="font-mono text-[11px]">{block.toolName}</span>
+          {headerSummary ? (
+            <span className="flex-1 truncate font-mono text-[11px] text-gray-300">{headerSummary}</span>
+          ) : (
+            <span className="flex-1" />
+          )}
+          {forkAskAnchor && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onForkAsk!(forkAskAnchor) }}
+              className="rounded px-1.5 py-px text-[10px] leading-tight transition-all duration-150"
+              style={{
+                color: '#36d399',
+                backgroundColor: 'rgba(54, 211, 153, 0.08)',
+                border: '1px solid rgba(54, 211, 153, 0.18)',
+              }}
+            >
+              Ask
+            </button>
+          )}
+          {statusEl}
+          <svg
+            className={`h-3 w-3 text-gray-300 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
       {/* HTML preview — always visible when result contains HTML */}
       {htmlBlocks.length > 0 && htmlBlocks.map((htmlBlock, i) => (
         <HtmlBlockRenderer key={`html-inline-${i}`} block={htmlBlock} />
@@ -1167,7 +1175,7 @@ function MergedBlocksRenderer({
       const resultIdx = toolResultById.get(tcId)
       const result = resultIdx !== undefined ? allBlocks[resultIdx].block as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} onForkAsk={onForkAsk} />
       )
       continue
     }
@@ -1194,8 +1202,6 @@ function MergedBlocksRenderer({
             <ExplanationBlockRenderer
               key={`expl-${msgId}-${blockIdx}`}
               content={block.content}
-              anchor={anchor}
-              onForkAsk={onForkAsk}
             />
           )
           continue
@@ -1285,7 +1291,7 @@ function MessageBlocksRenderer({
       const resultIdx = toolResultById.get(tcId)
       const result = resultIdx !== undefined ? msg.blocks[resultIdx] as ToolResultBlock : undefined
       elements.push(
-        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} />
+        <ToolCallRenderer key={`tc-${tcId}`} block={block} result={result} onFileSelect={onFileSelect} onForkAsk={onForkAsk} />
       )
       continue
     }
@@ -1312,8 +1318,6 @@ function MessageBlocksRenderer({
             <ExplanationBlockRenderer
               key={`expl-${msg.id}-${j}`}
               content={block.content}
-              anchor={anchor}
-              onForkAsk={onForkAsk}
             />
           )
           continue
