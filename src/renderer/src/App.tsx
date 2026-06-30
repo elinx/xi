@@ -1314,48 +1314,46 @@ function App(): React.ReactElement {
             )}
           </div>
 
-          {isSessionTabActive && (
-            <InputBar
-              onSend={handleSendPrompt}
-              disabled={!isConnected}
-              isConnected={isConnected}
-              sessionPath={activeSessionPath}
-              isStreaming={displayedStreaming}
-              onStop={handleStop}
-              workerStatus={displayedWorkerStatus}
-              currentModel={currentModel}
-              onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
-              getAvailableModels={() => getAvailableModels(activeSessionPath)}
-              files={indexedFiles}
-              sessions={sessions?.projects?.flatMap(p => p.allSessions) ?? []}
-              sentMessages={sentMessages}
-              quotes={mergedQuotes}
-              onRemoveQuote={handleRemoveQuote}
-              onClearQuotes={handleClearQuotes}
-              tokenUsage={displayedTokenUsage}
-              queueCount={messageQueue.length}
-              queueMessages={messageQueue.map(m => ({ text: m.text }))}
-              onClearQueue={() => setMessageQueue([])}
-              onRemoveQueuedAt={(i) => setMessageQueue(prev => prev.filter((_, idx) => idx !== i))}
-              onSendQueued={(i) => {
-                const msg = messageQueueRef.current[i]
-                if (!msg) return
-                setMessageQueue(prev => prev.filter((_, idx) => idx !== i))
-                if (isPiStreaming()) {
-                  setMessageQueue(prev => [msg, ...prev])
-                } else {
-                  const sessionPath = displayedSessionPathRef.current
-                  if (sessionPath) {
-                    const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
-                    apiWithWorker.workerEnsureReady?.(sessionPath).then(() => {
-                      sendPrompt(sessionPath, msg.text, msg.images, msg.mentions)
-                    })
-                  }
+          <InputBar
+            onSend={handleSendPrompt}
+            disabled={!isConnected}
+            isConnected={isConnected}
+            sessionPath={activeSessionPath}
+            isStreaming={displayedStreaming}
+            onStop={handleStop}
+            workerStatus={displayedWorkerStatus}
+            currentModel={currentModel}
+            onSetModel={(modelId, provider) => setModel(activeSessionPath, modelId, provider)}
+            getAvailableModels={() => getAvailableModels(activeSessionPath)}
+            files={indexedFiles}
+            sessions={sessions?.projects?.flatMap(p => p.allSessions) ?? []}
+            sentMessages={sentMessages}
+            quotes={mergedQuotes}
+            onRemoveQuote={handleRemoveQuote}
+            onClearQuotes={handleClearQuotes}
+            tokenUsage={displayedTokenUsage}
+            queueCount={messageQueue.length}
+            queueMessages={messageQueue.map(m => ({ text: m.text }))}
+            onClearQueue={() => setMessageQueue([])}
+            onRemoveQueuedAt={(i) => setMessageQueue(prev => prev.filter((_, idx) => idx !== i))}
+            onSendQueued={(i) => {
+              const msg = messageQueueRef.current[i]
+              if (!msg) return
+              setMessageQueue(prev => prev.filter((_, idx) => idx !== i))
+              if (isPiStreaming()) {
+                setMessageQueue(prev => [msg, ...prev])
+              } else {
+                const sessionPath = displayedSessionPathRef.current
+                if (sessionPath) {
+                  const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+                  apiWithWorker.workerEnsureReady?.(sessionPath).then(() => {
+                    sendPrompt(sessionPath, msg.text, msg.images, msg.mentions)
+                  })
                 }
-              }}
-              skills={skillStoreSkills}
-            />
-          )}
+              }
+            }}
+            skills={skillStoreSkills}
+          />
         </div>
 
         <RightPanel
