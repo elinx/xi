@@ -187,6 +187,7 @@ function App(): React.ReactElement {
   const updateTab = useTabStore(s => s.updateTab)
   const addTab = useTabStore(s => s.addTab)
   const resetTabs = useTabStore(s => s.resetTabs)
+  const switchToRecentTab = useTabStore(s => s.switchToRecentTab)
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isSessionTabActive = activeTab?.type === 'session'
 
@@ -823,10 +824,14 @@ function App(): React.ReactElement {
         e.preventDefault()
         setRightPanelView('search')
       }
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault()
+        switchToRecentTab()
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [abort, isPiStreaming, toggleLeftPanel, toggleRightPanel, addTab, paletteOpen, refreshFileIndex])
+  }, [abort, isPiStreaming, toggleLeftPanel, toggleRightPanel, addTab, paletteOpen, refreshFileIndex, switchToRecentTab])
 
   useEffect(() => {
     const api = window.api as typeof window.api & { watchStart?: () => Promise<{ ok: boolean }>; watchStop?: () => Promise<{ ok: boolean }> }

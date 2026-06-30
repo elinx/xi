@@ -28,6 +28,7 @@ function createSessionTab(): TabInfo {
 interface TabState {
   tabs: TabInfo[]
   activeTabId: string
+  recentTabIds: string[]
 
   addTab: (tab: Omit<TabInfo, 'id'> & { id?: string }) => string
   closeTab: (tabId: string) => void
@@ -35,6 +36,7 @@ interface TabState {
   updateTab: (tabId: string, updates: Partial<TabInfo>) => void
   findTabByMeta: (type: TabType, key: string, value: unknown) => TabInfo | undefined
   resetTabs: () => void
+  switchToRecentTab: () => void
 }
 
 export const useTabStore = create<TabState>()(
@@ -42,10 +44,10 @@ export const useTabStore = create<TabState>()(
     (set, get) => ({
       tabs: [createSessionTab()],
       activeTabId: SESSION_TAB_ID,
+      recentTabIds: [SESSION_TAB_ID],
 
       addTab: (tab) => {
         const id = tab.id ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        // Determine dedup key based on tab type
         const dedupKey = tab.type === 'skill' ? 'skillFilePath' : 'filePath'
         const dedupValue = tab.type === 'skill' ? tab.meta.skillFilePath : tab.meta.filePath
         const existing = dedupValue ? get().findTabByMeta(tab.type, dedupKey, dedupValue) : undefined
@@ -55,12 +57,14 @@ export const useTabStore = create<TabState>()(
               t.id === existing.id ? { ...t, meta: { ...t.meta, ...tab.meta } } : t
             ),
             activeTabId: existing.id,
+            recentTabIds: [existing.id, ...state.recentTabIds.filter((id) => id !== existing.id)],
           }))
           return existing.id
         }
         set((state) => ({
           tabs: [...state.tabs, { ...tab, id }],
           activeTabId: id,
+          recentTabIds: [id, ...state.recentTabIds.filter((rid) => rid !== id)],
         }))
         return id
       },
@@ -76,18 +80,24 @@ export const useTabStore = create<TabState>()(
 
         const idx = state.tabs.findIndex((t) => t.id === tabId)
         const remaining = state.tabs.filter((t) => t.id !== tabId)
+        const remainingRecent = state.recentTabIds.filter((id) => id !== tabId)
 
         let nextActiveId = state.activeTabId
         if (state.activeTabId === tabId) {
           nextActiveId = remaining[Math.min(idx, remaining.length - 1)]?.id ?? SESSION_TAB_ID
         }
 
-        set({ tabs: remaining, activeTabId: nextActiveId })
+        set({ tabs: remaining, activeTabId: nextActiveId, recentTabIds: remainingRecent.length > 0 ? remainingRecent : [nextActiveId] })
       },
 
       setActiveTab: (tabId) => {
         const exists = get().tabs.some((t) => t.id === tabId)
-        if (exists) set({ activeTabId: tabId })
+        if (exists) {
+          set((state) => ({
+            activeTabId: tabId,
+            recentTabIds: [tabId, ...state.recentTabIds.filter((id) => id !== tabId)],
+          }))
+        }
       },
 
       updateTab: (tabId, updates) => {
@@ -101,7 +111,19 @@ export const useTabStore = create<TabState>()(
       },
 
       resetTabs: () => {
-        set({ tabs: [createSessionTab()], activeTabId: SESSION_TAB_ID })
+        set({ tabs: [createSessionTab()], activeTabId: SESSION_TAB_ID, recentTabIds: [SESSION_TAB_ID] })
+      },
+
+      switchToRecentTab: () => {
+        const state = get()
+        const candidates = state.recentTabIds.filter((id) => id !== state.activeTabId && state.tabs.some((t) => t.id === id))
+        const target = candidates[0] ?? state.recentTabIds.find((id) => id !== state.activeTabId)
+        if (target) {
+          set((st) => ({
+            activeTabId: target,
+            recentTabIds: [target, ...st.recentTabIds.filter((id) => id !== target)],
+          }))
+        }
       },
     }),
     {
