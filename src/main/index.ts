@@ -1002,6 +1002,26 @@ function registerIpcHandlers(): void {
     initWorkerManager(mainSession?.filePath)
     try {
       await workerManager!.initPrimary(newCwd, initialSessionPath)
+      // Post-init: name session 'main' and flush to disk (same as pi:start handler)
+      try {
+        const state = (await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'get_state' })) as Record<string, unknown>
+        const sp = typeof state.sessionFile === 'string' ? state.sessionFile : null
+        if (sp) {
+          const primary = workerManager!.getPrimary()!
+          if (!primary.sessionPath) primary.sessionPath = sp
+          sessionService.nameSession(sp, 'main')
+          sessionService.flushPendingName(sp)
+        }
+      } catch {}
+      const mainSessionAfter = sessionService.findMainSession(newCwd)
+      if (!mainSessionAfter || !mainSessionAfter.name) {
+        try {
+          await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'set_session_name', name: 'main' })
+        } catch {}
+        try {
+          await workerManager!.getPrimary()!.bridge.sendRpcCommand({ type: 'flush_session' })
+        } catch {}
+      }
       return { ok: true }
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
