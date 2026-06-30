@@ -210,6 +210,7 @@ function initWorkerManager(sessionPath?: string): void {
       task,
       mode: 'single',
       runId: toolCallId,
+      status: 'running',
     })
 
     broadcastToRenderers('subagent:status', {
@@ -273,12 +274,40 @@ function initWorkerManager(sessionPath?: string): void {
           details: { sessionPath: subSessionPath, exitStatus: 'success' },
         },
       })
+
+      sessionService.setSubagentMeta(subSessionPath, {
+        agentName: 'subagent',
+        task,
+        mode: 'single',
+        runId: toolCallId,
+        status: 'completed',
+      })
+      broadcastToRenderers('subagent:status', {
+        type: 'subagent:completed',
+        sessionPath: subSessionPath,
+        parentSessionPath,
+        toolCallId,
+      })
     } catch (err) {
       const sender = (senderSessionPath ? workerManager?.get(senderSessionPath) : null) ?? workerManager?.getPrimary()
       sender?.bridge.sendCommand({
         type: 'subagent:result',
         toolCallId,
         error: err instanceof Error ? err.message : String(err),
+      })
+
+      sessionService.setSubagentMeta(subSessionPath, {
+        agentName: 'subagent',
+        task,
+        mode: 'single',
+        runId: toolCallId,
+        status: 'failed',
+      })
+      broadcastToRenderers('subagent:status', {
+        type: 'subagent:failed',
+        sessionPath: subSessionPath,
+        parentSessionPath,
+        toolCallId,
       })
     }
   })

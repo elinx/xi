@@ -542,6 +542,7 @@ export function setSubagentMeta(sessionPath: string, meta: {
   task: string
   mode: 'single' | 'parallel' | 'chain'
   runId: string
+  status?: 'running' | 'completed' | 'failed'
 }): boolean {
   if (!existsSync(sessionPath)) return false
   try {

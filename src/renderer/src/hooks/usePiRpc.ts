@@ -652,6 +652,8 @@ export function usePiRpc(options: UsePiRpcOptions): UsePiRpcReturn {
           if (sessionPath && parentSessionPath) {
             onSubagentDetected?.(sessionPath, parentSessionPath)
           }
+        } else if (obj.type === 'subagent:completed' || obj.type === 'subagent:failed') {
+          onSubagentDetected?.(obj.sessionPath as string, obj.parentSessionPath as string)
         }
       })
       return cleanup
