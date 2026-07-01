@@ -206,6 +206,7 @@ function SessionNode({
   const [childName, setChildName] = useState('')
   const isCompleted = node.session.status === 'completed'
   const isBranched = node.session.status === 'branched'
+  const isDone = isCompleted || isBranched
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
   const hiddenCount = hasChildren && !isExpanded ? countDescendants(node) : 0
@@ -455,7 +456,7 @@ function SessionNode({
                   return null
                 })()}
               </div>
-              {!isCompleted && (() => {
+                {!isDone && (() => {
                 if (node.session.origin === 'subagent' && node.session.subagentMeta) {
                   const meta = node.session.subagentMeta
                   return (
@@ -749,7 +750,7 @@ function SessionSidebar({
     const result: SessionTreeNode[] = []
     function walk(node: SessionTreeNode) {
       for (const child of node.children) {
-        if (child.session.status === 'completed' && !child.session.isMain) {
+        if ((child.session.status === 'completed' || child.session.status === 'branched') && !child.session.isMain) {
           result.push(child)
         }
         walk(child)
@@ -764,7 +765,7 @@ function SessionSidebar({
     function prune(node: SessionTreeNode): SessionTreeNode {
       const children: SessionTreeNode[] = []
       for (const child of node.children) {
-        if (child.session.status === 'completed') continue
+        if (child.session.status === 'completed' || child.session.status === 'branched') continue
         children.push(prune(child))
       }
       return { ...node, children }
@@ -1205,12 +1206,12 @@ function SessionSidebar({
           <button
             className="w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 text-left transition-colors duration-150 flex items-center gap-2"
             onClick={() => {
-              const newStatus = contextMenu.session.status === 'completed' ? 'active' : 'completed'
+              const newStatus = (contextMenu.session.status === 'completed' || contextMenu.session.status === 'branched') ? 'active' : 'completed'
               onSetSessionStatus(contextMenu.session.filePath, newStatus)
               setContextMenu(null)
             }}
           >
-            {contextMenu.session.status === 'completed' ? (
+            {(contextMenu.session.status === 'completed' || contextMenu.session.status === 'branched') ? (
               <>
                 <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
