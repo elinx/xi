@@ -20,6 +20,7 @@
     "release": "electron-vite build && electron-builder --publish always"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.78.0",
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@radix-ui/react-visually-hidden": "^1.2.5",
     "@tailwindcss/typography": "^0.5.19",
