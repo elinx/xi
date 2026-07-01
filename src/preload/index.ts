@@ -89,14 +89,14 @@ const api = {
   forkAtEntry: (sessionPath: string | null, entryId: string, name?: string, origin?: 'main' | 'subagent' | 'fork_ask'): Promise<{ success: boolean; text?: string; error?: string; sessionPath?: string }> =>
     ipcRenderer.invoke('session:forkAtEntry', sessionPath, entryId, name, origin),
 
-  analyzeBranchDirections: (sessionPath: string | null) =>
-    ipcRenderer.invoke('pi:analyzeBranchDirections', sessionPath) as Promise<{ directions: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }>,
+  analyzeBranchDirections: (sessionPath: string | null): Promise<{ directions: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }> =>
+    ipcRenderer.invoke('pi:analyzeBranchDirections', sessionPath),
 
-  classifyBranchMessages: (sessionPath: string | null, purpose: string) =>
-    ipcRenderer.invoke('pi:classifyBranchMessages', sessionPath, purpose) as Promise<{ classification: { keep: string[]; summarize: string[]; drop: string[] } }>,
+  classifyBranchMessages: (sessionPath: string | null, purpose: string): Promise<{ classification: { keep: string[]; summarize: string[]; drop: string[] } }> =>
+    ipcRenderer.invoke('pi:classifyBranchMessages', sessionPath, purpose),
 
-  createBranch: (sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }, classification?: { keep: string[]; summarize: string[]; drop: string[] }) =>
-    ipcRenderer.invoke('pi:createBranch', sessionPath, direction, classification) as Promise<{ success: boolean; newSessionPath?: string; error?: string }>,
+  createBranch: (sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }, classification?: { keep: string[]; summarize: string[]; drop: string[] }): Promise<{ success: boolean; newSessionPath?: string; error?: string }> =>
+    ipcRenderer.invoke('pi:createBranch', sessionPath, direction, classification),
 
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),
@@ -122,7 +122,7 @@ const api = {
   getForkPoints: (sessionPath: string): Promise<ForkPoint[]> =>
     ipcRenderer.invoke('session:getForkPoints', sessionPath),
 
-  setSessionStatus: (sessionPath: string, status: 'active' | 'completed'): Promise<{ success: boolean; error?: string }> =>
+  setSessionStatus: (sessionPath: string, status: 'active' | 'completed' | 'branched'): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:setSessionStatus', sessionPath, status),
 
   reparentSession: (sessionPath: string, newParentPath: string | null): Promise<{ success: boolean; error?: string }> =>

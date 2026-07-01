@@ -134,7 +134,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
 
     let messageCount = 0
     let name: string | null = null
-    let status: 'active' | 'completed' | null = null
+    let status: 'active' | 'completed' | 'branched' | null = null
     let summary: string | null = null
     let parentSessionPath: string | null = header.parentSession ?? null
     let firstUserMessage: string | null = null
@@ -156,7 +156,7 @@ export function parseSessionFile(filePath: string): SessionInfo | null {
           if (typeof entry.name === 'string') {
             name = entry.name
           }
-          if (entry.status === 'active' || entry.status === 'completed') {
+          if (entry.status === 'active' || entry.status === 'completed' || entry.status === 'branched') {
             status = entry.status
           }
           if (typeof entry.summary === 'string') {
