@@ -1365,10 +1365,14 @@ Output a JSON array. No markdown, no explanation, just the JSON array.`
       case 'classify_branch_messages': {
         try {
           const purpose = cmd.purpose as string
-          const messages = session.messages
-          const msgOutline = messages.map((m, i) => {
-            const role = m.role
-            const text = typeof m.content === 'string' ? m.content : (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
+          const entries = sessionManager?.getEntries() ?? []
+          const messageEntries = entries.filter(e => e.type === 'message' && (e as Record<string, unknown>).message)
+
+          const msgOutline = messageEntries.map((e, i) => {
+            const msg = (e as Record<string, unknown>).message as Record<string, unknown>
+            const role = msg.role as string
+            const content = msg.content
+            const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
             return `${i + 1}. [${role}] ${text.slice(0, 150)}`
           }).join('\n')
 
@@ -1415,8 +1419,14 @@ Output JSON: {"keep": [1,3,5], "summarize": [2,4], "drop": [6,7]}`
             classification = JSON.parse(jsonMatch ? jsonMatch[0] : text)
           } catch {}
 
-          const ids = messages.map((m, i) => ({ id: (m as Record<string, unknown>).id as string ?? String(i), idx: i }))
-          const toIds = (indices: number[]) => indices.map(i => ids[i - 1]?.id).filter(Boolean) as string[]
+          const toIds = (indices: number[]) => indices
+            .map(i => {
+              const idx = i - 1
+              const entry = messageEntries[idx] as Record<string, unknown> | undefined
+              if (!entry) return undefined
+              return typeof entry.id === 'string' ? entry.id : String(idx)
+            })
+            .filter((v): v is string => v !== undefined)
 
           send({
             channel: 'response', id: cmd.id, command: 'classify_branch_messages',
@@ -1441,29 +1451,32 @@ Output JSON: {"keep": [1,3,5], "summarize": [2,4], "drop": [6,7]}`
           const classification = cmd.classification as { keep: string[]; summarize: string[]; drop: string[] } | undefined
           const trunkSessionPath = cmd.trunkSessionPath as string
 
-          const messages = session.messages
           const entries = sessionManager?.getEntries() ?? []
+          const messageEntries = entries.filter(e => e.type === 'message' && (e as Record<string, unknown>).message)
 
-          let keepIds = classification?.keep ?? []
-          let summarizeIds = classification?.summarize ?? []
+          let keptEntries: typeof messageEntries = []
+          let summarizeEntryIndices: number[] = []
 
           if (!classification) {
-            keepIds = messages.map(m => (m as Record<string, unknown>).id as string).filter(Boolean)
-            summarizeIds = []
+            keptEntries = messageEntries
+          } else {
+            messageEntries.forEach((e, idx) => {
+              const entry = e as Record<string, unknown>
+              const entryId = typeof entry.id === 'string' ? entry.id : String(idx)
+              if (classification.keep.includes(entryId)) keptEntries.push(e)
+              if (classification.summarize.includes(entryId)) summarizeEntryIndices.push(idx)
+            })
           }
 
-          const keptEntries = entries.filter(e => {
-            if (e.type !== 'message') return false
-            const msg = (e as Record<string, unknown>).message as Record<string, unknown> | undefined
-            return msg && keepIds.includes((msg as Record<string, unknown>).id as string)
-          })
-
           let summaryText = ''
-          if (summarizeIds.length > 0 && completeSimpleFn) {
-            const summarizeMessages = messages.filter(m => summarizeIds.includes((m as Record<string, unknown>).id as string))
-            const summarizeOutline = summarizeMessages.map((m, i) => {
-              const text = typeof m.content === 'string' ? m.content : (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text').map(c => c.text).join(' ') ?? ''
-              return `${i + 1}. [${m.role}] ${text.slice(0, 300)}`
+          if (summarizeEntryIndices.length > 0 && completeSimpleFn) {
+            const summarizeOutline = summarizeEntryIndices.map((idx, i) => {
+              const entry = messageEntries[idx] as Record<string, unknown>
+              const msg = entry.message as Record<string, unknown>
+              const role = msg.role as string
+              const content = msg.content
+              const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
+              return `${i + 1}. [${role}] ${text.slice(0, 300)}`
             }).join('\n')
 
             const model = session.model
