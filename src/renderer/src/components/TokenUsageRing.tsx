@@ -10,6 +10,7 @@ interface TokenUsageRingProps {
   tooltipPosition?: 'top' | 'bottom'
   size?: number
   showPercent?: boolean
+  onClick?: () => void
 }
 
 export function interpolateColor(hex1: string, hex2: string, t: number): string {
@@ -33,15 +34,15 @@ export function formatTokens(n: number): string {
 }
 
 export function getFillColor(pct: number): string {
-  if (pct < 0.5) {
+  if (pct < 0.6) {
     return '#22c55e'
   }
-  if (pct < 0.75) {
-    const t = (pct - 0.5) / 0.25
+  if (pct < 0.8) {
+    const t = (pct - 0.6) / 0.2
     return interpolateColor('#22c55e', '#eab308', t)
   }
   if (pct < 0.9) {
-    const t = (pct - 0.75) / 0.15
+    const t = (pct - 0.8) / 0.1
     return interpolateColor('#eab308', '#f97316', t)
   }
   const t = Math.min(1, (pct - 0.9) / 0.1)
@@ -58,6 +59,7 @@ export function TokenUsageRing({
   tooltipPosition = 'bottom',
   size = 36,
   showPercent = true,
+  onClick,
 }: TokenUsageRingProps) {
   const [hovered, setHovered] = useState(false)
 
@@ -71,7 +73,7 @@ export function TokenUsageRing({
   const dashOffset = circumference * (1 - pct)
 
   const fillColor = getFillColor(pct)
-  const isCritical = pct >= 0.9
+  const isCritical = pct >= 0.8
 
   const remaining = contextWindowSize - usedTokens
 
@@ -89,9 +91,10 @@ export function TokenUsageRing({
 
   return (
     <div
-      style={{ position: 'relative', display: 'inline-flex' }}
+      style={{ position: 'relative', display: 'inline-flex', cursor: onClick ? 'pointer' : 'default' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
     >
       <style>{`
         @keyframes pulse-critical {

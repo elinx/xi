@@ -39,9 +39,12 @@ interface InputBarProps {
   onRemoveQueuedAt?: (index: number) => void
   onSendQueued?: (index: number) => void
   skills?: SkillInfo[]
+  onTokenRingClick?: () => void
+  showContextWarning?: boolean
+  onContextWarningAction?: () => void
 }
 
-function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued, skills = [] }: InputBarProps): React.ReactElement {
+function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onStop, workerStatus = 'none', currentModel, onSetModel, getAvailableModels, files, sessions, sentMessages, quotes, onRemoveQuote, onClearQuotes, tokenUsage, queueCount = 0, queueMessages = [], onClearQueue, onRemoveQueuedAt, onSendQueued, skills = [], onTokenRingClick, showContextWarning, onContextWarningAction }: InputBarProps): React.ReactElement {
   const [pastedImages, setPastedImages] = useState<{ data: string; mimeType: string }[]>([])
   const [showModelSelector, setShowModelSelector] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -604,6 +607,17 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
 
   return (
     <div className="relative">
+      {showContextWarning && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 border-b border-orange-200 text-xs text-orange-700">
+          <span className="flex-1">Context is nearly full. Branch to continue with a clean context.</span>
+          <button
+            onClick={onContextWarningAction}
+            className="px-2 py-0.5 rounded bg-orange-500 text-white text-[10px] font-medium hover:bg-orange-600 transition-colors"
+          >
+            Branch
+          </button>
+        </div>
+      )}
       <QuoteCard
         quotes={quotes}
         onRemove={onRemoveQuote}
@@ -719,6 +733,7 @@ function InputBar({ onSend, disabled, isConnected, sessionPath, isStreaming, onS
                   outputTokens={tokenUsage.outputTokens}
                   cacheReadTokens={tokenUsage.cacheReadTokens}
                   totalCost={tokenUsage.totalCost}
+                  onClick={onTokenRingClick}
                 />
               )}
               <button

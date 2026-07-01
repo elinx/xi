@@ -20,9 +20,10 @@ import SettingsPanel from './components/SettingsPanel'
 import SkillViewer from './components/SkillViewer'
 import CommandPalette from './components/CommandPalette'
 import QuestionDialog from './components/QuestionDialog'
+import BranchDialog from './components/BranchDialog'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage, TextBlock, ChangeAnchor, QuestionOption } from './types/message'
-import type { ForkPoint, SessionTreeNode } from './types/session'
+import type { ForkPoint, SessionTreeNode, BranchDirection, MessageClassification } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
@@ -107,6 +108,120 @@ function App(): React.ReactElement {
   const displayedStreamingId = sessionCache.displayedStreamingMessageId
   const activeSessionPath = sessionCache.displayedSessionPath ?? currentSession?.filePath ?? null
   const displayedWorkerStatus = activeSessionPath ? getWorkerStatus(activeSessionPath) : 'none'
+
+  const [branchDialogState, setBranchDialogState] = useState<{
+    visible: boolean
+    trigger: 'auto' | 'manual'
+    directions: BranchDirection[]
+    loading: boolean
+    creating: boolean
+  }>({ visible: false, trigger: 'manual', directions: [], loading: false, creating: false })
+  const branchDialogShownRef = useRef(false)
+  const dismissedRef = useRef(false)
+  const branchDialogStateRef = useRef(branchDialogState)
+  branchDialogStateRef.current = branchDialogState
+
+  const triggerBranchDialog = useCallback(async (trigger: 'auto' | 'manual') => {
+    setBranchDialogState({ visible: true, trigger, directions: [], loading: true, creating: false })
+    try {
+      const result = await window.api.analyzeBranchDirections(activeSessionPath)
+      setBranchDialogState(prev => ({ ...prev, loading: false, directions: result.directions ?? [] }))
+    } catch {
+      setBranchDialogState(prev => ({ ...prev, loading: false }))
+    }
+  }, [activeSessionPath])
+
+  const handleBranchDismiss = useCallback(() => {
+    setBranchDialogState(prev => ({ ...prev, visible: false }))
+    if (branchDialogState.trigger === 'auto') {
+      dismissedRef.current = true
+    }
+  }, [branchDialogState.trigger])
+
+  const handleBranchSelect = useCallback(async (direction: BranchDirection) => {
+    setBranchDialogState(prev => ({ ...prev, creating: true }))
+    try {
+      const result = await window.api.createBranch(activeSessionPath, direction)
+      if (result.success && result.newSessionPath) {
+        setBranchDialogState(prev => ({ ...prev, visible: false, creating: false }))
+        branchDialogShownRef.current = true
+        dismissedRef.current = false
+        await switchSession(result.newSessionPath)
+        refresh()
+      } else {
+        setBranchDialogState(prev => ({ ...prev, creating: false }))
+      }
+    } catch {
+      setBranchDialogState(prev => ({ ...prev, creating: false }))
+    }
+  }, [activeSessionPath, switchSession, refresh])
+
+  const handleBranchDelete = useCallback((index: number) => {
+    setBranchDialogState(prev => ({
+      ...prev,
+      directions: prev.directions.filter((_, i) => i !== index),
+    }))
+  }, [])
+
+  const handleBranchEdit = useCallback((index: number, updated: BranchDirection) => {
+    setBranchDialogState(prev => ({
+      ...prev,
+      directions: prev.directions.map((d, i) => i === index ? updated : d),
+    }))
+  }, [])
+
+  const handleBranchAdd = useCallback((direction: BranchDirection) => {
+    setBranchDialogState(prev => ({
+      ...prev,
+      directions: [...prev.directions, { ...direction, source: 'user' as const }],
+    }))
+  }, [])
+
+  const handleBranchRegenerate = useCallback(async () => {
+    setBranchDialogState(prev => ({ ...prev, loading: true }))
+    try {
+      const result = await window.api.analyzeBranchDirections(activeSessionPath)
+      setBranchDialogState(prev => {
+        const userDirs = prev.directions.filter(d => d.source === 'user')
+        return { ...prev, loading: false, directions: [...(result.directions ?? []), ...userDirs] }
+      })
+    } catch {
+      setBranchDialogState(prev => ({ ...prev, loading: false }))
+    }
+  }, [activeSessionPath])
+
+  useEffect(() => {
+    if (!activeSessionPath) return
+    branchDialogShownRef.current = false
+    dismissedRef.current = false
+  }, [activeSessionPath])
+
+  useEffect(() => {
+    if (!isSessionTabActive || !activeSessionPath) return
+    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
+    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
+    if (ratio >= 0.80 && !dismissedRef.current) {
+      triggerBranchDialog('auto')
+    } else if (ratio >= 0.80 && dismissedRef.current) {
+      dismissedRef.current = false
+      triggerBranchDialog('auto')
+    }
+  }, [displayedTokenUsage, isSessionTabActive, activeSessionPath, triggerBranchDialog])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key === 'b' && isSessionTabActive && !branchDialogStateRef.current.visible) {
+        e.preventDefault()
+        triggerBranchDialog('manual')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isSessionTabActive, triggerBranchDialog])
+
+  const showContextWarning = !branchDialogState.visible && dismissedRef.current &&
+    (displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize) >= 0.80
 
   // Compute sent messages (user text only, reversed for history navigation).
   // We stabilize the reference so it only changes when the actual content changes,
@@ -1376,6 +1491,9 @@ function App(): React.ReactElement {
               }
             }}
             skills={skillStoreSkills}
+            onTokenRingClick={() => triggerBranchDialog('manual')}
+            showContextWarning={showContextWarning}
+            onContextWarningAction={() => triggerBranchDialog('auto')}
           />
         </div>
 
@@ -1442,7 +1560,23 @@ function App(): React.ReactElement {
           onAnswer={handleQuestionAnswer}
         />
       )}
-    </div>
+
+      {branchDialogState.visible && (
+        <BranchDialog
+          trigger={branchDialogState.trigger}
+          tokenUsage={displayedTokenUsage}
+          directions={branchDialogState.directions}
+          loading={branchDialogState.loading}
+          creating={branchDialogState.creating}
+          onSelectDirection={handleBranchSelect}
+          onDeleteDirection={handleBranchDelete}
+          onEditDirection={handleBranchEdit}
+          onAddDirection={handleBranchAdd}
+          onRegenerateSuggestions={handleBranchRegenerate}
+          onDismiss={handleBranchDismiss}
+        />
+      )}
+     </div>
   )
 }
 

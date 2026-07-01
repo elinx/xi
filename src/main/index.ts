@@ -1196,6 +1196,39 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('pi:analyzeBranchDirections', async (_event, sessionPath: string | null) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { directions: [] }
+    try {
+      const result = await worker.bridge.sendRpcCommand({ type: 'analyze_branch_directions' }) as { directions?: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }
+      return { directions: result.directions ?? [] }
+    } catch (err: unknown) {
+      return { directions: [], error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:classifyBranchMessages', async (_event, sessionPath: string | null, purpose: string) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { classification: { keep: [], summarize: [], drop: [] } }
+    try {
+      const result = await worker.bridge.sendRpcCommand({ type: 'classify_branch_messages', purpose }) as { classification?: { keep: string[]; summarize: string[]; drop: string[] } }
+      return { classification: result.classification ?? { keep: [], summarize: [], drop: [] } }
+    } catch (err: unknown) {
+      return { classification: { keep: [], summarize: [], drop: [] }, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('pi:createBranch', async (_event, sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }, classification?: { keep: string[]; summarize: string[]; drop: string[] }) => {
+    const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
+    if (!worker?.bridge.isConnected) return { success: false, error: 'Worker not connected' }
+    try {
+      const result = await worker.bridge.sendRpcCommand({ type: 'create_branch', direction, classification, trunkSessionPath: sessionPath }) as { success?: boolean; newSessionPath?: string; error?: string }
+      return result
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('session:renameSession', async (_event, sessionPath: string | null, name: string) => {
     // If sessionPath is provided, write the name directly to that session's file
     if (sessionPath) {

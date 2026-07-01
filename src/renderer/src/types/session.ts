@@ -48,8 +48,8 @@ export interface SessionInfo {
   messageCount: number
   /** Whether this is the "main" session for its project. */
   isMain: boolean
-  /** Session status: 'active' or 'completed'. null means active (default). */
-  status: 'active' | 'completed' | null
+  /** Session status: 'active', 'completed', or 'branched'. null means active (default). */
+  status: 'active' | 'completed' | 'branched' | null
   /** Session summary (from session_info entries), or null. */
   summary: string | null
   /** First user message text (truncated), for search/preview. null if no user messages. */
@@ -89,6 +89,21 @@ export interface SessionListResult {
   projects: ProjectSessionTree[]
 }
 
+/** A proposed direction for branching a session into a new conversation. */
+export interface BranchDirection {
+  title: string
+  description: string
+  purpose: string
+  source: 'ai' | 'user'
+}
+
+/** Classification of messages when creating a branch (keep/summarize/drop by entryId). */
+export interface MessageClassification {
+  keep: string[]
+  summarize: string[]
+  drop: string[]
+}
+
 /** A forkable user message entry (from get_fork_messages RPC). */
 export interface ForkableMessage {
   entryId: string
@@ -118,6 +133,9 @@ export interface SessionIpcApi {
   setSessionStatus: (sessionPath: string, status: 'active' | 'completed') => Promise<{ success: boolean; error?: string }>
   reparentSession: (sessionPath: string, newParentPath: string | null) => Promise<{ success: boolean; error?: string }>
   setSessionSummary: (sessionPath: string, summary: string) => Promise<{ success: boolean; error?: string }>
+  analyzeBranchDirections: (sessionPath: string | null) => Promise<{ directions: BranchDirection[] }>
+  classifyBranchMessages: (sessionPath: string | null, purpose: string) => Promise<{ classification: MessageClassification }>
+  createBranch: (sessionPath: string | null, direction: BranchDirection, classification?: MessageClassification) => Promise<{ success: boolean; newSessionPath?: string; error?: string }>
 }
 
 /** Model info returned by Pi SDK. */

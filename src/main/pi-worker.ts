@@ -440,6 +440,7 @@ let runtime: AgentSessionRuntime | null = null
 let sessionManager: import('@earendil-works/pi-coding-agent').SessionManager | null = null
 let unsubscribe: (() => void) | null = null
 let pi: typeof import('@earendil-works/pi-coding-agent') | null = null
+let completeSimpleFn: typeof import('@earendil-works/pi-ai').completeSimple | null = null
 
 let captureEnabled = false
 let lastClearedTimestamp = 0
@@ -880,6 +881,10 @@ async function bindSession(): Promise<void> {
 
 async function init(data: WorkerInit): Promise<void> {
   pi = await import('@earendil-works/pi-coding-agent')
+  try {
+    const piAi = await import('@earendil-works/pi-ai')
+    completeSimpleFn = piAi.completeSimple
+  } catch {}
 
   // Bootstrap captureEnabled from persisted config (source of truth)
   captureEnabled = readCaptureEnabledFromConfig()
@@ -1278,6 +1283,240 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
       case 'compact': {
         const result = await session.compact(cmd.customInstructions as string | undefined)
         send({ channel: 'response', id: cmd.id, command: 'compact', success: true, data: result })
+        break
+      }
+
+      case 'analyze_branch_directions': {
+        try {
+          const messages = session.messages
+          const userMessages = messages.filter(m => m.role === 'user')
+          const toolCalls = messages.flatMap(m =>
+            (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'tool_use') ?? []
+          )
+
+          const userMsgOutline = userMessages.map((m, i) => {
+            const text = typeof m.content === 'string' ? m.content : (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text').map(c => c.text).join(' ') ?? ''
+            return `${i + 1}. ${text.slice(0, 200)}`
+          }).join('\n')
+
+          const toolOutline = toolCalls.map((t, i) => `${i + 1}. ${t.name ?? 'unknown'}`).join('\n')
+
+          const analysisPrompt = `You are a conversation analysis assistant. Analyze the following coding session and extract 2-4 natural follow-up directions.
+
+User messages:
+${userMsgOutline}
+
+Tool calls used:
+${toolOutline}
+
+For each direction, provide:
+1. title: short title (3-8 words)
+2. description: one sentence describing what this direction involves
+3. purpose: a purpose statement for context pruning (tells the pruning AI what to keep)
+
+Output a JSON array. No markdown, no explanation, just the JSON array.`
+
+          const model = session.model
+          const registry = session.modelRegistry
+          const auth = registry?.getApiKeyAndHeaders(model)
+
+          if (!completeSimpleFn) {
+            send({ channel: 'response', id: cmd.id, command: 'analyze_branch_directions', success: false, error: 'completeSimple not available' })
+            break
+          }
+
+          const resolvedAuth = await auth
+          if (!resolvedAuth.ok) {
+            send({ channel: 'response', id: cmd.id, command: 'analyze_branch_directions', success: false, error: 'No API key' })
+            break
+          }
+
+          const result = await completeSimpleFn(model, {
+            messages: [{ role: 'user', content: analysisPrompt }],
+          }, {
+            apiKey: resolvedAuth.apiKey,
+            headers: resolvedAuth.headers,
+          })
+
+          const text = (result.content as Array<Record<string, unknown>>)
+            ?.filter(c => c.type === 'text')
+            .map(c => c.text)
+            .join('') ?? ''
+
+          let directions: Array<{ title: string; description: string; purpose: string }> = []
+          try {
+            const jsonMatch = text.match(/\[[\s\S]*\]/)
+            directions = JSON.parse(jsonMatch ? jsonMatch[0] : text)
+          } catch {
+            directions = []
+          }
+
+          send({
+            channel: 'response', id: cmd.id, command: 'analyze_branch_directions',
+            success: true,
+            data: { directions: directions.map(d => ({ ...d, source: 'ai' })) },
+          })
+        } catch (err: unknown) {
+          send({ channel: 'response', id: cmd.id, command: 'analyze_branch_directions', success: false, error: err instanceof Error ? err.message : String(err) })
+        }
+        break
+      }
+
+      case 'classify_branch_messages': {
+        try {
+          const purpose = cmd.purpose as string
+          const messages = session.messages
+          const msgOutline = messages.map((m, i) => {
+            const role = m.role
+            const text = typeof m.content === 'string' ? m.content : (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
+            return `${i + 1}. [${role}] ${text.slice(0, 150)}`
+          }).join('\n')
+
+          const classifyPrompt = `You are a context pruning assistant.
+
+Branch purpose: ${purpose}
+
+Messages in the session:
+${msgOutline}
+
+IMPORTANT: tool_call and tool_result pairs must NOT be split. If you keep a tool_call, you must keep its tool_result. If you drop a tool_call, you must drop its tool_result.
+
+Classify each message as "keep", "summarize", or "drop":
+- keep: directly relevant to the branch purpose (architecture decisions, key code, explicit user requests)
+- summarize: indirectly relevant (background, intermediate steps, completed subtasks)
+- drop: irrelevant (chitchat, abandoned approaches, duplicates)
+
+Output JSON: {"keep": [1,3,5], "summarize": [2,4], "drop": [6,7]}`
+
+          const model = session.model
+          const registry = session.modelRegistry
+          const auth = await registry?.getApiKeyAndHeaders(model)
+
+          if (!completeSimpleFn || !auth?.ok) {
+            send({ channel: 'response', id: cmd.id, command: 'classify_branch_messages', success: false, error: 'Model not available' })
+            break
+          }
+
+          const result = await completeSimpleFn(model, {
+            messages: [{ role: 'user', content: classifyPrompt }],
+          }, {
+            apiKey: auth.apiKey,
+            headers: auth.headers,
+          })
+
+          const text = (result.content as Array<Record<string, unknown>>)
+            ?.filter(c => c.type === 'text')
+            .map(c => c.text)
+            .join('') ?? ''
+
+          let classification: { keep: number[]; summarize: number[]; drop: number[] } = { keep: [], summarize: [], drop: [] }
+          try {
+            const jsonMatch = text.match(/\{[\s\S]*\}/)
+            classification = JSON.parse(jsonMatch ? jsonMatch[0] : text)
+          } catch {}
+
+          const ids = messages.map((m, i) => ({ id: (m as Record<string, unknown>).id as string ?? String(i), idx: i }))
+          const toIds = (indices: number[]) => indices.map(i => ids[i - 1]?.id).filter(Boolean) as string[]
+
+          send({
+            channel: 'response', id: cmd.id, command: 'classify_branch_messages',
+            success: true,
+            data: {
+              classification: {
+                keep: toIds(classification.keep),
+                summarize: toIds(classification.summarize),
+                drop: toIds(classification.drop),
+              },
+            },
+          })
+        } catch (err: unknown) {
+          send({ channel: 'response', id: cmd.id, command: 'classify_branch_messages', success: false, error: err instanceof Error ? err.message : String(err) })
+        }
+        break
+      }
+
+      case 'create_branch': {
+        try {
+          const direction = cmd.direction as { title: string; description: string; purpose: string; source: string }
+          const classification = cmd.classification as { keep: string[]; summarize: string[]; drop: string[] } | undefined
+          const trunkSessionPath = cmd.trunkSessionPath as string
+
+          const messages = session.messages
+          const entries = sessionManager?.getEntries() ?? []
+
+          let keepIds = classification?.keep ?? []
+          let summarizeIds = classification?.summarize ?? []
+
+          if (!classification) {
+            keepIds = messages.map(m => (m as Record<string, unknown>).id as string).filter(Boolean)
+            summarizeIds = []
+          }
+
+          const keptEntries = entries.filter(e => {
+            if (e.type !== 'message') return false
+            const msg = (e as Record<string, unknown>).message as Record<string, unknown> | undefined
+            return msg && keepIds.includes((msg as Record<string, unknown>).id as string)
+          })
+
+          let summaryText = ''
+          if (summarizeIds.length > 0 && completeSimpleFn) {
+            const summarizeMessages = messages.filter(m => summarizeIds.includes((m as Record<string, unknown>).id as string))
+            const summarizeOutline = summarizeMessages.map((m, i) => {
+              const text = typeof m.content === 'string' ? m.content : (m.content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text').map(c => c.text).join(' ') ?? ''
+              return `${i + 1}. [${m.role}] ${text.slice(0, 300)}`
+            }).join('\n')
+
+            const model = session.model
+            const registry = session.modelRegistry
+            const auth = await registry?.getApiKeyAndHeaders(model)
+
+            if (auth?.ok) {
+              const summaryPrompt = `Summarize the following conversation context relevant to this purpose: ${direction.purpose}
+
+Messages:
+${summarizeOutline}
+
+Provide a concise summary that preserves key information, decisions, and context needed for the stated purpose.`
+
+              const result = await completeSimpleFn(model, {
+                messages: [{ role: 'user', content: summaryPrompt }],
+              }, {
+                apiKey: auth.apiKey,
+                headers: auth.headers,
+              })
+
+              summaryText = (result.content as Array<Record<string, unknown>>)
+                ?.filter(c => c.type === 'text')
+                .map(c => c.text)
+                .join('') ?? ''
+            }
+          }
+
+          const { createSessionFile, writeBranchMessages, addForkPoint, setSessionStatus, getSessionDir } = await import('./session-service')
+          const cwd = session.cwd ?? process.cwd()
+          const sessionDir = getSessionDir(cwd)
+          const newSessionPath = createSessionFile(sessionDir, cwd, direction.title, trunkSessionPath)
+
+          writeBranchMessages(newSessionPath, {
+            purpose: direction.purpose,
+            summary: summaryText,
+            keptMessages: keptEntries.map(e => JSON.stringify(e)),
+          })
+
+          const leafId = sessionManager?.getLeafId()
+          if (leafId && trunkSessionPath) {
+            addForkPoint(trunkSessionPath, leafId, direction.title)
+            setSessionStatus(trunkSessionPath, 'branched')
+          }
+
+          send({
+            channel: 'response', id: cmd.id, command: 'create_branch',
+            success: true,
+            data: { newSessionPath },
+          })
+        } catch (err: unknown) {
+          send({ channel: 'response', id: cmd.id, command: 'create_branch', success: false, error: err instanceof Error ? err.message : String(err) })
+        }
         break
       }
 

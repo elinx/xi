@@ -205,6 +205,7 @@ function SessionNode({
   const [isCreatingChild, setIsCreatingChild] = useState(false)
   const [childName, setChildName] = useState('')
   const isCompleted = node.session.status === 'completed'
+  const isBranched = node.session.status === 'branched'
   const isActive = currentSessionPath === node.session.filePath
   const hasChildren = node.children.length > 0
   const hiddenCount = hasChildren && !isExpanded ? countDescendants(node) : 0
@@ -441,6 +442,9 @@ function SessionNode({
                   const ws = workerStatuses.get(node.session.filePath)
                   if (isCompleted) return (
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" title="done" />
+                  )
+                  if (isBranched) return (
+                    <span className="text-[10px] text-blue-500 flex-shrink-0" title="branched">🌿</span>
                   )
                   if (ws === 'connected' || ws === 'starting') return (
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 xi-pulse-ring flex-shrink-0" title="running" />

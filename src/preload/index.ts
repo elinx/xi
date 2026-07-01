@@ -89,6 +89,15 @@ const api = {
   forkAtEntry: (sessionPath: string | null, entryId: string, name?: string, origin?: 'main' | 'subagent' | 'fork_ask'): Promise<{ success: boolean; text?: string; error?: string; sessionPath?: string }> =>
     ipcRenderer.invoke('session:forkAtEntry', sessionPath, entryId, name, origin),
 
+  analyzeBranchDirections: (sessionPath: string | null) =>
+    ipcRenderer.invoke('pi:analyzeBranchDirections', sessionPath) as Promise<{ directions: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }>,
+
+  classifyBranchMessages: (sessionPath: string | null, purpose: string) =>
+    ipcRenderer.invoke('pi:classifyBranchMessages', sessionPath, purpose) as Promise<{ classification: { keep: string[]; summarize: string[]; drop: string[] } }>,
+
+  createBranch: (sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }, classification?: { keep: string[]; summarize: string[]; drop: string[] }) =>
+    ipcRenderer.invoke('pi:createBranch', sessionPath, direction, classification) as Promise<{ success: boolean; newSessionPath?: string; error?: string }>,
+
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),
 

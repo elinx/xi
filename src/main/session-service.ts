@@ -481,7 +481,7 @@ export function addForkPoint(sessionPath: string, entryId: string, childName: st
   }
 }
 
-export function setSessionStatus(sessionPath: string, status: 'active' | 'completed'): boolean {
+export function setSessionStatus(sessionPath: string, status: 'active' | 'completed' | 'branched'): boolean {
   if (!existsSync(sessionPath)) return false
 
   try {
@@ -490,6 +490,43 @@ export function setSessionStatus(sessionPath: string, status: 'active' | 'comple
       status,
     })
     appendFileSync(sessionPath, entry + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function writeBranchMessages(
+  sessionPath: string,
+  data: { purpose: string; summary: string; keptMessages: unknown[] }
+): boolean {
+  if (!existsSync(sessionPath)) return false
+  try {
+    const systemEntry = JSON.stringify({
+      type: 'message',
+      message: {
+        role: 'system',
+        content: `This session was branched from a parent session. Branch purpose: ${data.purpose}`,
+      },
+    })
+    appendFileSync(sessionPath, systemEntry + '\n')
+
+    if (data.summary) {
+      const summaryEntry = JSON.stringify({
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: `[Context Summary]\n${data.summary}` }],
+        },
+      })
+      appendFileSync(sessionPath, summaryEntry + '\n')
+    }
+
+    for (const msg of data.keptMessages) {
+      const entry = typeof msg === 'string' ? msg : JSON.stringify(msg)
+      appendFileSync(sessionPath, entry + '\n')
+    }
+
     return true
   } catch {
     return false
