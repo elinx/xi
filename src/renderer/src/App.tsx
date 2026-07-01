@@ -215,39 +215,16 @@ function App(): React.ReactElement {
   }, [activeSessionPath])
 
   useEffect(() => {
-    if (!isSessionTabActive || !activeSessionPath) return
-    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
-    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
-    if (ratio >= 0.80 && !dismissedRef.current) {
-      triggerBranchDialog('auto')
-    }
-  }, [displayedTokenUsage, isSessionTabActive, activeSessionPath, triggerBranchDialog])
-
-  useEffect(() => {
-    const wasStreaming = wasStreamingRef.current
-    wasStreamingRef.current = displayedStreaming
-    if (!wasStreaming || displayedStreaming) return
-    if (!isSessionTabActive || !activeSessionPath) return
-    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
-    if (!dismissedRef.current) return
-    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
-    if (ratio >= 0.80) {
-      dismissedRef.current = false
-      triggerBranchDialog('auto')
-    }
-  }, [displayedStreaming, isSessionTabActive, activeSessionPath, displayedTokenUsage, triggerBranchDialog])
-
-  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key === 'b' && isSessionTabActive && !branchDialogStateRef.current.visible) {
+      if (mod && e.key === 'b' && !branchDialogStateRef.current.visible) {
         e.preventDefault()
         triggerBranchDialog('manual')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isSessionTabActive, triggerBranchDialog])
+  }, [triggerBranchDialog])
 
   const showContextWarning = !branchDialogState.visible && dismissedRef.current &&
     (displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize) >= 0.80
@@ -335,6 +312,29 @@ function App(): React.ReactElement {
   const switchToRecentTab = useTabStore(s => s.switchToRecentTab)
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isSessionTabActive = activeTab?.type === 'session'
+
+  useEffect(() => {
+    const wasStreaming = wasStreamingRef.current
+    wasStreamingRef.current = displayedStreaming
+    if (!wasStreaming || displayedStreaming) return
+    if (!isSessionTabActive || !activeSessionPath) return
+    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
+    if (!dismissedRef.current) return
+    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
+    if (ratio >= 0.80) {
+      dismissedRef.current = false
+      triggerBranchDialog('auto')
+    }
+  }, [displayedStreaming, isSessionTabActive, activeSessionPath, displayedTokenUsage, triggerBranchDialog])
+
+  useEffect(() => {
+    if (!isSessionTabActive || !activeSessionPath) return
+    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
+    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
+    if (ratio >= 0.80 && !dismissedRef.current) {
+      triggerBranchDialog('auto')
+    }
+  }, [displayedTokenUsage, isSessionTabActive, activeSessionPath, triggerBranchDialog])
 
   const contentAreaRef = useRef<HTMLDivElement>(null)
 
