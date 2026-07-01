@@ -115,7 +115,8 @@ function App(): React.ReactElement {
     directions: BranchDirection[]
     loading: boolean
     creating: boolean
-  }>({ visible: false, trigger: 'manual', directions: [], loading: false, creating: false })
+    error: string | null
+  }>({ visible: false, trigger: 'manual', directions: [], loading: false, creating: false, error: null })
   const branchDialogShownRef = useRef(false)
   const dismissedRef = useRef(false)
   const branchDialogStateRef = useRef(branchDialogState)
@@ -123,12 +124,12 @@ function App(): React.ReactElement {
   const wasStreamingRef = useRef(false)
 
   const triggerBranchDialog = useCallback(async (trigger: 'auto' | 'manual') => {
-    setBranchDialogState({ visible: true, trigger, directions: [], loading: true, creating: false })
+    setBranchDialogState({ visible: true, trigger, directions: [], loading: true, creating: false, error: null })
     try {
       const result = await window.api.analyzeBranchDirections(activeSessionPath)
-      setBranchDialogState(prev => ({ ...prev, loading: false, directions: result.directions ?? [] }))
+      setBranchDialogState(prev => ({ ...prev, loading: false, directions: result.directions ?? [], error: result.error ?? null }))
     } catch {
-      setBranchDialogState(prev => ({ ...prev, loading: false }))
+      setBranchDialogState(prev => ({ ...prev, loading: false, error: 'Failed to analyze conversation' }))
     }
   }, [activeSessionPath])
 
@@ -196,15 +197,15 @@ function App(): React.ReactElement {
   }, [])
 
   const handleBranchRegenerate = useCallback(async () => {
-    setBranchDialogState(prev => ({ ...prev, loading: true }))
+    setBranchDialogState(prev => ({ ...prev, loading: true, error: null }))
     try {
       const result = await window.api.analyzeBranchDirections(activeSessionPath)
       setBranchDialogState(prev => {
         const userDirs = prev.directions.filter(d => d.source === 'user')
-        return { ...prev, loading: false, directions: [...(result.directions ?? []), ...userDirs] }
+        return { ...prev, loading: false, directions: [...(result.directions ?? []), ...userDirs], error: result.error ?? null }
       })
     } catch {
-      setBranchDialogState(prev => ({ ...prev, loading: false }))
+      setBranchDialogState(prev => ({ ...prev, loading: false, error: 'Failed to analyze conversation' }))
     }
   }, [activeSessionPath])
 
@@ -1598,6 +1599,7 @@ function App(): React.ReactElement {
           directions={branchDialogState.directions}
           loading={branchDialogState.loading}
           creating={branchDialogState.creating}
+          error={branchDialogState.error}
           onSelectDirection={handleBranchSelect}
           onDeleteDirection={handleBranchDelete}
           onEditDirection={handleBranchEdit}

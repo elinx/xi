@@ -8,6 +8,7 @@ interface BranchDialogProps {
   directions: BranchDirection[]
   loading: boolean
   creating: boolean
+  error: string | null
   onSelectDirection: (direction: BranchDirection) => void
   onDeleteDirection: (index: number) => void
   onEditDirection: (index: number, direction: BranchDirection) => void
@@ -22,6 +23,7 @@ export default function BranchDialog({
   directions,
   loading,
   creating,
+  error,
   onSelectDirection,
   onDeleteDirection,
   onEditDirection,
@@ -225,6 +227,16 @@ export default function BranchDialog({
           renderSpinner('Analyzing conversation...')
         ) : (
           <>
+            {error && (
+              <div className="mb-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'rgba(248,81,73,0.3)', backgroundColor: isDark ? 'rgba(248,81,73,0.08)' : 'rgba(248,81,73,0.05)', color: '#f87171' }}>
+                {error}
+              </div>
+            )}
+            {!error && directions.length === 0 && (
+              <div className="mb-3 py-6 text-center text-xs" style={{ color: c.labelColor }}>
+                No suggestions available. Add a custom direction below.
+              </div>
+            )}
             <div className="mb-3 space-y-2">
               {directions.map((dir, idx) => {
                 const isEditing = editingIndex === idx
