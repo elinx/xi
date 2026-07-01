@@ -14,6 +14,7 @@ import RightPanel from './components/RightPanel'
 import FileViewer from './components/FileViewer'
 import DiffViewer from './components/DiffViewer'
 import TerminalPane from './components/TerminalPane'
+import InTabSearch, { type InTabSearchMode } from './components/InTabSearch'
 import WelcomeDialog from './components/WelcomeDialog'
 import SettingsPanel from './components/SettingsPanel'
 import SkillViewer from './components/SkillViewer'
@@ -190,6 +191,20 @@ function App(): React.ReactElement {
   const switchToRecentTab = useTabStore(s => s.switchToRecentTab)
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isSessionTabActive = activeTab?.type === 'session'
+
+  const contentAreaRef = useRef<HTMLDivElement>(null)
+
+  const searchConfig = useMemo<{ mode: InTabSearchMode; active: boolean }>(() => {
+    if (!activeTab) return { mode: 'dom', active: false }
+    switch (activeTab.type) {
+      case 'session':
+      case 'file':
+      case 'skill':
+        return { mode: 'dom', active: true }
+      default:
+        return { mode: 'dom', active: false }
+    }
+  }, [activeTab?.type])
 
   // Trigger session tree scroll when switching back to session tab
   const triggerSessionScroll = useLayoutStore(s => s.triggerSessionScroll)
@@ -1246,7 +1261,7 @@ function App(): React.ReactElement {
             }}
           />
 
-          <div className="flex-1 overflow-hidden relative">
+          <div ref={contentAreaRef} className="flex-1 overflow-hidden relative">
             <div className={activeTab?.type === 'session' ? 'h-full' : 'hidden'}>
               <ChatView
                 messages={displayedMessages}
@@ -1312,6 +1327,14 @@ function App(): React.ReactElement {
                 currentModel={currentModel}
               />
             )}
+
+            <InTabSearch
+              containerRef={contentAreaRef}
+              mode={searchConfig.mode}
+              active={searchConfig.active}
+              tabId={activeTab?.id}
+              onClose={() => {}}
+            />
           </div>
 
           <InputBar

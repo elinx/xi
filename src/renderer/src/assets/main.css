@@ -377,3 +377,11 @@
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+::highlight(search-match) {
+  background-color: rgba(250, 204, 21, 0.35);
+}
+
+::highlight(search-current) {
+  background-color: rgba(249, 115, 22, 0.5);
+}
