@@ -1198,7 +1198,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('pi:analyzeBranchDirections', async (_event, sessionPath: string | null) => {
     const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) return { directions: [] }
+    if (!worker?.bridge.isConnected) return { directions: [], error: 'Worker not connected' }
     try {
       const result = await worker.bridge.sendRpcCommand({ type: 'analyze_branch_directions' }) as { directions?: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }
       return { directions: result.directions ?? [] }
@@ -1209,7 +1209,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('pi:classifyBranchMessages', async (_event, sessionPath: string | null, purpose: string) => {
     const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
-    if (!worker?.bridge.isConnected) return { classification: { keep: [], summarize: [], drop: [] } }
+    if (!worker?.bridge.isConnected) return { classification: { keep: [], summarize: [], drop: [] }, error: 'Worker not connected' }
     try {
       const result = await worker.bridge.sendRpcCommand({ type: 'classify_branch_messages', purpose }) as { classification?: { keep: string[]; summarize: string[]; drop: string[] } }
       return { classification: result.classification ?? { keep: [], summarize: [], drop: [] } }
@@ -1222,8 +1222,8 @@ function registerIpcHandlers(): void {
     const worker = (sessionPath ? workerManager?.get(sessionPath) : null) ?? workerManager?.getPrimary()
     if (!worker?.bridge.isConnected) return { success: false, error: 'Worker not connected' }
     try {
-      const result = await worker.bridge.sendRpcCommand({ type: 'create_branch', direction, classification, trunkSessionPath: sessionPath }) as { success?: boolean; newSessionPath?: string; error?: string }
-      return result
+      const result = await worker.bridge.sendRpcCommand({ type: 'create_branch', direction, classification, trunkSessionPath: sessionPath }) as { newSessionPath?: string }
+      return { success: true, newSessionPath: result.newSessionPath }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
