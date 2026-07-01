@@ -41,6 +41,7 @@ export default function BranchDialog({
   const [newDescription, setNewDescription] = useState('')
   const [newPurpose, setNewPurpose] = useState('')
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -67,6 +68,8 @@ export default function BranchDialog({
     btnDangerText: '#f87171',
     cardBg: 'rgba(255,255,255,0.03)',
     cardHoverBg: 'rgba(255,255,255,0.06)',
+    cardSelectedBg: 'rgba(54,211,153,0.08)',
+    cardSelectedBorder: 'rgba(54,211,153,0.4)',
     spinnerBorder: 'rgba(255,255,255,0.2)',
     spinnerTop: '#36d399',
     badgeAiBg: 'rgba(54,211,153,0.12)',
@@ -90,6 +93,8 @@ export default function BranchDialog({
     btnDangerText: '#dc2626',
     cardBg: '#f9fafb',
     cardHoverBg: '#f3f4f6',
+    cardSelectedBg: 'rgba(16,185,129,0.06)',
+    cardSelectedBorder: 'rgba(16,185,129,0.4)',
     spinnerBorder: 'rgba(0,0,0,0.1)',
     spinnerTop: '#2563eb',
     badgeAiBg: 'rgba(16,185,129,0.1)',
@@ -240,11 +245,15 @@ export default function BranchDialog({
             <div className="mb-3 space-y-2">
               {directions.map((dir, idx) => {
                 const isEditing = editingIndex === idx
+                const isSelected = selectedIndex === idx
                 return (
                   <div
                     key={idx}
                     className="rounded-lg border transition-colors"
-                    style={{ borderColor: c.borderColor, backgroundColor: hoveredIndex === idx ? c.cardHoverBg : c.cardBg }}
+                    style={{
+                      borderColor: isSelected ? c.cardSelectedBorder : c.borderColor,
+                      backgroundColor: isSelected ? c.cardSelectedBg : hoveredIndex === idx ? c.cardHoverBg : c.cardBg,
+                    }}
                   >
                     {isEditing ? (
                       <div className="space-y-2 p-3">
@@ -293,7 +302,7 @@ export default function BranchDialog({
                       </div>
                     ) : (
                       <div
-                        onClick={() => onSelectDirection(dir)}
+                        onClick={() => setSelectedIndex(prev => prev === idx ? null : idx)}
                         className="cursor-pointer rounded-lg p-3 transition-colors"
                         onMouseEnter={() => setHoveredIndex(idx)}
                         onMouseLeave={() => setHoveredIndex(null)}
@@ -418,13 +427,23 @@ export default function BranchDialog({
               Regenerate suggestions
             </button>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={onDismiss}
                 className="rounded px-4 py-1.5 text-xs font-medium transition-colors"
                 style={{ backgroundColor: c.btnCancelBg, color: c.btnCancelText }}
               >
                 {trigger === 'auto' ? 'Continue in current session' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedIndex !== null) onSelectDirection(directions[selectedIndex])
+                }}
+                disabled={selectedIndex === null}
+                className="rounded px-4 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
+              >
+                Create Branch
               </button>
             </div>
           </>
