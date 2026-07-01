@@ -1396,6 +1396,7 @@ function App(): React.ReactElement {
             onTabClick={setActiveTab}
             onTabClose={closeTab}
             onAddTab={handleAddTab}
+            onBranch={() => triggerBranchDialog('manual')}
             onClearSession={async () => {
               if (!activeSessionPath) return
               const result = await clearSessionMessages(activeSessionPath)

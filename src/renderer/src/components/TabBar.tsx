@@ -12,6 +12,7 @@ interface TabBarProps {
   onAddTab: (type: TabType) => void
   onTabContextMenu?: (tabId: string, x: number, y: number) => void
   onClearSession?: () => void
+  onBranch?: () => void
 }
 
 function TabIcon({ type }: { type: TabType }) {
@@ -68,7 +69,7 @@ const ADD_MENU_ITEMS: Array<{ type: TabType; label: string }> = [
   { type: 'terminal', label: 'Terminal' },
 ]
 
-export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAddTab, onTabContextMenu, onClearSession }: TabBarProps) {
+export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAddTab, onTabContextMenu, onClearSession, onBranch }: TabBarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
@@ -163,6 +164,22 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onAd
           )
         })}
       </div>
+      {onBranch && tabs.find(t => t.id === activeTabId)?.type === 'session' && (
+        <button
+          onClick={onBranch}
+          className="h-9 px-2.5 text-sm text-gray-500 hover:text-green-600 hover:bg-gray-200 flex items-center justify-center transition-colors"
+          style={noDrag}
+          title="Branch session (Ctrl+B)"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="4" cy="3" r="1.5" />
+            <circle cx="4" cy="13" r="1.5" />
+            <circle cx="12" cy="6" r="1.5" />
+            <path d="M4 4.5v7" />
+            <path d="M4 8c0-2 2-3 4-3h2.5" />
+          </svg>
+        </button>
+      )}
       <div className="relative flex-shrink-0" ref={menuRef}>
         <button
           onClick={() => setMenuOpen(prev => !prev)}
