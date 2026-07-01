@@ -9,7 +9,7 @@ interface BranchDialogProps {
   loading: boolean
   creating: boolean
   error: string | null
-  onSelectDirection: (direction: BranchDirection) => void
+  onSelectDirections: (directions: BranchDirection[]) => void
   onDeleteDirection: (index: number) => void
   onEditDirection: (index: number, direction: BranchDirection) => void
   onAddDirection: (direction: BranchDirection) => void
@@ -24,7 +24,7 @@ export default function BranchDialog({
   loading,
   creating,
   error,
-  onSelectDirection,
+  onSelectDirections,
   onDeleteDirection,
   onEditDirection,
   onAddDirection,
@@ -41,7 +41,7 @@ export default function BranchDialog({
   const [newDescription, setNewDescription] = useState('')
   const [newPurpose, setNewPurpose] = useState('')
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -245,7 +245,7 @@ export default function BranchDialog({
             <div className="mb-3 space-y-2">
               {directions.map((dir, idx) => {
                 const isEditing = editingIndex === idx
-                const isSelected = selectedIndex === idx
+                const isSelected = selectedIndices.has(idx)
                 return (
                   <div
                     key={idx}
@@ -302,7 +302,12 @@ export default function BranchDialog({
                       </div>
                     ) : (
                       <div
-                        onClick={() => setSelectedIndex(prev => prev === idx ? null : idx)}
+                        onClick={() => setSelectedIndices(prev => {
+                          const next = new Set(prev)
+                          if (next.has(idx)) next.delete(idx)
+                          else next.add(idx)
+                          return next
+                        })}
                         className="cursor-pointer rounded-lg p-3 transition-colors"
                         onMouseEnter={() => setHoveredIndex(idx)}
                         onMouseLeave={() => setHoveredIndex(null)}
@@ -437,13 +442,14 @@ export default function BranchDialog({
               </button>
               <button
                 onClick={() => {
-                  if (selectedIndex !== null) onSelectDirection(directions[selectedIndex])
+                  const selected = [...selectedIndices].sort().map(i => directions[i]).filter(Boolean)
+                  if (selected.length > 0) onSelectDirections(selected)
                 }}
-                disabled={selectedIndex === null}
+                disabled={selectedIndices.size === 0}
                 className="rounded px-4 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 style={{ backgroundColor: c.btnPrimaryBg, color: c.btnPrimaryText }}
               >
-                Create Branch
+                {selectedIndices.size > 0 ? `Create ${selectedIndices.size} Branch${selectedIndices.size > 1 ? 'es' : ''}` : 'Create Branch'}
               </button>
             </div>
           </>

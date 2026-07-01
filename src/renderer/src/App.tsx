@@ -140,33 +140,35 @@ function App(): React.ReactElement {
     }
   }, [branchDialogState.trigger])
 
-  const handleBranchSelect = useCallback(async (direction: BranchDirection) => {
+  const handleBranchSelect = useCallback(async (directions: BranchDirection[]) => {
     setBranchDialogState(prev => ({ ...prev, creating: true }))
     try {
-      // Classify messages for pruning (best-effort — falls back to keeping all)
-      let classification: MessageClassification | undefined
-      try {
-        const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
-        if (classifyResult.classification.keep.length > 0) {
-          classification = classifyResult.classification
-        }
-      } catch {
-        // classification stays undefined → createBranch keeps all messages
-      }
+      let lastNewPath: string | null = null
+      for (const direction of directions) {
+        let classification: MessageClassification | undefined
+        try {
+          const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
+          if (classifyResult.classification.keep.length > 0) {
+            classification = classifyResult.classification
+          }
+        } catch {}
 
-      const result = await window.api.createBranch(activeSessionPath, direction, classification)
-      if (result.success && result.newSessionPath) {
+        const result = await window.api.createBranch(activeSessionPath, direction, classification)
+        if (result.success && result.newSessionPath) {
+          lastNewPath = result.newSessionPath
+        }
+      }
+      if (lastNewPath) {
         setBranchDialogState(prev => ({ ...prev, visible: false, creating: false }))
         branchDialogShownRef.current = true
         dismissedRef.current = false
-        const newPath = result.newSessionPath
         await refresh()
-        await displaySessionRef.current(newPath)
+        await displaySessionRef.current(lastNewPath)
         const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
         if (apiWithWorker.workerEnsureReady) {
-          await apiWithWorker.workerEnsureReady(newPath)
+          await apiWithWorker.workerEnsureReady(lastNewPath)
         }
-        window.api.saveLastSession(newPath)
+        window.api.saveLastSession(lastNewPath)
       } else {
         setBranchDialogState(prev => ({ ...prev, creating: false }))
       }
@@ -1600,7 +1602,7 @@ function App(): React.ReactElement {
           loading={branchDialogState.loading}
           creating={branchDialogState.creating}
           error={branchDialogState.error}
-          onSelectDirection={handleBranchSelect}
+          onSelectDirections={handleBranchSelect}
           onDeleteDirection={handleBranchDelete}
           onEditDirection={handleBranchEdit}
           onAddDirection={handleBranchAdd}
