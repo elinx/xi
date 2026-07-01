@@ -147,10 +147,14 @@ function App(): React.ReactElement {
         let classification: MessageClassification | undefined
         try {
           const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
-          if (classifyResult.classification.keep.length > 0) {
+          if (classifyResult.error) {
+            console.warn('[branch] classify failed:', classifyResult.error)
+          } else if (classifyResult.classification.keep.length > 0) {
             classification = classifyResult.classification
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[branch] classify error:', err)
+        }
 
         return window.api.createBranch(activeSessionPath, direction, classification)
       }))

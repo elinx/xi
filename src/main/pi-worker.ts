@@ -1458,7 +1458,13 @@ Output JSON: {"keep": [1,3,5], "summarize": [2,4], "drop": [6,7]}`
           let summarizeEntryIndices: number[] = []
 
           if (!classification) {
-            keptEntries = messageEntries
+            // No classification available — keep first user message + last 40% of messages
+            const firstUserIdx = messageEntries.findIndex(e => {
+              const msg = (e as Record<string, unknown>).message as Record<string, unknown>
+              return msg?.role === 'user'
+            })
+            const cutoff = Math.floor(messageEntries.length * 0.6)
+            keptEntries = messageEntries.filter((_, idx) => idx === firstUserIdx || idx >= cutoff)
           } else {
             messageEntries.forEach((e, idx) => {
               const entry = e as Record<string, unknown>
