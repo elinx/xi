@@ -143,8 +143,7 @@ function App(): React.ReactElement {
   const handleBranchSelect = useCallback(async (directions: BranchDirection[]) => {
     setBranchDialogState(prev => ({ ...prev, creating: true }))
     try {
-      let lastNewPath: string | null = null
-      for (const direction of directions) {
+      const results = await Promise.all(directions.map(async (direction) => {
         let classification: MessageClassification | undefined
         try {
           const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
@@ -153,22 +152,22 @@ function App(): React.ReactElement {
           }
         } catch {}
 
-        const result = await window.api.createBranch(activeSessionPath, direction, classification)
-        if (result.success && result.newSessionPath) {
-          lastNewPath = result.newSessionPath
-        }
-      }
-      if (lastNewPath) {
+        return window.api.createBranch(activeSessionPath, direction, classification)
+      }))
+
+      const lastResult = results.findLast(r => r.success && r.newSessionPath)
+      if (lastResult?.newSessionPath) {
         setBranchDialogState(prev => ({ ...prev, visible: false, creating: false }))
         branchDialogShownRef.current = true
         dismissedRef.current = false
+        const newPath = lastResult.newSessionPath
         await refresh()
-        await displaySessionRef.current(lastNewPath)
+        await displaySessionRef.current(newPath)
         const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
         if (apiWithWorker.workerEnsureReady) {
-          await apiWithWorker.workerEnsureReady(lastNewPath)
+          await apiWithWorker.workerEnsureReady(newPath)
         }
-        window.api.saveLastSession(lastNewPath)
+        window.api.saveLastSession(newPath)
       } else {
         setBranchDialogState(prev => ({ ...prev, creating: false }))
       }
