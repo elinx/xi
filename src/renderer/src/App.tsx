@@ -120,6 +120,7 @@ function App(): React.ReactElement {
   const dismissedRef = useRef(false)
   const branchDialogStateRef = useRef(branchDialogState)
   branchDialogStateRef.current = branchDialogState
+  const wasStreamingRef = useRef(false)
 
   const triggerBranchDialog = useCallback(async (trigger: 'auto' | 'manual') => {
     setBranchDialogState({ visible: true, trigger, directions: [], loading: true, creating: false })
@@ -141,20 +142,37 @@ function App(): React.ReactElement {
   const handleBranchSelect = useCallback(async (direction: BranchDirection) => {
     setBranchDialogState(prev => ({ ...prev, creating: true }))
     try {
-      const result = await window.api.createBranch(activeSessionPath, direction)
+      // Classify messages for pruning (best-effort — falls back to keeping all)
+      let classification: MessageClassification | undefined
+      try {
+        const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
+        if (classifyResult.classification.keep.length > 0) {
+          classification = classifyResult.classification
+        }
+      } catch {
+        // classification stays undefined → createBranch keeps all messages
+      }
+
+      const result = await window.api.createBranch(activeSessionPath, direction, classification)
       if (result.success && result.newSessionPath) {
         setBranchDialogState(prev => ({ ...prev, visible: false, creating: false }))
         branchDialogShownRef.current = true
         dismissedRef.current = false
-        await switchSession(result.newSessionPath)
-        refresh()
+        const newPath = result.newSessionPath
+        await refresh()
+        await displaySessionRef.current(newPath)
+        const apiWithWorker = window.api as typeof window.api & { workerEnsureReady?: (sp: string) => Promise<{ ok: boolean; status?: string; error?: string }> }
+        if (apiWithWorker.workerEnsureReady) {
+          await apiWithWorker.workerEnsureReady(newPath)
+        }
+        window.api.saveLastSession(newPath)
       } else {
         setBranchDialogState(prev => ({ ...prev, creating: false }))
       }
     } catch {
       setBranchDialogState(prev => ({ ...prev, creating: false }))
     }
-  }, [activeSessionPath, switchSession, refresh])
+  }, [activeSessionPath, refresh])
 
   const handleBranchDelete = useCallback((index: number) => {
     setBranchDialogState(prev => ({
@@ -202,11 +220,22 @@ function App(): React.ReactElement {
     const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
     if (ratio >= 0.80 && !dismissedRef.current) {
       triggerBranchDialog('auto')
-    } else if (ratio >= 0.80 && dismissedRef.current) {
+    }
+  }, [displayedTokenUsage, isSessionTabActive, activeSessionPath, triggerBranchDialog])
+
+  useEffect(() => {
+    const wasStreaming = wasStreamingRef.current
+    wasStreamingRef.current = displayedStreaming
+    if (!wasStreaming || displayedStreaming) return
+    if (!isSessionTabActive || !activeSessionPath) return
+    if (branchDialogShownRef.current || branchDialogStateRef.current.visible) return
+    if (!dismissedRef.current) return
+    const ratio = displayedTokenUsage.totalTokens / displayedTokenUsage.contextWindowSize
+    if (ratio >= 0.80) {
       dismissedRef.current = false
       triggerBranchDialog('auto')
     }
-  }, [displayedTokenUsage, isSessionTabActive, activeSessionPath, triggerBranchDialog])
+  }, [displayedStreaming, isSessionTabActive, activeSessionPath, displayedTokenUsage, triggerBranchDialog])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
