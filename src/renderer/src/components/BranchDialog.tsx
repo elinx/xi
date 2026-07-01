@@ -38,6 +38,7 @@ export default function BranchDialog({
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newPurpose, setNewPurpose] = useState('')
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -181,10 +182,10 @@ export default function BranchDialog({
   if (creating) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-        <div
-          className="w-full max-w-lg rounded-lg p-4 shadow-2xl"
-          style={{ backgroundColor: c.overlayBg }}
-        >
+    <div
+      className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg p-4 shadow-2xl"
+      style={{ backgroundColor: c.overlayBg }}
+    >
           {renderSpinner('Creating branch...')}
         </div>
       </div>,
@@ -230,8 +231,8 @@ export default function BranchDialog({
                 return (
                   <div
                     key={idx}
-                    className="xi-glass rounded-lg border transition-colors"
-                    style={{ borderColor: c.borderColor, backgroundColor: c.cardBg }}
+                    className="rounded-lg border transition-colors"
+                    style={{ borderColor: c.borderColor, backgroundColor: hoveredIndex === idx ? c.cardHoverBg : c.cardBg }}
                   >
                     {isEditing ? (
                       <div className="space-y-2 p-3">
@@ -281,10 +282,9 @@ export default function BranchDialog({
                     ) : (
                       <div
                         onClick={() => onSelectDirection(dir)}
-                        className="cursor-pointer rounded-lg p-3 transition-colors hover:bg-opacity-50"
-                        style={{ backgroundColor: 'transparent' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = c.cardHoverBg }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        className="cursor-pointer rounded-lg p-3 transition-colors"
+                        onMouseEnter={() => setHoveredIndex(idx)}
+                        onMouseLeave={() => setHoveredIndex(null)}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -341,7 +341,7 @@ export default function BranchDialog({
 
             {showAddForm ? (
               <div
-                className="xi-glass mb-3 space-y-2 rounded-lg border p-3"
+                className="mb-3 space-y-2 rounded-lg border p-3"
                 style={{ borderColor: c.borderColor, backgroundColor: c.cardBg }}
               >
                 <input
@@ -390,7 +390,7 @@ export default function BranchDialog({
             ) : (
               <button
                 onClick={() => setShowAddForm(true)}
-                className="xi-glass mb-3 w-full rounded-lg border border-dashed py-2 text-xs font-medium transition-colors"
+                className="mb-3 w-full rounded-lg border border-dashed py-2 text-xs font-medium transition-colors"
                 style={{ borderColor: c.borderColor, color: c.labelColor }}
               >
                 + Add custom direction
@@ -400,7 +400,7 @@ export default function BranchDialog({
             <button
               onClick={onRegenerateSuggestions}
               disabled={loading}
-              className="xi-glass mb-4 w-full rounded-lg border py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              className="mb-4 w-full rounded-lg border py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               style={{ borderColor: c.borderColor, color: c.labelColor }}
             >
               Regenerate suggestions
