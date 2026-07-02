@@ -1370,13 +1370,76 @@ Output a JSON array. No markdown, no explanation, just the JSON array.`
           const entries = sessionManager?.getEntries() ?? []
           const messageEntries = entries.filter(e => e.type === 'message' && (e as Record<string, unknown>).message)
 
-          const conversationText = messageEntries.map((e, i) => {
+          // Serialize conversation with full fidelity (matching Pi SDK's serializeConversation)
+          // Preserves thinking blocks, tool call arguments, tool results (truncated to 2000 chars)
+          const conversationParts: string[] = []
+          const fileOps = { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() }
+
+          for (const e of messageEntries) {
             const msg = (e as Record<string, unknown>).message as Record<string, unknown>
             const role = msg.role as string
             const content = msg.content
-            const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
-            return `${i + 1}. [${role}] ${text.slice(0, 500)}`
-          }).join('\n')
+
+            if (role === 'user') {
+              const text = typeof content === 'string'
+                ? content
+                : (content as Array<Record<string, unknown>> | undefined)
+                    ?.filter(c => c.type === 'text')
+                    .map(c => c.text as string)
+                    .join('') ?? ''
+              if (text) conversationParts.push(`[User]: ${text}`)
+            } else if (role === 'assistant') {
+              const blocks = content as Array<Record<string, unknown>> | undefined
+              if (!blocks) continue
+              const textParts: string[] = []
+              const thinkingParts: string[] = []
+              const toolCalls: string[] = []
+              for (const block of blocks) {
+                if (block.type === 'text' && block.text) {
+                  textParts.push(block.text as string)
+                } else if (block.type === 'thinking' && block.thinking) {
+                  thinkingParts.push(block.thinking as string)
+                } else if (block.type === 'toolCall') {
+                  const name = block.name as string
+                  const args = block.arguments as Record<string, unknown> | undefined
+                  const argsStr = args
+                    ? Object.entries(args).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+                    : ''
+                  toolCalls.push(`${name}(${argsStr})`)
+                  if ((name === 'read' || name === 'write' || name === 'edit') && args?.path) {
+                    const path = args.path as string
+                    if (name === 'read') fileOps.read.add(path)
+                    else if (name === 'write') fileOps.written.add(path)
+                    else if (name === 'edit') fileOps.edited.add(path)
+                  }
+                }
+              }
+              if (thinkingParts.length > 0) conversationParts.push(`[Assistant thinking]: ${thinkingParts.join('\n')}`)
+              if (textParts.length > 0) conversationParts.push(`[Assistant]: ${textParts.join('\n')}`)
+              if (toolCalls.length > 0) conversationParts.push(`[Assistant tool calls]: ${toolCalls.join('; ')}`)
+            } else if (role === 'toolResult') {
+              const blocks = content as Array<Record<string, unknown>> | undefined
+              const text = blocks?.filter(c => c.type === 'text').map(c => c.text as string).join('') ?? ''
+              if (text) {
+                // Truncate tool results to 2000 chars (matching Pi SDK)
+                const truncated = text.length <= 2000
+                  ? text
+                  : `${text.slice(0, 2000)}\n\n[... ${text.length - 2000} more characters truncated]`
+                conversationParts.push(`[Tool result]: ${truncated}`)
+              }
+            }
+          }
+
+          const conversationText = conversationParts.join('\n\n')
+
+          // Compute file lists: read-only vs modified (written + edited)
+          const modified = new Set([...fileOps.edited, ...fileOps.written])
+          const readFiles = [...fileOps.read].filter(f => !modified.has(f)).sort()
+          const modifiedFiles = [...modified].sort()
+          const fileOpsSections: string[] = []
+          if (readFiles.length > 0) fileOpsSections.push(`<read-files>\n${readFiles.join('\n')}\n</read-files>`)
+          if (modifiedFiles.length > 0) fileOpsSections.push(`<modified-files>\n${modifiedFiles.join('\n')}\n</modified-files>`)
+          const fileOpsXml = fileOpsSections.length > 0 ? `\n\n${fileOpsSections.join('\n\n')}` : ''
 
           let compactedText = ''
 
@@ -1385,18 +1448,55 @@ Output a JSON array. No markdown, no explanation, just the JSON array.`
           const auth = await registry?.getApiKeyAndHeaders(model)
 
           if (completeSimpleFn && auth?.ok) {
-            const compactPrompt = `You are a context compaction assistant. The user wants to branch this conversation into a new session with a specific purpose.
+            const systemPrompt = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified.
+
+Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`
+
+            const promptText = `<conversation>
+${conversationText}
+</conversation>
+
+The user wants to branch this conversation into a new session with a specific purpose.
 
 Branch purpose: ${direction.title} — ${direction.description}
 Pruning directive: ${direction.purpose}
 
-Full conversation:
-${conversationText}
+Create a structured context checkpoint summary that another LLM will use to continue working on the branch purpose. Focus the summary on information relevant to the branch purpose — drop irrelevant tangents, chitchat, and abandoned approaches.
 
-Compress this conversation into a concise context that preserves everything needed to continue working on the branch purpose. Drop irrelevant tangents, chitchat, and abandoned approaches. Keep code snippets, architecture decisions, and key context. Output the compacted context as a natural conversation summary that an AI assistant can read and continue from.`
+Use this EXACT format:
+
+## Goal
+[What is the user trying to accomplish? Focus on the branch purpose.]
+
+## Constraints & Preferences
+- [Any constraints, preferences, or requirements mentioned by user]
+- [Or "(none)" if none were mentioned]
+
+## Progress
+### Done
+- [x] [Completed tasks/changes relevant to the branch purpose]
+
+### In Progress
+- [ ] [Current work relevant to the branch purpose]
+
+### Blocked
+- [Issues preventing progress, if any]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale]
+
+## Next Steps
+1. [Ordered list of what should happen next for the branch purpose]
+
+## Critical Context
+- [Any data, code snippets, architecture decisions, file paths, function names, and references needed to continue]
+- [Or "(none)" if not applicable]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages.`
 
             const result = await completeSimpleFn(model, {
-              messages: [{ role: 'user', content: compactPrompt }],
+              systemPrompt,
+              messages: [{ role: 'user', content: promptText }],
             }, {
               apiKey: auth.apiKey,
               headers: auth.headers,
@@ -1407,6 +1507,9 @@ Compress this conversation into a concise context that preserves everything need
               .map(c => c.text)
               .join('') ?? ''
           }
+
+          // Append file operations as XML tags (matching Pi SDK's formatFileOperations)
+          compactedText += fileOpsXml
 
           const { createSessionFile, writeBranchMessages, addForkPoint, setSessionStatus, getSessionDir } = await import('./session-service')
           const cwd = session.cwd ?? process.cwd()
