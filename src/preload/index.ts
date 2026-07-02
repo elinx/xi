@@ -92,11 +92,8 @@ const api = {
   analyzeBranchDirections: (sessionPath: string | null): Promise<{ directions: Array<{ title: string; description: string; purpose: string; source: 'ai' | 'user' }> }> =>
     ipcRenderer.invoke('pi:analyzeBranchDirections', sessionPath),
 
-  classifyBranchMessages: (sessionPath: string | null, purpose: string): Promise<{ classification: { keep: string[]; summarize: string[]; drop: string[] } }> =>
-    ipcRenderer.invoke('pi:classifyBranchMessages', sessionPath, purpose),
-
-  createBranch: (sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }, classification?: { keep: string[]; summarize: string[]; drop: string[] }): Promise<{ success: boolean; newSessionPath?: string; error?: string }> =>
-    ipcRenderer.invoke('pi:createBranch', sessionPath, direction, classification),
+  createBranch: (sessionPath: string | null, direction: { title: string; description: string; purpose: string; source: 'ai' | 'user' }): Promise<{ success: boolean; newSessionPath?: string; error?: string }> =>
+    ipcRenderer.invoke('pi:createBranch', sessionPath, direction),
 
   switchSession: (sessionPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('session:switchSession', sessionPath),

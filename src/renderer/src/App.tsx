@@ -23,7 +23,7 @@ import QuestionDialog from './components/QuestionDialog'
 import BranchDialog from './components/BranchDialog'
 import type { ViewMode } from './utils/compact-view'
 import type { ChatMessage, TextBlock, ChangeAnchor, QuestionOption } from './types/message'
-import type { ForkPoint, SessionTreeNode, BranchDirection, MessageClassification } from './types/session'
+import type { ForkPoint, SessionTreeNode, BranchDirection } from './types/session'
 import type { TokenUsage } from './utils/convert-messages'
 import type { QuotedMessage } from './components/QuoteCard'
 import { getSessionDisplayName } from './utils/session-utils'
@@ -143,21 +143,9 @@ function App(): React.ReactElement {
   const handleBranchSelect = useCallback(async (directions: BranchDirection[]) => {
     setBranchDialogState(prev => ({ ...prev, creating: true }))
     try {
-      const results = await Promise.all(directions.map(async (direction) => {
-        let classification: MessageClassification | undefined
-        try {
-          const classifyResult = await window.api.classifyBranchMessages(activeSessionPath, direction.purpose)
-          if (classifyResult.error) {
-            console.warn('[branch] classify failed:', classifyResult.error)
-          } else if (classifyResult.classification.keep.length > 0) {
-            classification = classifyResult.classification
-          }
-        } catch (err) {
-          console.warn('[branch] classify error:', err)
-        }
-
-        return window.api.createBranch(activeSessionPath, direction, classification)
-      }))
+      const results = await Promise.all(directions.map(direction =>
+        window.api.createBranch(activeSessionPath, direction)
+      ))
 
       const lastResult = results.findLast(r => r.success && r.newSessionPath)
       if (lastResult?.newSessionPath) {

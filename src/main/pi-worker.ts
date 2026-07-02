@@ -1362,154 +1362,50 @@ Output a JSON array. No markdown, no explanation, just the JSON array.`
         break
       }
 
-      case 'classify_branch_messages': {
-        try {
-          const purpose = cmd.purpose as string
-          const entries = sessionManager?.getEntries() ?? []
-          const messageEntries = entries.filter(e => e.type === 'message' && (e as Record<string, unknown>).message)
-
-          const msgOutline = messageEntries.map((e, i) => {
-            const msg = (e as Record<string, unknown>).message as Record<string, unknown>
-            const role = msg.role as string
-            const content = msg.content
-            const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
-            return `${i + 1}. [${role}] ${text.slice(0, 150)}`
-          }).join('\n')
-
-          const classifyPrompt = `You are a context pruning assistant.
-
-Branch purpose: ${purpose}
-
-Messages in the session:
-${msgOutline}
-
-IMPORTANT: tool_call and tool_result pairs must NOT be split. If you keep a tool_call, you must keep its tool_result. If you drop a tool_call, you must drop its tool_result.
-
-Classify each message as "keep", "summarize", or "drop":
-- keep: directly relevant to the branch purpose (architecture decisions, key code, explicit user requests)
-- summarize: indirectly relevant (background, intermediate steps, completed subtasks)
-- drop: irrelevant (chitchat, abandoned approaches, duplicates)
-
-Output JSON: {"keep": [1,3,5], "summarize": [2,4], "drop": [6,7]}`
-
-          const model = session.model
-          const registry = session.modelRegistry
-          const auth = await registry?.getApiKeyAndHeaders(model)
-
-          if (!completeSimpleFn || !auth?.ok) {
-            send({ channel: 'response', id: cmd.id, command: 'classify_branch_messages', success: false, error: 'Model not available' })
-            break
-          }
-
-          const result = await completeSimpleFn(model, {
-            messages: [{ role: 'user', content: classifyPrompt }],
-          }, {
-            apiKey: auth.apiKey,
-            headers: auth.headers,
-          })
-
-          const text = (result.content as Array<Record<string, unknown>>)
-            ?.filter(c => c.type === 'text')
-            .map(c => c.text)
-            .join('') ?? ''
-
-          let classification: { keep: number[]; summarize: number[]; drop: number[] } = { keep: [], summarize: [], drop: [] }
-          try {
-            const jsonMatch = text.match(/\{[\s\S]*\}/)
-            classification = JSON.parse(jsonMatch ? jsonMatch[0] : text)
-          } catch {}
-
-          const toIds = (indices: number[]) => indices
-            .map(i => {
-              const idx = i - 1
-              const entry = messageEntries[idx] as Record<string, unknown> | undefined
-              if (!entry) return undefined
-              return typeof entry.id === 'string' ? entry.id : String(idx)
-            })
-            .filter((v): v is string => v !== undefined)
-
-          send({
-            channel: 'response', id: cmd.id, command: 'classify_branch_messages',
-            success: true,
-            data: {
-              classification: {
-                keep: toIds(classification.keep),
-                summarize: toIds(classification.summarize),
-                drop: toIds(classification.drop),
-              },
-            },
-          })
-        } catch (err: unknown) {
-          send({ channel: 'response', id: cmd.id, command: 'classify_branch_messages', success: false, error: err instanceof Error ? err.message : String(err) })
-        }
-        break
-      }
-
       case 'create_branch': {
         try {
           const direction = cmd.direction as { title: string; description: string; purpose: string; source: string }
-          const classification = cmd.classification as { keep: string[]; summarize: string[]; drop: string[] } | undefined
           const trunkSessionPath = cmd.trunkSessionPath as string
 
           const entries = sessionManager?.getEntries() ?? []
           const messageEntries = entries.filter(e => e.type === 'message' && (e as Record<string, unknown>).message)
 
-          let keptEntries: typeof messageEntries = []
-          let summarizeEntryIndices: number[] = []
+          const conversationText = messageEntries.map((e, i) => {
+            const msg = (e as Record<string, unknown>).message as Record<string, unknown>
+            const role = msg.role as string
+            const content = msg.content
+            const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
+            return `${i + 1}. [${role}] ${text.slice(0, 500)}`
+          }).join('\n')
 
-          if (!classification) {
-            const firstUserIdx = messageEntries.findIndex(e => {
-              const msg = (e as Record<string, unknown>).message as Record<string, unknown>
-              return msg?.role === 'user'
+          let compactedText = ''
+
+          const model = session.model
+          const registry = session.modelRegistry
+          const auth = await registry?.getApiKeyAndHeaders(model)
+
+          if (completeSimpleFn && auth?.ok) {
+            const compactPrompt = `You are a context compaction assistant. The user wants to branch this conversation into a new session with a specific purpose.
+
+Branch purpose: ${direction.title} — ${direction.description}
+Pruning directive: ${direction.purpose}
+
+Full conversation:
+${conversationText}
+
+Compress this conversation into a concise context that preserves everything needed to continue working on the branch purpose. Drop irrelevant tangents, chitchat, and abandoned approaches. Keep code snippets, architecture decisions, and key context. Output the compacted context as a natural conversation summary that an AI assistant can read and continue from.`
+
+            const result = await completeSimpleFn(model, {
+              messages: [{ role: 'user', content: compactPrompt }],
+            }, {
+              apiKey: auth.apiKey,
+              headers: auth.headers,
             })
-            const cutoff = Math.floor(messageEntries.length * 0.6)
-            keptEntries = messageEntries.filter((_, idx) => idx === firstUserIdx || idx >= cutoff)
-            console.log(`[branch] no classification, heuristic: ${messageEntries.length} total → ${keptEntries.length} kept (firstUser=${firstUserIdx}, cutoff=${cutoff})`)
-          } else {
-            messageEntries.forEach((e, idx) => {
-              const entry = e as Record<string, unknown>
-              const entryId = typeof entry.id === 'string' ? entry.id : String(idx)
-              if (classification.keep.includes(entryId)) keptEntries.push(e)
-              if (classification.summarize.includes(entryId)) summarizeEntryIndices.push(idx)
-            })
-            console.log(`[branch] classification: ${messageEntries.length} total → keep=${classification.keep.length}, summarize=${classification.summarize.length}, drop=${classification.drop.length}, keptEntries=${keptEntries.length}`)
-          }
 
-          let summaryText = ''
-          if (summarizeEntryIndices.length > 0 && completeSimpleFn) {
-            const summarizeOutline = summarizeEntryIndices.map((idx, i) => {
-              const entry = messageEntries[idx] as Record<string, unknown>
-              const msg = entry.message as Record<string, unknown>
-              const role = msg.role as string
-              const content = msg.content
-              const text = typeof content === 'string' ? content : (content as Array<Record<string, unknown>> | undefined)?.filter(c => c.type === 'text' || c.type === 'tool_use' || c.type === 'tool_result').map(c => c.type === 'text' ? c.text : c.type === 'tool_use' ? `[tool: ${c.name}]` : '[tool result]').join(' ') ?? ''
-              return `${i + 1}. [${role}] ${text.slice(0, 300)}`
-            }).join('\n')
-
-            const model = session.model
-            const registry = session.modelRegistry
-            const auth = await registry?.getApiKeyAndHeaders(model)
-
-            if (auth?.ok) {
-              const summaryPrompt = `Summarize the following conversation context relevant to this purpose: ${direction.purpose}
-
-Messages:
-${summarizeOutline}
-
-Provide a concise summary that preserves key information, decisions, and context needed for the stated purpose.`
-
-              const result = await completeSimpleFn(model, {
-                messages: [{ role: 'user', content: summaryPrompt }],
-              }, {
-                apiKey: auth.apiKey,
-                headers: auth.headers,
-              })
-
-              summaryText = (result.content as Array<Record<string, unknown>>)
-                ?.filter(c => c.type === 'text')
-                .map(c => c.text)
-                .join('') ?? ''
-            }
+            compactedText = (result.content as Array<Record<string, unknown>>)
+              ?.filter(c => c.type === 'text')
+              .map(c => c.text)
+              .join('') ?? ''
           }
 
           const { createSessionFile, writeBranchMessages, addForkPoint, setSessionStatus, getSessionDir } = await import('./session-service')
@@ -1519,8 +1415,8 @@ Provide a concise summary that preserves key information, decisions, and context
 
           writeBranchMessages(newSessionPath, {
             purpose: direction.purpose,
-            summary: summaryText,
-            keptMessages: keptEntries.map(e => JSON.stringify(e)),
+            summary: compactedText,
+            keptMessages: [],
           })
 
           const leafId = sessionManager?.getLeafId()

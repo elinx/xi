@@ -97,13 +97,6 @@ export interface BranchDirection {
   source: 'ai' | 'user'
 }
 
-/** Classification of messages when creating a branch (keep/summarize/drop by entryId). */
-export interface MessageClassification {
-  keep: string[]
-  summarize: string[]
-  drop: string[]
-}
-
 /** A forkable user message entry (from get_fork_messages RPC). */
 export interface ForkableMessage {
   entryId: string
@@ -134,8 +127,7 @@ export interface SessionIpcApi {
   reparentSession: (sessionPath: string, newParentPath: string | null) => Promise<{ success: boolean; error?: string }>
   setSessionSummary: (sessionPath: string, summary: string) => Promise<{ success: boolean; error?: string }>
   analyzeBranchDirections: (sessionPath: string | null) => Promise<{ directions: BranchDirection[] }>
-  classifyBranchMessages: (sessionPath: string | null, purpose: string) => Promise<{ classification: MessageClassification }>
-  createBranch: (sessionPath: string | null, direction: BranchDirection, classification?: MessageClassification) => Promise<{ success: boolean; newSessionPath?: string; error?: string }>
+  createBranch: (sessionPath: string | null, direction: BranchDirection) => Promise<{ success: boolean; newSessionPath?: string; error?: string }>
 }
 
 /** Model info returned by Pi SDK. */
